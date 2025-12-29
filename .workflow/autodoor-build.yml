@@ -16,16 +16,15 @@ stages:
       - step: run@command
         name: build_windows
         displayName: 构建 Windows 版本
-        runInContainer: true
-        image: python:3.12-windowsservercore
-        shell: cmd
-        commands:
-          - echo 开始构建 Windows 版本...
-          - python --version
-          - pip --version
-          - pip install -r requirements.txt pyinstaller
-          - pyinstaller autodoor.spec --noconfirm
-          - echo Windows 版本构建完成
+        powershellConfig:
+          image: python:3.12-windowsservercore
+          commands:
+            - echo 开始构建 Windows 版本...
+            - python --version
+            - pip --version
+            - pip install -r requirements.txt pyinstaller
+            - pyinstaller autodoor.spec --noconfirm
+            - echo Windows 版本构建完成
         artifacts:
           - name: autodoor-windows
             path: dist/autodoor/
@@ -39,16 +38,15 @@ stages:
       - step: run@command
         name: build_macos
         displayName: 构建 macOS 版本
-        runInContainer: true
-        image: python:3.12
-        shell: bash
-        commands:
-          - echo 开始构建 macOS 版本...
-          - python3 --version
-          - pip3 --version
-          - pip3 install -r requirements.txt pyinstaller
-          - pyinstaller autodoor.spec --noconfirm
-          - echo macOS 版本构建完成
+        bashConfig:
+          image: python:3.12
+          commands:
+            - echo 开始构建 macOS 版本...
+            - python3 --version
+            - pip3 --version
+            - pip3 install -r requirements.txt pyinstaller
+            - pyinstaller autodoor.spec --noconfirm
+            - echo macOS 版本构建完成
         artifacts:
           - name: autodoor-macos
             path: dist/autodoor/
