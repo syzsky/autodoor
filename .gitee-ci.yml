@@ -4,7 +4,6 @@
 stages:
   - build_windows
   - build_macos
-  - deploy
 
 # Windows 构建任务
 build_windows:
@@ -42,14 +41,3 @@ build_macos:
       - dist/autodoor/
     expire_in: 30 days
 
-# 部署任务（可选，用于自动发布或其他操作）
-deploy:
-  stage: deploy
-  tags:
-    - windows
-  script:
-    - echo "部署任务"
-  dependencies:
-    - build_windows
-    - build_macos
-  when: on_success
