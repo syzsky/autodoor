@@ -1,0 +1,14 @@
+/venv/
+build/
+dist/
+tesseract/
+*.log
+*.bak
+*.pyc
+__pycache__/
+*.spec
+*.exe
+*.pkg
+*.zip
+.DS_Store
+Thumbs.db

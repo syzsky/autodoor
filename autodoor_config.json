@@ -1,0 +1,17 @@
+{
+    "tesseract_path": "E:\\tesseract\\tesseract.exe",
+    "ocr_interval": 5,
+    "pause_duration": 180,
+    "selected_region": [
+        -1915,
+        1254,
+        -1439,
+        1282
+    ],
+    "custom_key": "o",
+    "custom_keywords": [
+        "door",
+        "men"
+    ],
+    "ocr_language": "eng"
+}
