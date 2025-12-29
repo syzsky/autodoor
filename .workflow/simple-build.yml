@@ -3,8 +3,8 @@
 
 version: '1.0'
 name: autodoor-simple-build
-name-cn: AutoDoor 简化版构建流水线
-displayName: AutoDoor 简化版构建流水线
+name-cn: AutoDoor
+displayName: AutoDoor
 description: 自动构建 Windows 版本的 AutoDoor 程序
 
 stages:

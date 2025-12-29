@@ -1,14 +1,15 @@
 /venv/
 build/
 dist/
-tesseract/
 *.log
 *.bak
 *.pyc
 __pycache__/
-*.spec
+!autodoor.spec
 *.exe
+!tesseract/**/*.exe
 *.pkg
 *.zip
+!tesseract/**/*.zip
 .DS_Store
 Thumbs.db
