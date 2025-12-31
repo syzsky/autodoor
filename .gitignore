@@ -1,6 +1,7 @@
 /venv/
 build/
 dist/
+/test/
 *.log
 *.bak
 *.pyc
