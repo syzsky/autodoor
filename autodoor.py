@@ -21,9 +21,9 @@ class AutoDoorOCR:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("AutoDoor OCR 识别系统")
-        self.root.geometry("700x600")  # 增大窗口尺寸以容纳更多控件
+        self.root.geometry("800x700")  # 增大窗口尺寸以容纳更多控件
         self.root.resizable(True, True)  # 允许调整窗口大小
-        self.root.minsize(650, 550)  # 设置最小尺寸
+        self.root.minsize(750, 650)  # 设置最小尺寸
         
         # 配置参数
         self.ocr_interval = 5  # OCR识别间隔（秒）
@@ -31,8 +31,8 @@ class AutoDoorOCR:
         self.click_delay = 0.5  # 点击后等待时间（秒）
         self.custom_key = "equal"  # 自定义按键，默认为等号键
         
-        # 关键词和语言配置
-        self.custom_keywords = ["door", "men"]  # 自定义关键词列表
+        # 关键词配置
+        self.custom_keywords = ["men", "door"]  # 自定义关键词列表
         self.ocr_language = "eng"  # OCR识别语言，默认为英文（eng）
         
         # 坐标轴参数
@@ -55,6 +55,25 @@ class AutoDoorOCR:
         
         # 线程控制
         self.ocr_thread = None
+        self.timed_threads = []
+        self.number_threads = []
+        
+        # 事件队列
+        from collections import deque
+        self.event_queue = deque()
+        self.event_lock = threading.Lock()
+        self.event_cond = threading.Condition(self.event_lock)
+        self.is_event_running = False
+        self.event_thread = None
+        
+        # 定时功能相关
+        self.timed_enabled_var = None
+        self.timed_groups = []
+        
+        # 数字识别相关
+        self.number_enabled_var = None
+        self.number_regions = []
+        self.current_number_region = None
         
         # 初始化Tesseract相关变量
         self.tesseract_path = ""
@@ -83,6 +102,12 @@ class AutoDoorOCR:
         if not self.tesseract_available:
             messagebox.showwarning("警告", "未检测到Tesseract OCR引擎，请先安装并配置环境变量！")
             self.status_var.set("Tesseract未安装")
+        
+        # 设置配置监听器
+        self.setup_config_listeners()
+        
+        # 启动事件处理线程
+        self.start_event_thread()
     
 
     
@@ -224,24 +249,32 @@ class AutoDoorOCR:
         status_label = ttk.Label(status_frame, textvariable=self.status_var, style="Header.TLabel", foreground="green")
         status_label.pack(side=tk.LEFT)
         
-        # 区域信息
+        # 区域信息已移至文字识别标签页内，此处不再显示
         self.region_var = tk.StringVar(value="未选择区域")
-        region_label = ttk.Label(status_frame, textvariable=self.region_var, font=("Arial", 10))
-        region_label.pack(side=tk.RIGHT)
         
         # 主内容区域 - 使用笔记本(tab)布局
         notebook = ttk.Notebook(main_frame)
         notebook.pack(fill=tk.BOTH, expand=True)
         
+        # 文字识别标签页
+        ocr_frame = ttk.Frame(notebook)
+        notebook.add(ocr_frame, text="文字识别")
+        self.create_ocr_tab(ocr_frame)
+        
+        # 定时功能标签页
+        timed_frame = ttk.Frame(notebook)
+        notebook.add(timed_frame, text="定时功能")
+        self.create_timed_tab(timed_frame)
+        
+        # 数字识别标签页
+        number_frame = ttk.Frame(notebook)
+        notebook.add(number_frame, text="数字识别")
+        self.create_number_tab(number_frame)
+        
         # 基本设置标签页
         basic_frame = ttk.Frame(notebook)
         notebook.add(basic_frame, text="基本设置")
         self.create_basic_tab(basic_frame)
-        
-        # 高级设置标签页
-        advanced_frame = ttk.Frame(notebook)
-        notebook.add(advanced_frame, text="高级设置")
-        self.create_advanced_tab(advanced_frame)
         
         # 日志标签页
         log_frame = ttk.Frame(notebook)
@@ -252,18 +285,258 @@ class AutoDoorOCR:
         control_frame = ttk.Frame(main_frame, padding="10 5 10 0")
         control_frame.pack(fill=tk.X, pady=(10, 0))
         
-        self.select_btn = ttk.Button(control_frame, text="选择区域", command=self.start_region_selection)
-        self.select_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.start_btn = ttk.Button(control_frame, text="开始监控", command=self.start_monitoring, state="disabled")
-        self.start_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.stop_btn = ttk.Button(control_frame, text="停止监控", command=self.stop_monitoring, state="disabled")
-        self.stop_btn.pack(side=tk.LEFT)
-        
         # 退出按钮在右侧
         exit_btn = ttk.Button(control_frame, text="退出程序", command=self.exit_program)
         exit_btn.pack(side=tk.RIGHT)
+    
+    def create_ocr_tab(self, parent):
+        """创建文字识别标签页"""
+        ocr_frame = ttk.Frame(parent, padding="10")
+        ocr_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 区域选择
+        region_frame = ttk.LabelFrame(ocr_frame, text="区域选择", padding="10")
+        region_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        region_btn = ttk.Button(region_frame, text="选择区域", command=self.start_region_selection)
+        region_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        region_label = ttk.Label(region_frame, textvariable=self.region_var)
+        region_label.pack(side=tk.LEFT)
+        
+        # 识别设置 - 第一行：识别间隔、暂停时长、按键设置
+        setting_frame = ttk.LabelFrame(ocr_frame, text="识别设置", padding="10")
+        setting_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 第一行：识别间隔、暂停时长、按键设置
+        row1_frame = ttk.Frame(setting_frame)
+        row1_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 识别间隔
+        interval_frame = ttk.Frame(row1_frame)
+        interval_frame.pack(side=tk.LEFT, padx=(0, 20))
+        ocr_interval_label = ttk.Label(interval_frame, text="识别间隔(秒):")
+        ocr_interval_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        self.ocr_interval_var = tk.IntVar(value=self.ocr_interval)
+        ocr_interval_entry = ttk.Entry(interval_frame, textvariable=self.ocr_interval_var, width=15)
+        ocr_interval_entry.pack(fill=tk.X)
+        
+        # 暂停时长
+        pause_frame = ttk.Frame(row1_frame)
+        pause_frame.pack(side=tk.LEFT, padx=(0, 20))
+        pause_duration_label = ttk.Label(pause_frame, text="暂停时长(秒):")
+        pause_duration_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        self.pause_duration_var = tk.IntVar(value=self.pause_duration)
+        pause_duration_entry = ttk.Entry(pause_frame, textvariable=self.pause_duration_var, width=15)
+        pause_duration_entry.pack(fill=tk.X)
+        
+        # 按键设置
+        key_setting_frame = ttk.Frame(row1_frame)
+        key_setting_frame.pack(side=tk.LEFT, padx=(0, 20))
+        key_label = ttk.Label(key_setting_frame, text="触发按键:")
+        key_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        # 按键配置区域
+        key_config_frame = ttk.Frame(key_setting_frame)
+        key_config_frame.pack(fill=tk.X)
+        
+        self.key_var = tk.StringVar(value=self.custom_key)
+        
+        # 显示当前按键的标签
+        current_key_label = ttk.Label(key_config_frame, textvariable=self.key_var, relief="sunken", padding=5, width=10)
+        current_key_label.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # 设置按键按钮
+        self.set_key_btn = ttk.Button(key_config_frame, text="设置", 
+                                    command=lambda: self.start_key_listening(self.key_var, self.set_key_btn))
+        self.set_key_btn.pack(side=tk.LEFT)
+        
+        # 第二部分：关键词和语言设置
+        keyword_language_frame = ttk.LabelFrame(setting_frame, text="关键词和语言", padding="10")
+        keyword_language_frame.pack(fill=tk.X, pady=(0, 0))
+        
+        # 关键词设置行
+        keyword_row = ttk.Frame(keyword_language_frame)
+        keyword_row.pack(fill=tk.X, pady=(0, 10))
+        
+        keywords_label = ttk.Label(keyword_row, text="识别关键词:", width=12, anchor=tk.W)
+        keywords_label.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 关键词输入框
+        self.keywords_var = tk.StringVar(value=",".join(self.custom_keywords))
+        self.keywords_entry = ttk.Entry(keyword_row, textvariable=self.keywords_var, width=20)
+        self.keywords_entry.pack(side=tk.LEFT)
+        
+        # 语言设置行
+        language_row = ttk.Frame(keyword_language_frame)
+        language_row.pack(fill=tk.X, pady=(0, 5))
+        
+        language_label = ttk.Label(language_row, text="OCR识别语言:", width=12, anchor=tk.W)
+        language_label.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 语言选择
+        self.language_var = tk.StringVar(value=self.ocr_language)
+        language_combobox = ttk.Combobox(language_row, textvariable=self.language_var, 
+                                        values=["eng", "chi_sim", "chi_tra"], 
+                                        width=15)
+        language_combobox.pack(side=tk.LEFT)
+        
+        # 语言说明（放在输入框下方）
+        language_desc = ttk.Label(keyword_language_frame, text="eng: 英文 | chi_sim: 简体中文 | chi_tra: 繁体中文", 
+                                font=("Arial", 8), foreground="gray")
+        language_desc.pack(anchor=tk.W, pady=(5, 10))
+        
+        # 按钮行（放在提示文字下方）
+        btn_frame = ttk.Frame(keyword_language_frame)
+        btn_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        set_keyword_btn = ttk.Button(btn_frame, text="保存关键词", command=self.set_custom_keywords)
+        set_keyword_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        restore_keyword_btn = ttk.Button(btn_frame, text="恢复默认", command=self.restore_default_keywords)
+        restore_keyword_btn.pack(side=tk.LEFT)
+        
+        # 操作按钮
+        action_frame = ttk.Frame(ocr_frame)
+        action_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.start_btn = ttk.Button(action_frame, text="开始监控", command=self.start_monitoring, state="disabled")
+        self.start_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        self.stop_btn = ttk.Button(action_frame, text="停止监控", command=self.stop_monitoring, state="disabled")
+        self.stop_btn.pack(side=tk.LEFT)
+    
+    def create_timed_tab(self, parent):
+        """创建定时功能标签页"""
+        timed_frame = ttk.Frame(parent, padding="10")
+        timed_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 定时组配置
+        self.timed_groups = []
+        for i in range(3):
+            group_frame = ttk.LabelFrame(timed_frame, text=f"定时组{i+1}", padding="10")
+            group_frame.pack(fill=tk.X, pady=(0, 10))
+            
+            # 启用开关
+            enabled_var = tk.BooleanVar(value=False)
+            enabled_switch = ttk.Checkbutton(group_frame, text="启用", variable=enabled_var)
+            enabled_switch.pack(side=tk.LEFT, padx=(0, 10))
+            
+            # 时间间隔
+            interval_label = ttk.Label(group_frame, text="间隔(秒):", width=10)
+            interval_label.pack(side=tk.LEFT)
+            
+            interval_var = tk.IntVar(value=10*(i+1))
+            interval_entry = ttk.Entry(group_frame, textvariable=interval_var, width=10)
+            interval_entry.pack(side=tk.LEFT, padx=(0, 10))
+            
+            # 按键选择
+            key_label = ttk.Label(group_frame, text="按键:", width=5)
+            key_label.pack(side=tk.LEFT)
+            
+            key_var = tk.StringVar(value=["space", "enter", "tab"][i])
+            
+            # 按键配置区域
+            timed_key_config_frame = ttk.Frame(group_frame)
+            timed_key_config_frame.pack(side=tk.LEFT)
+            
+            # 显示当前按键的标签
+            timed_current_key_label = ttk.Label(timed_key_config_frame, textvariable=key_var, relief="sunken", padding=2, width=5)
+            timed_current_key_label.pack(side=tk.LEFT, padx=(0, 5))
+            
+            # 设置按键按钮
+            set_timed_key_btn = ttk.Button(timed_key_config_frame, text="设置", width=6)
+            set_timed_key_btn.pack(side=tk.LEFT)
+            # 单独绑定事件，避免UnboundLocalError
+            set_timed_key_btn.config(command=lambda v=key_var, b=set_timed_key_btn: self.start_key_listening(v, b))
+            
+            self.timed_groups.append({
+                "enabled": enabled_var,
+                "interval": interval_var,
+                "key": key_var
+            })
+        
+        # 操作按钮
+        action_frame = ttk.Frame(timed_frame)
+        action_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.start_timed_btn = ttk.Button(action_frame, text="开始定时任务", command=self.start_timed_tasks, state="normal")
+        self.start_timed_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        self.stop_timed_btn = ttk.Button(action_frame, text="停止定时任务", command=self.stop_timed_tasks, state="disabled")
+        self.stop_timed_btn.pack(side=tk.LEFT)
+    
+    def create_number_tab(self, parent):
+        """创建数字识别标签页"""
+        number_frame = ttk.Frame(parent, padding="10")
+        number_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 区域配置
+        self.number_regions = []
+        for i in range(2):
+            region_frame = ttk.LabelFrame(number_frame, text=f"区域{i+1}", padding="10")
+            region_frame.pack(fill=tk.X, pady=(0, 10))
+            
+            # 启用开关
+            enabled_var = tk.BooleanVar(value=False)
+            enabled_switch = ttk.Checkbutton(region_frame, text="启用", variable=enabled_var)
+            enabled_switch.pack(side=tk.LEFT, padx=(0, 10))
+            
+            # 区域选择
+            select_btn = ttk.Button(region_frame, text="选择区域", command=lambda idx=i: self.start_number_region_selection(idx))
+            select_btn.pack(side=tk.LEFT, padx=(0, 10))
+            
+            region_var = tk.StringVar(value="未选择区域")
+            region_label = ttk.Label(region_frame, textvariable=region_var)
+            region_label.pack(side=tk.LEFT, padx=(0, 10))
+            
+            # 阈值设置
+            threshold_label = ttk.Label(region_frame, text="阈值:", width=10)
+            threshold_label.pack(side=tk.LEFT)
+            
+            threshold_var = tk.IntVar(value=500 if i == 0 else 1000)
+            threshold_entry = ttk.Entry(region_frame, textvariable=threshold_var, width=10)
+            threshold_entry.pack(side=tk.LEFT, padx=(0, 10))
+            
+            # 按键设置
+            key_label = ttk.Label(region_frame, text="按键:", width=5)
+            key_label.pack(side=tk.LEFT)
+            
+            key_var = tk.StringVar(value=["f1", "f2"][i])
+            
+            # 按键配置区域
+            number_key_config_frame = ttk.Frame(region_frame)
+            number_key_config_frame.pack(side=tk.LEFT)
+            
+            # 显示当前按键的标签
+            number_current_key_label = ttk.Label(number_key_config_frame, textvariable=key_var, relief="sunken", padding=2, width=5)
+            number_current_key_label.pack(side=tk.LEFT, padx=(0, 5))
+            
+            # 设置按键按钮
+            set_number_key_btn = ttk.Button(number_key_config_frame, text="设置", width=6)
+            set_number_key_btn.pack(side=tk.LEFT)
+            # 单独绑定事件，避免UnboundLocalError
+            set_number_key_btn.config(command=lambda v=key_var, b=set_number_key_btn: self.start_key_listening(v, b))
+            
+            self.number_regions.append({
+                "enabled": enabled_var,
+                "region_var": region_var,
+                "region": None,
+                "threshold": threshold_var,
+                "key": key_var
+            })
+        
+        # 操作按钮
+        action_frame = ttk.Frame(number_frame)
+        action_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.start_number_btn = ttk.Button(action_frame, text="开始数字识别", command=self.start_number_recognition, state="normal")
+        self.start_number_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        self.stop_number_btn = ttk.Button(action_frame, text="停止数字识别", command=self.stop_number_recognition, state="disabled")
+        self.stop_number_btn.pack(side=tk.LEFT)
     
     def create_basic_tab(self, parent):
         """创建基本设置标签页"""
@@ -271,13 +544,9 @@ class AutoDoorOCR:
         basic_frame = ttk.Frame(parent, padding="10")
         basic_frame.pack(fill=tk.BOTH, expand=True)
         
-        # 第一行：Tesseract配置和时间间隔设置
-        top_frame = ttk.Frame(basic_frame)
-        top_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-        
-        # 左侧：Tesseract配置
-        tesseract_frame = ttk.LabelFrame(top_frame, text="Tesseract配置", padding="10")
-        tesseract_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        # Tesseract配置
+        tesseract_frame = ttk.LabelFrame(basic_frame, text="Tesseract配置", padding="10")
+        tesseract_frame.pack(fill=tk.X, pady=(0, 10))
         
         # Tesseract路径
         path_label = ttk.Label(tesseract_frame, text="Tesseract路径:")
@@ -293,101 +562,12 @@ class AutoDoorOCR:
         self.set_path_btn = ttk.Button(path_frame, text="设置", command=self.set_tesseract_path)
         self.set_path_btn.pack(side=tk.RIGHT)
         
-        # 右侧：时间间隔设置
-        interval_frame = ttk.LabelFrame(top_frame, text="时间间隔设置", padding="10")
-        interval_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        # 坐标模式设置
+        coord_frame = ttk.LabelFrame(basic_frame, text="坐标模式", padding="10")
+        coord_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # 第二行：关键词和语言设置
-        bottom_frame = ttk.Frame(basic_frame)
-        bottom_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # 左侧：关键词设置
-        keywords_frame = ttk.LabelFrame(bottom_frame, text="关键词设置", padding="10")
-        keywords_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
-        
-        # 关键词输入
-        keywords_label = ttk.Label(keywords_frame, text="识别关键词（英文逗号分隔）:")
-        keywords_label.pack(anchor=tk.W, pady=(0, 5))
-        
-        self.keywords_var = tk.StringVar(value=",".join(self.custom_keywords))
-        self.keywords_entry = ttk.Entry(keywords_frame, textvariable=self.keywords_var)
-        self.keywords_entry.pack(fill=tk.X, pady=(0, 10))
-        
-        # 关键词操作按钮
-        keyword_btn_frame = ttk.Frame(keywords_frame)
-        keyword_btn_frame.pack(fill=tk.X)
-        
-        self.set_keywords_btn = ttk.Button(keyword_btn_frame, text="应用关键词", command=self.set_custom_keywords)
-        self.set_keywords_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.reset_keywords_btn = ttk.Button(keyword_btn_frame, text="恢复默认", command=self.restore_default_keywords)
-        self.reset_keywords_btn.pack(side=tk.LEFT)
-        
-        # 右侧：语言设置
-        language_frame = ttk.LabelFrame(bottom_frame, text="语言设置", padding="10")
-        language_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-        
-        # 语言选择
-        language_label = ttk.Label(language_frame, text="OCR识别语言:")
-        language_label.pack(anchor=tk.W, pady=(0, 5))
-        
-        self.language_var = tk.StringVar(value=self.ocr_language)
-        language_combobox = ttk.Combobox(language_frame, textvariable=self.language_var, 
-                                        values=["eng", "chi_sim", "chi_tra"], 
-                                        width=10)
-        language_combobox.pack(fill=tk.X, pady=(0, 10))
-        
-        # 语言说明
-        language_desc = ttk.Label(language_frame, text="eng: 英文 | chi_sim: 简体中文 | chi_tra: 繁体中文", 
-                                font=("Arial", 8), foreground="gray")
-        language_desc.pack(anchor=tk.W)
-        
-        # OCR识别间隔
-        ocr_interval_label = ttk.Label(interval_frame, text=f"识别间隔: {self.ocr_interval}秒")
-        ocr_interval_label.pack(anchor=tk.W, pady=(0, 5))
-        
-        self.ocr_interval_var = tk.IntVar(value=self.ocr_interval)
-        self.ocr_interval_scale = ttk.Scale(interval_frame, from_=1, to=30, orient=tk.HORIZONTAL,
-                                         variable=self.ocr_interval_var, command=lambda x: self.update_interval_label(ocr_interval_label, "识别间隔", self.ocr_interval_var))
-        self.ocr_interval_scale.pack(fill=tk.X, pady=(0, 10))
-        
-        ocr_interval_entry = ttk.Entry(interval_frame, textvariable=self.ocr_interval_var, width=5)
-        ocr_interval_entry.pack(side=tk.RIGHT)
-        
-        # 暂停时长（检测到关键词后暂停识别的时间）
-        pause_duration_label = ttk.Label(interval_frame, text=f"暂停时长: {self.pause_duration}秒")
-        pause_duration_label.pack(anchor=tk.W, pady=(0, 5))
-        
-        self.pause_duration_var = tk.IntVar(value=self.pause_duration)
-        self.pause_duration_scale = ttk.Scale(interval_frame, from_=30, to=300, orient=tk.HORIZONTAL, length=150,
-                                          variable=self.pause_duration_var, command=lambda x: self.update_interval_label(pause_duration_label, "暂停时长", self.pause_duration_var))
-        self.pause_duration_scale.pack(fill=tk.X, pady=(0, 10))
-        
-        pause_duration_entry = ttk.Entry(interval_frame, textvariable=self.pause_duration_var, width=5)
-        pause_duration_entry.pack(side=tk.RIGHT)
-    
-    def create_advanced_tab(self, parent):
-        """创建高级设置标签页"""
-        advanced_frame = ttk.Frame(parent, padding="10")
-        advanced_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # 左侧：坐标轴选取
-        axis_frame = ttk.LabelFrame(advanced_frame, text="坐标轴选取", padding="10")
-        axis_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
-        self.create_axis_section(axis_frame)
-        
-        # 右侧：键位自定义
-        key_frame = ttk.LabelFrame(advanced_frame, text="键位自定义", padding="10")
-        key_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-        self.create_key_section(key_frame)
-        
-        # 为配置变量添加监听器，自动保存配置
-        self.setup_config_listeners()
-    
-    def create_axis_section(self, parent):
-        """创建坐标轴选取区域"""
         # 点击模式选择
-        mode_frame = ttk.Frame(parent)
+        mode_frame = ttk.Frame(coord_frame)
         mode_frame.pack(fill=tk.X, pady=(0, 15))
         
         self.click_mode_var = tk.StringVar(value=self.click_mode)
@@ -399,60 +579,38 @@ class AutoDoorOCR:
         custom_rbtn.pack(side=tk.LEFT)
         
         # 自定义坐标输入
-        coord_frame = ttk.Frame(parent)
-        coord_frame.pack(fill=tk.X)
+        self.x_coord_var = tk.IntVar(value=self.click_x)
+        self.y_coord_var = tk.IntVar(value=self.click_y)
         
-        # X轴坐标
         x_frame = ttk.Frame(coord_frame)
         x_frame.pack(fill=tk.X, pady=(0, 10))
         
         x_label = ttk.Label(x_frame, text="X轴坐标:", width=10)
         x_label.pack(side=tk.LEFT)
         
-        self.x_coord_var = tk.IntVar(value=self.click_x)
         self.x_coord_entry = ttk.Entry(x_frame, textvariable=self.x_coord_var, width=10, state="disabled")
-        self.x_coord_entry.pack(side=tk.LEFT, padx=(0, 10))
+        self.x_coord_entry.pack(side=tk.LEFT)
         
-        # Y轴坐标
         y_frame = ttk.Frame(coord_frame)
         y_frame.pack(fill=tk.X)
         
         y_label = ttk.Label(y_frame, text="Y轴坐标:", width=10)
         y_label.pack(side=tk.LEFT)
         
-        self.y_coord_var = tk.IntVar(value=self.click_y)
         self.y_coord_entry = ttk.Entry(y_frame, textvariable=self.y_coord_var, width=10, state="disabled")
-        self.y_coord_entry.pack(side=tk.LEFT, padx=(0, 10))
+        self.y_coord_entry.pack(side=tk.LEFT)
         
-        # 提示信息
-        tip_label = ttk.Label(parent, text="自定义坐标相对于选择区域的左上角", font=("Arial", 8), foreground="gray")
-        tip_label.pack(anchor=tk.W, pady=(10, 0))
+        # 配置管理
+        config_frame = ttk.Frame(basic_frame)
+        config_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        save_btn = ttk.Button(config_frame, text="保存配置", command=self.save_config)
+        save_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        reset_btn = ttk.Button(config_frame, text="重置配置", command=self.load_config)
+        reset_btn.pack(side=tk.LEFT)
     
-    def create_key_section(self, parent):
-        """创建键位自定义区域"""
-        # 按键选择
-        key_label = ttk.Label(parent, text="自动按键:")
-        key_label.pack(anchor=tk.W, pady=(0, 5))
-        
-        # 按键下拉菜单
-        self.key_var = tk.StringVar(value=self.custom_key)
-        self.key_combobox = ttk.Combobox(parent, textvariable=self.key_var, values=self.get_available_keys(), width=10)
-        self.key_combobox.pack(fill=tk.X, pady=(0, 10))
-        
-        # 按键预览
-        preview_frame = ttk.Frame(parent)
-        preview_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        preview_btn = ttk.Button(preview_frame, text="预览按键", command=self.preview_key)
-        preview_btn.pack(side=tk.LEFT)
-        
-        # 恢复默认
-        default_btn = ttk.Button(preview_frame, text="恢复默认", command=self.restore_default_key)
-        default_btn.pack(side=tk.RIGHT)
-        
-        # 提示信息
-        key_tip_label = ttk.Label(parent, text="选择识别到关键词后自动按下的按键", font=("Arial", 8), foreground="gray")
-        key_tip_label.pack(anchor=tk.W, pady=(10, 0))
+
     
     def create_log_tab(self, parent):
         """创建日志标签页"""
@@ -494,9 +652,9 @@ class AutoDoorOCR:
         return [
             "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
             "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-            "space", "enter", "tab", "escape", "backspace", "delete",
+            "space", "enter", "tab", "escape", "backspace", "delete", "insert",
             "equal", "plus", "minus", "asterisk", "slash", "backslash",
-            "comma", "period", "semicolon", "apostrophe", "quote", "left", "right", "up", "down",
+            "comma", "period", "semicolon", "apostrophe", "quote", "left", "right", "up", "down", "home", "end", "pageup", "pagedown",
             "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"
         ]
     
@@ -511,6 +669,104 @@ class AutoDoorOCR:
         self.key_var.set("equal")
         self.log_message("已恢复默认按键设置")
         self.save_config()
+    
+    def start_key_listening(self, target_var, button):
+        """开始监听用户按下的按键
+        
+        Args:
+            target_var: 保存按键的StringVar变量
+            button: 触发监听的按钮，用于更新按钮状态
+        """
+        # 保存当前焦点
+        current_focus = self.root.focus_get()
+        
+        # 更新按钮状态
+        original_text = button.cget("text")
+        button.config(text="请按任意键...")
+        button.config(state="disabled")
+        
+        # 创建按键监听函数
+        def on_key_press(event):
+            """处理按键按下事件"""
+            # 获取按键名称
+            key = event.keysym.lower()
+            
+            # 特殊按键映射
+            key_mappings = {
+                "Return": "enter",
+                "Escape": "escape",
+                "Tab": "tab",
+                "BackSpace": "backspace",
+                "Delete": "delete",
+                "Insert": "insert",
+                "space": "space",
+                "minus": "minus",
+                "plus": "plus",
+                "asterisk": "asterisk",
+                "slash": "slash",
+                "backslash": "backslash",
+                "comma": "comma",
+                "period": "period",
+                "semicolon": "semicolon",
+                "apostrophe": "apostrophe",
+                "quoteleft": "quote",
+                "quoteright": "quote",
+                "Left": "left",
+                "Right": "right",
+                "Up": "up",
+                "Down": "down",
+                "Home": "home",
+                "End": "end",
+                "Page_Up": "pageup",
+                "Prior": "pageup",
+                "Page_Down": "pagedown",
+                "Next": "pagedown"
+            }
+            
+            # 映射特殊按键
+            if key in key_mappings:
+                key = key_mappings[key]
+            
+            # 确保按键在可用列表中
+            available_keys = self.get_available_keys()
+            if key not in available_keys:
+                self.log_message(f"不支持的按键: {key}")
+                return
+            
+            # 保存按键
+            target_var.set(key)
+            
+            # 恢复按钮状态
+            button.config(text=original_text)
+            button.config(state="normal")
+            
+            # 解除按键监听
+            self.root.unbind("<KeyPress>")
+            
+            # 恢复焦点
+            if current_focus:
+                current_focus.focus_set()
+            
+            # 记录日志
+            self.log_message(f"已设置按键: {key}")
+            
+            # 保存配置
+            self.save_config()
+        
+        # 绑定按键事件
+        self.root.bind("<KeyPress>", on_key_press)
+        
+        # 设置超时，防止永久监听
+        def timeout():
+            if button.cget("state") == "disabled":
+                button.config(text=original_text)
+                button.config(state="normal")
+                self.root.unbind("<KeyPress>")
+                if current_focus:
+                    current_focus.focus_set()
+                self.log_message("按键监听已超时")
+        
+        self.root.after(5000, timeout)  # 5秒超时
     
     def set_custom_keywords(self):
         """设置自定义关键词"""
@@ -534,6 +790,8 @@ class AutoDoorOCR:
     def load_config(self):
         """加载配置
         增强错误处理，能够处理文件不存在、格式错误或路径配置缺失等异常情况
+        确保加载所有前端设置，包括新增功能的相关配置
+        支持新旧配置格式的兼容处理
         """
         import json
         
@@ -545,10 +803,26 @@ class AutoDoorOCR:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
                 
-                # 加载Tesseract路径 - 最优先处理
+                self.log_message(f"开始加载配置: {self.config_file}")
+                
+                # 获取配置版本，默认为1.0.0
+                config_version = config.get('version', '1.0.0')
+                self.log_message(f"配置版本: {config_version}")
+                
+                # 1. 加载Tesseract配置
                 config_has_tesseract = False
-                if 'tesseract_path' in config and config['tesseract_path']:
-                    temp_path = config['tesseract_path'].strip()
+                
+                # 兼容旧格式和新格式
+                tesseract_path = None
+                if 'tesseract' in config and isinstance(config['tesseract'], dict):
+                    # 新格式
+                    tesseract_path = config['tesseract'].get('path')
+                else:
+                    # 旧格式
+                    tesseract_path = config.get('tesseract_path')
+                
+                if tesseract_path and tesseract_path.strip():
+                    temp_path = tesseract_path.strip()
                     # 检查路径是否存在
                     if os.path.exists(temp_path):
                         self.tesseract_path = temp_path
@@ -557,74 +831,168 @@ class AutoDoorOCR:
                     else:
                         self.log_message(f"配置文件中的Tesseract路径不存在: {temp_path}")
                 
+                # 2. 加载基本OCR配置
+                ocr_config = {}
+                if 'ocr' in config and isinstance(config['ocr'], dict):
+                    # 新格式
+                    ocr_config = config['ocr']
+                else:
+                    # 旧格式
+                    ocr_config = {
+                        'interval': config.get('ocr_interval'),
+                        'pause_duration': config.get('pause_duration'),
+                        'selected_region': config.get('selected_region'),
+                        'custom_key': config.get('custom_key'),
+                        'custom_keywords': config.get('custom_keywords'),
+                        'language': config.get('ocr_language')
+                    }
+                
                 # 加载时间间隔
-                if 'ocr_interval' in config:
-                    self.ocr_interval = config['ocr_interval']
+                if 'interval' in ocr_config and ocr_config['interval'] is not None:
+                    self.ocr_interval = ocr_config['interval']
                     self.ocr_interval_var.set(self.ocr_interval)
                 
-                if 'pause_duration' in config:
-                    self.pause_duration = config['pause_duration']
+                if 'pause_duration' in ocr_config and ocr_config['pause_duration'] is not None:
+                    self.pause_duration = ocr_config['pause_duration']
                     self.pause_duration_var.set(self.pause_duration)
                 
                 # 加载选择区域
-                if 'selected_region' in config:
-                    self.selected_region = tuple(config['selected_region'])
-                    self.region_var.set(f"区域: {self.selected_region[0]},{self.selected_region[1]} - {self.selected_region[2]},{self.selected_region[3]}")
-                    self.start_btn.config(state="normal")
+                if 'selected_region' in ocr_config and ocr_config['selected_region'] is not None:
+                    try:
+                        self.selected_region = tuple(ocr_config['selected_region'])
+                        self.region_var.set(f"区域: {self.selected_region[0]},{self.selected_region[1]} - {self.selected_region[2]},{self.selected_region[3]}")
+                        self.start_btn.config(state="normal")
+                    except (TypeError, ValueError):
+                        self.log_message(f"配置文件中的选择区域格式错误: {ocr_config['selected_region']}")
                 
                 # 加载自定义按键
-                if 'custom_key' in config:
-                    self.custom_key = config['custom_key']
+                if 'custom_key' in ocr_config:
+                    self.custom_key = ocr_config['custom_key']
                     self.key_var.set(self.custom_key)
                 
                 # 加载关键词
-                if 'custom_keywords' in config:
-                    self.custom_keywords = config['custom_keywords']
+                if 'custom_keywords' in ocr_config and ocr_config['custom_keywords']:
+                    self.custom_keywords = ocr_config['custom_keywords']
                     self.keywords_var.set(",".join(self.custom_keywords))
                 
                 # 加载语言设置
-                if 'ocr_language' in config:
-                    self.ocr_language = config['ocr_language']
+                if 'language' in ocr_config:
+                    self.ocr_language = ocr_config['language']
                     self.language_var.set(self.ocr_language)
+                
+                # 3. 加载点击模式和坐标配置
+                click_config = {}
+                if 'click' in config and isinstance(config['click'], dict):
+                    # 新格式
+                    click_config = config['click']
+                else:
+                    # 旧格式
+                    click_config = {
+                        'mode': config.get('click_mode'),
+                        'x': config.get('click_x'),
+                        'y': config.get('click_y')
+                    }
+                
+                if 'mode' in click_config:
+                    self.click_mode_var.set(click_config['mode'])
+                if 'x' in click_config and click_config['x'] is not None:
+                    self.x_coord_var.set(click_config['x'])
+                if 'y' in click_config and click_config['y'] is not None:
+                    self.y_coord_var.set(click_config['y'])
+                
+                # 4. 加载定时功能配置
+                timed_config = config.get('timed_key_press', {})
+                if 'groups' in timed_config and isinstance(timed_config['groups'], list):
+                    groups = timed_config['groups']
+                    for i, group in enumerate(groups[:3]):
+                        if i < len(self.timed_groups) and isinstance(group, dict):
+                            if 'enabled' in group:
+                                self.timed_groups[i]['enabled'].set(group['enabled'])
+                            if 'interval' in group:
+                                self.timed_groups[i]['interval'].set(group['interval'])
+                            if 'key' in group:
+                                self.timed_groups[i]['key'].set(group['key'])
+                
+                # 5. 加载数字识别配置
+                number_config = config.get('number_recognition', {})
+                if 'regions' in number_config and isinstance(number_config['regions'], list):
+                    regions = number_config['regions']
+                    for i, region_config in enumerate(regions[:2]):
+                        if i < len(self.number_regions) and isinstance(region_config, dict):
+                            if 'enabled' in region_config:
+                                self.number_regions[i]['enabled'].set(region_config['enabled'])
+                            if 'region' in region_config and region_config['region'] is not None:
+                                try:
+                                    region = tuple(region_config['region'])
+                                    self.number_regions[i]['region'] = region
+                                    self.number_regions[i]['region_var'].set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
+                                except (TypeError, ValueError):
+                                    self.log_message(f"配置文件中的数字识别区域格式错误: {region_config['region']}")
+                            if 'threshold' in region_config:
+                                self.number_regions[i]['threshold'].set(region_config['threshold'])
+                            if 'key' in region_config:
+                                self.number_regions[i]['key'].set(region_config['key'])
+                
+                # 6. 更新界面控件状态
+                self.update_axis_inputs()
                 
                 self.log_message("配置加载成功")
                 config_loaded = True
                 
-            except json.JSONDecodeError:
-                self.log_message(f"配置文件格式错误: {self.config_file}")
+            except json.JSONDecodeError as e:
+                self.log_message(f"配置文件格式错误: {self.config_file}，错误详情: {str(e)}")
             except PermissionError:
                 self.log_message(f"没有权限读取配置文件: {self.config_file}")
+            except IOError as e:
+                self.log_message(f"配置文件IO错误: {str(e)}")
             except Exception as e:
                 self.log_message(f"配置加载错误: {str(e)}")
         else:
             self.log_message(f"配置文件不存在: {self.config_file}")
         
-        # 如果配置加载成功，更新界面中的Tesseract路径变量
-        if config_loaded and hasattr(self, 'tesseract_path_var'):
+        # 无论配置是否加载成功，都更新界面中的Tesseract路径变量
+        if hasattr(self, 'tesseract_path_var'):
             self.tesseract_path_var.set(self.tesseract_path)
+            
+        return config_loaded
     
 
     
     def setup_config_listeners(self):
         """为配置变量添加监听器，自动保存配置"""
-        # 为时间间隔变量添加监听器
-        def on_interval_change(*args):
-            # 延迟保存，避免频繁保存
+        # 通用的延迟保存函数，避免频繁保存
+        def delayed_save(*args):
             self.root.after(1000, self.save_config)
         
-        # 为按键变量添加监听器
-        def on_key_change(*args):
+        # 即时保存函数
+        def immediate_save(*args):
             self.save_config()
         
-        # 为语言变量添加监听器
-        def on_language_change(*args):
-            self.save_config()
+        # 1. 基本OCR配置监听器
+        self.ocr_interval_var.trace_add("write", delayed_save)
+        self.pause_duration_var.trace_add("write", delayed_save)
+        self.key_var.trace_add("write", immediate_save)
+        self.language_var.trace_add("write", immediate_save)
         
-        # 添加监听器
-        self.ocr_interval_var.trace_add("write", on_interval_change)
-        self.pause_duration_var.trace_add("write", on_interval_change)
-        self.key_var.trace_add("write", on_key_change)
-        self.language_var.trace_add("write", on_language_change)
+        # 2. 关键词配置监听器
+        self.keywords_var.trace_add("write", delayed_save)
+        
+        # 3. 点击模式和坐标监听器
+        self.click_mode_var.trace_add("write", immediate_save)
+        self.x_coord_var.trace_add("write", delayed_save)
+        self.y_coord_var.trace_add("write", delayed_save)
+        
+        # 4. 定时任务配置监听器
+        for i, group in enumerate(self.timed_groups):
+            group["enabled"].trace_add("write", immediate_save)
+            group["interval"].trace_add("write", delayed_save)
+            group["key"].trace_add("write", immediate_save)
+        
+        # 5. 数字识别配置监听器
+        for i, region_config in enumerate(self.number_regions):
+            region_config["enabled"].trace_add("write", immediate_save)
+            region_config["threshold"].trace_add("write", delayed_save)
+            region_config["key"].trace_add("write", immediate_save)
     
     def clear_log(self):
         """清除日志"""
@@ -785,6 +1153,8 @@ class AutoDoorOCR:
         
         # 更新界面
         self.region_var.set(f"区域: {self.selected_region[0]},{self.selected_region[1]} - {self.selected_region[2]},{self.selected_region[3]}")
+        
+        # 启用开始监控按钮
         self.start_btn.config(state="normal")
         
         self.log_message(f"已选择区域: {self.selected_region}")
@@ -813,7 +1183,6 @@ class AutoDoorOCR:
         self.is_paused = False
         
         # 更新按钮状态
-        self.select_btn.config(state="disabled")
         self.start_btn.config(state="disabled")
         self.stop_btn.config(state="normal")
         
@@ -828,7 +1197,6 @@ class AutoDoorOCR:
         self.is_running = False
         
         # 更新按钮状态
-        self.select_btn.config(state="normal")
         self.start_btn.config(state="normal")
         self.stop_btn.config(state="disabled")
         
@@ -901,22 +1269,94 @@ class AutoDoorOCR:
             self.log_message(f"OCR错误: {str(e)}")
     
     def save_config(self):
-        """保存配置"""
+        """保存配置
+        保存所有前端用户设置，包括新增功能的相关配置
+        确保数据结构完整、一致，并处理边界情况
+        """
         import json
-        config = {
-            'tesseract_path': self.tesseract_path,
-            'ocr_interval': self.ocr_interval_var.get(),
-            'pause_duration': self.pause_duration_var.get(),
-            'selected_region': self.selected_region,
-            'custom_key': self.key_var.get(),
-            'custom_keywords': self.custom_keywords,
-            'ocr_language': self.language_var.get()
-        }
         
         try:
+            # 1. 保存定时功能配置
+            timed_groups_config = []
+            for group in self.timed_groups:
+                timed_groups_config.append({
+                    'enabled': group['enabled'].get(),
+                    'interval': group['interval'].get(),
+                    'key': group['key'].get()
+                })
+            
+            # 2. 保存数字识别配置
+            number_regions_config = []
+            for region_config in self.number_regions:
+                number_regions_config.append({
+                    'enabled': region_config['enabled'].get(),
+                    'region': list(region_config['region']) if region_config['region'] else None,
+                    'threshold': region_config['threshold'].get(),
+                    'key': region_config['key'].get()
+                })
+            
+            # 3. 确保关键词列表是最新的
+            keywords_str = self.keywords_var.get().strip()
+            current_keywords = [keyword.strip().lower() for keyword in keywords_str.split(",") if keyword.strip()]
+            if not current_keywords:
+                current_keywords = self.custom_keywords  # 保留原有关键词作为备份
+            
+            # 更新内部关键词列表，确保一致性
+            self.custom_keywords = current_keywords
+            
+            # 4. 完整的配置数据结构，确保所有配置项都被保存
+            config = {
+                'version': '1.0.1',  # 版本升级，支持更完整的配置保存
+                'last_save_time': datetime.datetime.now().isoformat(),
+                
+                # 基本OCR配置
+                'ocr': {
+                    'interval': self.ocr_interval_var.get(),
+                    'pause_duration': self.pause_duration_var.get(),
+                    'selected_region': list(self.selected_region) if self.selected_region else None,
+                    'custom_key': self.key_var.get(),
+                    'custom_keywords': current_keywords,
+                    'language': self.language_var.get()
+                },
+                
+                # Tesseract配置
+                'tesseract': {
+                    'path': self.tesseract_path
+                },
+                
+                # 坐标模式配置
+                'click': {
+                    'mode': self.click_mode_var.get(),
+                    'x': self.x_coord_var.get(),
+                    'y': self.y_coord_var.get()
+                },
+                
+                # 定时功能配置
+                'timed_key_press': {
+                    'groups': timed_groups_config
+                },
+                
+                # 数字识别配置
+                'number_recognition': {
+                    'regions': number_regions_config
+                }
+            }
+            
+            # 5. 确保配置文件目录存在
+            os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
+            
+            # 6. 写入配置文件，使用更紧凑的格式
             with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(config, f, indent=4, ensure_ascii=False)
+                json.dump(config, f, indent=2, ensure_ascii=False, default=str)
+            
             self.log_message("配置已保存")
+            
+        except PermissionError:
+            self.log_message(f"没有权限写入配置文件: {self.config_file}")
+        except IOError as e:
+            self.log_message(f"配置文件IO错误: {str(e)}")
+        except json.JSONDecodeError as e:
+            self.log_message(f"配置JSON编码错误: {str(e)}")
         except Exception as e:
             self.log_message(f"配置保存错误: {str(e)}")
     
@@ -935,10 +1375,9 @@ class AutoDoorOCR:
             # 2. 等待固定时间（无需用户修改）
             time.sleep(self.click_delay)
             
-            # 3. 按下自定义按键
+            # 3. 通过事件队列按下自定义按键
             custom_key = self.key_var.get()
-            pyautogui.press(custom_key)
-            self.log_message(f"按下了 {custom_key} 键")
+            self.add_event(('keypress', custom_key))
             
             # 记录触发时间
             self.last_trigger_time = time.time()
@@ -969,10 +1408,347 @@ class AutoDoorOCR:
         
         return click_x, click_y
     
+    def start_event_thread(self):
+        """启动事件处理线程"""
+        self.is_event_running = True
+        self.event_thread = threading.Thread(target=self.process_events, daemon=True)
+        self.event_thread.start()
+        self.log_message("事件处理线程已启动")
+    
+    def process_events(self):
+        """处理事件队列中的事件"""
+        while self.is_event_running:
+            try:
+                with self.event_cond:
+                    while not self.event_queue:
+                        self.event_cond.wait()
+                    event = self.event_queue.popleft()
+                
+                # 执行事件
+                self.execute_event(event)
+            except Exception as e:
+                self.log_message(f"事件处理错误: {str(e)}")
+                time.sleep(1)
+    
+    def add_event(self, event):
+        """添加事件到队列"""
+        with self.event_cond:
+            self.event_queue.append(event)
+            self.event_cond.notify()
+    
+    def execute_event(self, event):
+        """执行具体事件"""
+        event_type, data = event
+        
+        if event_type == 'keypress':
+            key = data
+            try:
+                pyautogui.press(key)
+                self.log_message(f"按下了 {key} 键")
+            except Exception as e:
+                self.log_message(f"按键执行错误: {str(e)}")
+        # 其他事件类型...
+    
+    def start_timed_tasks(self):
+        """开始定时任务"""
+        # 停止现有的定时任务
+        self.stop_timed_tasks()
+        
+        self.log_message("开始定时任务")
+        
+        # 统计要启动的定时组数量
+        start_count = 0
+        for i, group in enumerate(self.timed_groups):
+            if group["enabled"].get():
+                interval = group["interval"].get()
+                key = group["key"].get()
+                # 创建线程并存储
+                thread = threading.Thread(target=self.timed_task_loop, args=(i, interval, key), daemon=True)
+                self.timed_threads.append(thread)
+                thread.start()
+                start_count += 1
+        
+        # 更新按钮状态
+        self.start_timed_btn.config(state="disabled")
+        self.stop_timed_btn.config(state="normal")
+        
+        if start_count == 0:
+            self.log_message("没有启用任何定时组")
+    
+    def stop_timed_tasks(self):
+        """停止定时任务"""
+        # 停止所有定时任务
+        self.log_message("停止所有定时任务")
+        
+        # 清空线程列表
+        if self.timed_threads:
+            self.log_message(f"停止{len(self.timed_threads)}个定时任务线程")
+            self.timed_threads.clear()
+        
+        # 更新按钮状态
+        self.start_timed_btn.config(state="normal")
+        self.stop_timed_btn.config(state="disabled")
+        
+        self.log_message("已停止定时任务")
+    
+    def timed_task_loop(self, group_index, interval, key):
+        """定时任务循环"""
+        import threading
+        current_thread = threading.current_thread()
+        
+        # 检查线程是否在timed_threads列表中，以及定时组是否启用
+        while current_thread in self.timed_threads and self.timed_groups[group_index]["enabled"].get():
+            try:
+                self.add_event(('keypress', key))
+                self.log_message(f"定时任务{group_index+1}触发按键: {key}")
+                
+                # 等待指定的时间间隔
+                for _ in range(interval):
+                    time.sleep(1)
+                    # 每秒钟检查一次线程是否仍在列表中
+                    if current_thread not in self.timed_threads:
+                        return
+            except Exception as e:
+                self.log_message(f"定时任务{group_index+1}错误: {str(e)}")
+                break
+    
+    def start_number_region_selection(self, region_index):
+        """开始数字识别区域选择"""
+        self.current_number_region = region_index
+        self.log_message(f"开始数字识别区域{region_index+1}选择...")
+        self.is_selecting = True
+        
+        # 检查screeninfo库是否可用
+        if screeninfo is None:
+            messagebox.showerror("错误", "screeninfo库未安装，无法支持多显示器选择。请运行 'pip install screeninfo' 安装该库。")
+            return
+        
+        # 获取虚拟屏幕的尺寸（包含所有显示器）
+        monitors = screeninfo.get_monitors()
+        
+        # 计算整个虚拟屏幕的边界
+        self.min_x = min(monitor.x for monitor in monitors)
+        self.min_y = min(monitor.y for monitor in monitors)
+        max_x = max(monitor.x + monitor.width for monitor in monitors)
+        max_y = max(monitor.y + monitor.height for monitor in monitors)
+        
+        # 创建透明的区域选择窗口，覆盖整个虚拟屏幕
+        self.select_window = tk.Toplevel(self.root)
+        self.select_window.geometry(f"{max_x - self.min_x}x{max_y - self.min_y}+{self.min_x}+{self.min_y}")
+        self.select_window.overrideredirect(True)  # 移除窗口装饰
+        self.select_window.attributes("-alpha", 0.3)
+        self.select_window.attributes("-topmost", True)
+        
+        # 创建画布用于绘制选择框
+        self.canvas = tk.Canvas(self.select_window, cursor="cross", 
+                               width=max_x - self.min_x, height=max_y - self.min_y)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+        
+        # 绑定鼠标事件
+        self.canvas.bind("<Button-1>", self.on_mouse_down)
+        self.canvas.bind("<B1-Motion>", self.on_mouse_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_number_region_mouse_up)
+        
+        self.select_window.protocol("WM_DELETE_WINDOW", self.cancel_selection)
+    
+    def on_number_region_mouse_up(self, event):
+        """数字识别区域鼠标释放事件"""
+        # 获取结束绝对坐标
+        end_x_abs = event.x_root
+        end_y_abs = event.y_root
+        
+        # 确保选择区域有效
+        if abs(end_x_abs - self.start_x_abs) < 10 or abs(end_y_abs - self.start_y_abs) < 10:
+            messagebox.showwarning("警告", "选择的区域太小，请重新选择")
+            self.cancel_selection()
+            return
+        
+        # 保存选择区域（使用绝对坐标）
+        region = (
+            min(self.start_x_abs, end_x_abs),
+            min(self.start_y_abs, end_y_abs),
+            max(self.start_x_abs, end_x_abs),
+            max(self.start_y_abs, end_y_abs)
+        )
+        
+        # 更新界面
+        region_index = self.current_number_region
+        self.number_regions[region_index]["region"] = region
+        self.number_regions[region_index]["region_var"].set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
+        
+        self.log_message(f"已选择数字识别区域{region_index+1}: {region}")
+        self.cancel_selection()
+        
+        # 保存配置
+        self.save_config()
+    
+    def start_number_recognition(self):
+        """开始数字识别"""
+        # 停止现有的数字识别任务
+        self.stop_number_recognition()
+        
+        self.log_message("开始数字识别")
+        
+        # 统计要启动的数字识别区域数量
+        start_count = 0
+        for i, region_config in enumerate(self.number_regions):
+            if region_config["enabled"].get():
+                region = region_config["region"]
+                if not region:
+                    messagebox.showwarning("警告", f"请先为数字识别区域{i+1}选择区域")
+                    return
+                
+                threshold = region_config["threshold"].get()
+                key = region_config["key"].get()
+                thread = threading.Thread(target=self.number_recognition_loop, args=(i, region, threshold, key), daemon=True)
+                self.number_threads.append(thread)
+                thread.start()
+                start_count += 1
+        
+        # 更新按钮状态
+        self.start_number_btn.config(state="disabled")
+        self.stop_number_btn.config(state="normal")
+        
+        if start_count == 0:
+            self.log_message("没有启用任何数字识别区域")
+    
+    def stop_number_recognition(self):
+        """停止数字识别"""
+        # 清空线程列表
+        if self.number_threads:
+            self.log_message(f"停止{len(self.number_threads)}个数字识别线程")
+            self.number_threads.clear()
+        
+        # 更新按钮状态
+        self.start_number_btn.config(state="normal")
+        self.stop_number_btn.config(state="disabled")
+        
+        self.log_message("已停止数字识别")
+    
+    def number_recognition_loop(self, region_index, region, threshold, key):
+        """数字识别循环"""
+        import threading
+        current_thread = threading.current_thread()
+        
+        # 检查线程是否在number_threads列表中，以及数字识别区域是否启用
+        while current_thread in self.number_threads and self.number_regions[region_index]["enabled"].get():
+            try:
+                # 截图并识别数字
+                screenshot = self.take_screenshot(region)
+                text = self.ocr_number(screenshot)
+                self.log_message(f"数字识别{region_index+1}结果: '{text}'")
+                
+                number = self.parse_number(text)
+                if number is not None:
+                    self.log_message(f"数字识别{region_index+1}解析结果: {number}")
+                    if number < threshold:
+                        self.add_event(('keypress', key))
+                        self.log_message(f"数字识别{region_index+1}触发按键: {key}")
+                
+                time.sleep(1)  # 1秒间隔
+            except Exception as e:
+                self.log_message(f"数字识别{region_index+1}错误: {str(e)}")
+                time.sleep(5)
+    
+    def parse_number(self, text):
+        """解析数字，支持X/Y格式
+        打印详细日志以帮助排查问题
+        """
+        # 打印当前识别到的文字内容
+        self.log_message(f"数字识别解析: 当前文字内容为 '{text}'")
+        
+        # 移除可能的空格和换行符
+        text = text.strip()
+        
+        # 检查是否为X/Y格式
+        if '/' in text:
+            self.log_message(f"数字识别解析: 检测到X/Y格式文字 '{text}'")
+            parts = text.split('/')
+            self.log_message(f"数字识别解析: 分割结果为 {parts}")
+            
+            if len(parts) == 2:
+                # 尝试解析X部分
+                x_part = parts[0].strip()
+                self.log_message(f"数字识别解析: 尝试解析X部分 '{x_part}'")
+                try:
+                    x_number = int(x_part)
+                    self.log_message(f"数字识别解析: 成功解析X部分为 {x_number}")
+                    return x_number
+                except ValueError as e:
+                    self.log_message(f"数字识别解析: 无法解析X部分 '{x_part}'，错误: {str(e)}")
+                    # 尝试清理X部分，移除非数字字符
+                    cleaned_x = ''.join(filter(str.isdigit, x_part))
+                    if cleaned_x:
+                        self.log_message(f"数字识别解析: 清理后X部分为 '{cleaned_x}'")
+                        try:
+                            return int(cleaned_x)
+                        except ValueError:
+                            self.log_message(f"数字识别解析: 清理后仍无法解析X部分 '{cleaned_x}'")
+        else:
+            self.log_message(f"数字识别解析: 未检测到X/Y格式，尝试直接解析数字 '{text}'")
+            
+        # 尝试直接解析为数字
+        try:
+            # 清理文字，移除非数字字符
+            cleaned_text = ''.join(filter(str.isdigit, text))
+            if cleaned_text:
+                self.log_message(f"数字识别解析: 清理后文字为 '{cleaned_text}'")
+                number = int(cleaned_text)
+                self.log_message(f"数字识别解析: 成功解析为数字 {number}")
+                return number
+            else:
+                self.log_message(f"数字识别解析: 清理后无数字字符")
+                return None
+        except ValueError as e:
+            self.log_message(f"数字识别解析: 无法直接解析为数字，错误: {str(e)}")
+            return None
+    
+    def take_screenshot(self, region):
+        """截取指定区域的屏幕"""
+        from PIL import ImageGrab
+        x1, y1, x2, y2 = region
+        left = min(x1, x2)
+        top = min(y1, y2)
+        right = max(x1, x2)
+        bottom = max(y1, y2)
+        return ImageGrab.grab(bbox=(left, top, right, bottom), all_screens=True)
+    
+    def ocr_number(self, image):
+        """识别数字，支持X/Y格式
+        简化图像预处理，保留字符白名单以避免'ee'错误识别
+        """
+        # 1. 转换为灰度图像
+        image = image.convert('L')
+        
+        # 2. 不使用复杂的OpenCV预处理，只使用基本的阈值处理
+        # 这样可以保留更多原始信息，提高识别率
+        
+        # 3. 优化OCR配置，平衡识别率和错误率
+        # 使用--psm 7（单行文本）和--oem 3（默认OCR引擎模式）
+        # 添加字符白名单，只识别数字和/符号，防止'ee'错误
+        config = '--psm 7 --oem 3 -c tessedit_char_whitelist=0123456789/'
+        text = pytesseract.image_to_string(image, lang='eng', config=config)
+        
+        # 4. 额外的文本清理，移除可能的换行符和空格
+        text = text.strip().replace('\n', '').replace('\r', '')
+        
+        return text
+    
+
+    
     def exit_program(self):
         """退出程序"""
         if self.is_running:
             self.stop_monitoring()
+        self.stop_timed_tasks()
+        self.stop_number_recognition()
+        
+        # 停止事件线程
+        self.is_event_running = False
+        if self.event_thread:
+            self.add_event(('exit', None))
+            self.event_thread.join(timeout=1)
+        
         self.root.destroy()
     
     def run(self):
