@@ -38,11 +38,8 @@ a = Analysis(
     datas=data_files,
     hiddenimports=[],
     hookspath=[],
-    hooksconfig={
-        'cv2': {
-            'excludes': ['opencv_videoio_ffmpeg*', 'opencv_ffmpeg*']
-        }
-    },
+    hooksconfig={},
+
     runtime_hooks=[],
     excludes=[
         # 大型深度学习框架
@@ -61,19 +58,13 @@ a = Analysis(
         'pyqt5', 'pyside6', 'wxpython', 'tkinterdnd2',
         
         # PIL扩展
-        'pillow_heif', 'PIL._imagingtk', 'PIL._tkinter_finder', 'PIL.ImageQt',
+        'pillow_heif', 'PIL._imagingtk', 'PIL._tkinter_finder', 'PIL.ImageQt', 'PIL.ImageTk',
         
-        # OpenCV不必要的组件
-        'cv2.data', 'cv2.gapi', 'cv2.misc', 'cv2.typing',
-        'cv2.aruco', 'cv2.bgsegm', 'cv2.bioinspired', 'cv2.calib3d',
-        'cv2.datasets', 'cv2.dnn', 'cv2.dnn_objdetect', 'cv2.dnn_superres',
-        'cv2.dpm', 'cv2.face', 'cv2.freetype', 'cv2.fuzzy', 'cv2.hfs',
-        'cv2.img_hash', 'cv2.line_descriptor', 'cv2.mcc', 'cv2.optflow',
-        'cv2.phase_unwrapping', 'cv2.plot', 'cv2.quality', 'cv2.rapid',
-        'cv2.reg', 'cv2.rgbd', 'cv2.saliency', 'cv2.shape', 'cv2.stitching',
-        'cv2.superres', 'cv2.surface_matching', 'cv2.text', 'cv2.tracking',
-        'cv2.video', 'cv2.videoio', 'cv2.videostab', 'cv2.xfeatures2d',
-        'cv2.ximgproc', 'cv2.xobjdetect', 'cv2.xphoto',
+        # 完全排除OpenCV
+        'cv2',
+        
+        # 完全排除NumPy
+        'numpy',
         
         # NumPy扩展
         'numpy.testing', 'numpy.f2py', 'numpy.distutils',

@@ -2,14 +2,14 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import pyautogui
 import pytesseract
-from PIL import Image, ImageTk
-import cv2
-import numpy as np
+from PIL import Image, ImageGrab
 import threading
 import time
 import datetime
 import subprocess
 import os
+import json
+from collections import deque
 
 # 尝试导入screeninfo库，如果不可用则提供安装提示
 try:
@@ -21,27 +21,27 @@ class AutoDoorOCR:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("AutoDoor OCR 识别系统")
-        self.root.geometry("800x700")  # 增大窗口尺寸以容纳更多控件
-        self.root.resizable(True, True)  # 允许调整窗口大小
-        self.root.minsize(750, 650)  # 设置最小尺寸
+        self.root.geometry("800x700") 
+        self.root.resizable(True, True) 
+        self.root.minsize(750, 650)
         
         # 配置参数
-        self.ocr_interval = 5  # OCR识别间隔（秒）
-        self.pause_duration = 180  # 暂停时长（秒）
-        self.click_delay = 0.5  # 点击后等待时间（秒）
-        self.custom_key = "equal"  # 自定义按键，默认为等号键
+        self.ocr_interval = 5
+        self.pause_duration = 180
+        self.click_delay = 0.5
+        self.custom_key = "equal"
         
         # 关键词配置
-        self.custom_keywords = ["men", "door"]  # 自定义关键词列表
-        self.ocr_language = "eng"  # OCR识别语言，默认为英文（eng）
+        self.custom_keywords = ["men", "door"]
+        self.ocr_language = "eng"
         
         # 坐标轴参数
-        self.click_x = 0  # 点击x坐标（相对于选择区域）
-        self.click_y = 0  # 点击y坐标（相对于选择区域）
-        self.click_mode = "center"  # 点击模式：center或custom
+        self.click_x = 0 
+        self.click_y = 0
+        self.click_mode = "center"
         
         # 状态变量
-        self.selected_region = None  # (x1, y1, x2, y2)
+        self.selected_region = None
         self.is_running = False
         self.is_paused = False
         self.is_selecting = False
@@ -59,7 +59,6 @@ class AutoDoorOCR:
         self.number_threads = []
         
         # 事件队列
-        from collections import deque
         self.event_queue = deque()
         self.event_lock = threading.Lock()
         self.event_cond = threading.Condition(self.event_lock)
@@ -630,12 +629,7 @@ class AutoDoorOCR:
         clear_btn = ttk.Button(parent, text="清除日志", command=self.clear_log)
         clear_btn.pack(side=tk.BOTTOM, pady=5, anchor=tk.E)
     
-    def update_interval_label(self, label, prefix, var, is_float=False):
-        """更新时间间隔标签"""
-        value = var.get()
-        if is_float:
-            value = round(value, 1)
-        label.config(text=f"{prefix}: {value}秒")
+
         
     def update_axis_inputs(self):
         """根据点击模式更新坐标轴输入状态"""
@@ -793,8 +787,6 @@ class AutoDoorOCR:
         确保加载所有前端设置，包括新增功能的相关配置
         支持新旧配置格式的兼容处理
         """
-        import json
-        
         # 初始化配置加载结果
         config_loaded = False
         
@@ -810,8 +802,6 @@ class AutoDoorOCR:
                 self.log_message(f"配置版本: {config_version}")
                 
                 # 1. 加载Tesseract配置
-                config_has_tesseract = False
-                
                 # 兼容旧格式和新格式
                 tesseract_path = None
                 if 'tesseract' in config and isinstance(config['tesseract'], dict):
@@ -827,7 +817,6 @@ class AutoDoorOCR:
                     if os.path.exists(temp_path):
                         self.tesseract_path = temp_path
                         self.log_message(f"从配置文件加载Tesseract路径: {self.tesseract_path}")
-                        config_has_tesseract = True
                     else:
                         self.log_message(f"配置文件中的Tesseract路径不存在: {temp_path}")
                 
@@ -1067,8 +1056,18 @@ class AutoDoorOCR:
     
     def start_region_selection(self):
         """开始区域选择"""
-        self.log_message("开始区域选择...")
+        self._start_selection("normal", None)
+    
+    def _start_selection(self, selection_type, region_index):
+        """通用的区域选择方法
+        
+        Args:
+            selection_type: 选择类型，"normal"或"number"
+            region_index: 数字识别区域索引，仅当selection_type为"number"时有效
+        """
+        self.log_message(f"开始{'数字识别区域' if selection_type == 'number' else ''}区域选择...")
         self.is_selecting = True
+        self.current_number_region = region_index
         
         # 检查screeninfo库是否可用
         if screeninfo is None:
@@ -1099,7 +1098,12 @@ class AutoDoorOCR:
         # 绑定鼠标事件
         self.canvas.bind("<Button-1>", self.on_mouse_down)
         self.canvas.bind("<B1-Motion>", self.on_mouse_drag)
-        self.canvas.bind("<ButtonRelease-1>", self.on_mouse_up)
+        
+        # 根据选择类型绑定不同的鼠标释放事件
+        if selection_type == "number":
+            self.canvas.bind("<ButtonRelease-1>", self.on_number_region_mouse_up)
+        else:
+            self.canvas.bind("<ButtonRelease-1>", self.on_mouse_up)
         
         self.select_window.protocol("WM_DELETE_WINDOW", self.cancel_selection)
     
@@ -1248,7 +1252,6 @@ class AutoDoorOCR:
             bottom = max(y1, y2)
             
             # 使用PIL的ImageGrab.grab()方法，设置all_screens=True捕获所有屏幕
-            from PIL import ImageGrab
             screenshot = ImageGrab.grab(bbox=(left, top, right, bottom), all_screens=True)
             
             # 转换为灰度图像以提高识别率
@@ -1273,8 +1276,6 @@ class AutoDoorOCR:
         保存所有前端用户设置，包括新增功能的相关配置
         确保数据结构完整、一致，并处理边界情况
         """
-        import json
-        
         try:
             # 1. 保存定时功能配置
             timed_groups_config = []
@@ -1493,7 +1494,6 @@ class AutoDoorOCR:
     
     def timed_task_loop(self, group_index, interval, key):
         """定时任务循环"""
-        import threading
         current_thread = threading.current_thread()
         
         # 检查线程是否在timed_threads列表中，以及定时组是否启用
@@ -1514,42 +1514,7 @@ class AutoDoorOCR:
     
     def start_number_region_selection(self, region_index):
         """开始数字识别区域选择"""
-        self.current_number_region = region_index
-        self.log_message(f"开始数字识别区域{region_index+1}选择...")
-        self.is_selecting = True
-        
-        # 检查screeninfo库是否可用
-        if screeninfo is None:
-            messagebox.showerror("错误", "screeninfo库未安装，无法支持多显示器选择。请运行 'pip install screeninfo' 安装该库。")
-            return
-        
-        # 获取虚拟屏幕的尺寸（包含所有显示器）
-        monitors = screeninfo.get_monitors()
-        
-        # 计算整个虚拟屏幕的边界
-        self.min_x = min(monitor.x for monitor in monitors)
-        self.min_y = min(monitor.y for monitor in monitors)
-        max_x = max(monitor.x + monitor.width for monitor in monitors)
-        max_y = max(monitor.y + monitor.height for monitor in monitors)
-        
-        # 创建透明的区域选择窗口，覆盖整个虚拟屏幕
-        self.select_window = tk.Toplevel(self.root)
-        self.select_window.geometry(f"{max_x - self.min_x}x{max_y - self.min_y}+{self.min_x}+{self.min_y}")
-        self.select_window.overrideredirect(True)  # 移除窗口装饰
-        self.select_window.attributes("-alpha", 0.3)
-        self.select_window.attributes("-topmost", True)
-        
-        # 创建画布用于绘制选择框
-        self.canvas = tk.Canvas(self.select_window, cursor="cross", 
-                               width=max_x - self.min_x, height=max_y - self.min_y)
-        self.canvas.pack(fill=tk.BOTH, expand=True)
-        
-        # 绑定鼠标事件
-        self.canvas.bind("<Button-1>", self.on_mouse_down)
-        self.canvas.bind("<B1-Motion>", self.on_mouse_drag)
-        self.canvas.bind("<ButtonRelease-1>", self.on_number_region_mouse_up)
-        
-        self.select_window.protocol("WM_DELETE_WINDOW", self.cancel_selection)
+        self._start_selection("number", region_index)
     
     def on_number_region_mouse_up(self, event):
         """数字识别区域鼠标释放事件"""
@@ -1627,7 +1592,6 @@ class AutoDoorOCR:
     
     def number_recognition_loop(self, region_index, region, threshold, key):
         """数字识别循环"""
-        import threading
         current_thread = threading.current_thread()
         
         # 检查线程是否在number_threads列表中，以及数字识别区域是否启用
@@ -1662,30 +1626,30 @@ class AutoDoorOCR:
         
         # 检查是否为X/Y格式
         if '/' in text:
-            self.log_message(f"数字识别解析: 检测到X/Y格式文字 '{text}'")
+            self.log_message("数字识别解析: 检测到X/Y格式文字 '{0}'".format(text))
             parts = text.split('/')
-            self.log_message(f"数字识别解析: 分割结果为 {parts}")
+            self.log_message("数字识别解析: 分割结果为 {0}".format(parts))
             
             if len(parts) == 2:
                 # 尝试解析X部分
                 x_part = parts[0].strip()
-                self.log_message(f"数字识别解析: 尝试解析X部分 '{x_part}'")
+                self.log_message("数字识别解析: 尝试解析X部分 '{0}'".format(x_part))
                 try:
                     x_number = int(x_part)
-                    self.log_message(f"数字识别解析: 成功解析X部分为 {x_number}")
+                    self.log_message("数字识别解析: 成功解析X部分为 {0}".format(x_number))
                     return x_number
                 except ValueError as e:
-                    self.log_message(f"数字识别解析: 无法解析X部分 '{x_part}'，错误: {str(e)}")
+                    self.log_message("数字识别解析: 无法解析X部分 '{0}'，错误: {1}".format(x_part, str(e)))
                     # 尝试清理X部分，移除非数字字符
                     cleaned_x = ''.join(filter(str.isdigit, x_part))
                     if cleaned_x:
-                        self.log_message(f"数字识别解析: 清理后X部分为 '{cleaned_x}'")
+                        self.log_message("数字识别解析: 清理后X部分为 '{0}'".format(cleaned_x))
                         try:
                             return int(cleaned_x)
                         except ValueError:
-                            self.log_message(f"数字识别解析: 清理后仍无法解析X部分 '{cleaned_x}'")
+                            self.log_message("数字识别解析: 清理后仍无法解析X部分 '{0}'".format(cleaned_x))
         else:
-            self.log_message(f"数字识别解析: 未检测到X/Y格式，尝试直接解析数字 '{text}'")
+            self.log_message("数字识别解析: 未检测到X/Y格式，尝试直接解析数字 '{0}'".format(text))
             
         # 尝试直接解析为数字
         try:
@@ -1705,7 +1669,6 @@ class AutoDoorOCR:
     
     def take_screenshot(self, region):
         """截取指定区域的屏幕"""
-        from PIL import ImageGrab
         x1, y1, x2, y2 = region
         left = min(x1, x2)
         top = min(y1, y2)
