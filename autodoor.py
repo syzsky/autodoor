@@ -23,7 +23,7 @@ except ImportError:
     PYGAME_AVAILABLE = False
 
 # 全局版本号配置
-VERSION = "1.2.1"
+VERSION = "1.3.0"
 
 # 尝试导入screeninfo库，如果不可用则提供安装提示
 try:
@@ -64,11 +64,28 @@ class AutoDoorOCR:
         self.is_selecting = False
         self.last_trigger_time = 0
         
-        # 配置文件路径
-        self.config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "autodoor_config.json")
+        # 配置文件路径 - 使用系统标准配置目录
+        app_name = "AutoDoorOCR"
         
-        # 日志文件路径
-        self.log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "autodoor.log")
+        # 根据不同操作系统选择配置文件目录
+        if platform.system() == "Windows":
+            # Windows: 使用APPDATA环境变量
+            config_dir = os.path.join(os.environ.get("APPDATA"), app_name)
+        elif platform.system() == "Darwin":
+            # macOS: 使用Library/Preferences目录
+            config_dir = os.path.join(os.path.expanduser("~"), "Library", "Preferences", app_name)
+        else:
+            # 其他系统: 回退到程序运行目录
+            config_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config")
+        
+        # 确保配置目录存在
+        os.makedirs(config_dir, exist_ok=True)
+        
+        # 配置文件路径
+        self.config_file = os.path.join(config_dir, "autodoor_config.json")
+        
+        # 日志文件路径 - 也放在配置目录下
+        self.log_file = os.path.join(config_dir, "autodoor.log")
         
         # 线程控制
         self.ocr_thread = None
@@ -140,6 +157,11 @@ class AutoDoorOCR:
         
         # 设置配置监听器
         self.setup_config_listeners()
+        
+        # 设置快捷键绑定
+        self.setup_shortcuts()
+        
+        # 移除全局鼠标滚轮事件处理，让每个标签页自己处理滚动事件
         
         # 启动事件处理线程
         self.start_event_thread()
@@ -340,6 +362,11 @@ class AutoDoorOCR:
         # 主内容区域 - 使用笔记本(tab)布局
         notebook = ttk.Notebook(main_frame)
         notebook.pack(fill=tk.BOTH, expand=True)
+        
+        # 首页标签页 - 新增
+        home_frame = ttk.Frame(notebook)
+        notebook.add(home_frame, text="首页")
+        self.create_home_tab(home_frame)
         
         # 文字识别标签页
         ocr_frame = ttk.Frame(notebook)
@@ -558,267 +585,553 @@ class AutoDoorOCR:
         restore_keyword_btn = ttk.Button(btn_frame, text="恢复默认", command=self.restore_default_keywords)
         restore_keyword_btn.pack(side=tk.LEFT)
         
-        # 操作按钮
-        action_frame = ttk.Frame(ocr_frame)
-        action_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        self.start_btn = ttk.Button(action_frame, text="开始监控", command=self.start_monitoring, state="disabled")
-        self.start_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.stop_btn = ttk.Button(action_frame, text="停止监控", command=self.stop_monitoring, state="disabled")
-        self.stop_btn.pack(side=tk.LEFT)
+        # 操作按钮已移除，统一由首页全局控制
     
     def create_timed_tab(self, parent):
         """创建定时功能标签页"""
         timed_frame = ttk.Frame(parent, padding="10")
         timed_frame.pack(fill=tk.BOTH, expand=True)
         
+        # 顶部按钮栏
+        top_frame = ttk.Frame(timed_frame)
+        top_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 新增组按钮
+        self.add_timed_group_btn = ttk.Button(top_frame, text="新增定时组", command=self.add_timed_group)
+        self.add_timed_group_btn.pack(side=tk.LEFT)
+        
+        # 定时组容器，带滚动条
+        groups_container = ttk.Frame(timed_frame)
+        groups_container.pack(fill=tk.BOTH, expand=True)
+        
+        # 垂直滚动条
+        groups_scrollbar = ttk.Scrollbar(groups_container, orient=tk.VERTICAL)
+        groups_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # 画布，用于实现滚动
+        groups_canvas = tk.Canvas(groups_container, yscrollcommand=groups_scrollbar.set, highlightthickness=0)
+        groups_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        groups_scrollbar.config(command=groups_canvas.yview)
+        
+        # 内部容器，用于放置所有定时组
+        self.timed_groups_frame = ttk.Frame(groups_canvas)
+        groups_canvas.create_window((0, 0), window=self.timed_groups_frame, anchor="nw", tags="inner_frame")
+        
+        # 配置画布尺寸和滚动区域
+        def configure_scroll_region(event):
+            groups_canvas.configure(scrollregion=groups_canvas.bbox("all"))
+            # 确保内部框架宽度与画布一致
+            groups_canvas.itemconfig("inner_frame", width=groups_canvas.winfo_width())
+        
+        groups_canvas.bind("<Configure>", configure_scroll_region)
+        self.timed_groups_frame.bind("<Configure>", configure_scroll_region)
+        
+        # 添加鼠标滚轮支持
+        def on_mousewheel(event):
+            # 使用yview_moveto方法实现平滑滚动
+            # 获取当前滚动位置
+            current_pos = groups_canvas.yview()
+            # 计算新的滚动位置
+            scroll_amount = event.delta / 120 / 10  # 调整滚动速度
+            new_pos = current_pos[0] - scroll_amount
+            # 确保新位置在有效范围内
+            new_pos = max(0, min(1, new_pos))
+            # 设置新的滚动位置
+            groups_canvas.yview_moveto(new_pos)
+            # 阻止事件继续传播
+            return "break"
+        
+        # 为画布绑定鼠标滚轮事件
+        groups_canvas.bind("<MouseWheel>", on_mousewheel)
+        
+        # 为内部框架绑定鼠标滚轮事件
+        self.timed_groups_frame.bind("<MouseWheel>", on_mousewheel)
+        
+        # 为整个标签页绑定鼠标滚轮事件
+        timed_frame.bind("<MouseWheel>", on_mousewheel)
+        
+        # 保存定时功能的画布和框架引用
+        self.timed_canvas = groups_canvas
+        self.timed_frame = timed_frame
+        self.timed_groups_container = groups_container
+        
         # 定时组配置
         self.timed_groups = []
         for i in range(3):
-            group_frame = ttk.LabelFrame(timed_frame, text=f"定时组{i+1}", padding="10")
-            group_frame.pack(fill=tk.X, pady=(0, 10))
-            
-            # 启用开关
-            enabled_var = tk.BooleanVar(value=False)
-            enabled_switch = ttk.Checkbutton(group_frame, text="启用", variable=enabled_var)
-            enabled_switch.pack(side=tk.LEFT, padx=(0, 10))
-            
-            # 时间间隔
-            interval_label = ttk.Label(group_frame, text="间隔(秒):", width=10)
-            interval_label.pack(side=tk.LEFT)
-            
-            interval_var = tk.IntVar(value=10*(i+1))
-            interval_entry = ttk.Entry(group_frame, textvariable=interval_var, width=10)
-            interval_entry.pack(side=tk.LEFT, padx=(0, 10))
-            
-            # 按键选择
-            key_label = ttk.Label(group_frame, text="按键:", width=5)
-            key_label.pack(side=tk.LEFT)
-            
-            key_var = tk.StringVar(value=["space", "enter", "tab"][i])
-            
-            # 按键配置区域
-            timed_key_config_frame = ttk.Frame(group_frame)
-            timed_key_config_frame.pack(side=tk.LEFT)
-            
-            # 显示当前按键的标签
-            timed_current_key_label = ttk.Label(timed_key_config_frame, textvariable=key_var, relief="sunken", padding=2, width=5)
-            timed_current_key_label.pack(side=tk.LEFT, padx=(0, 5))
-            
-            # 设置按键按钮
-            set_timed_key_btn = ttk.Button(timed_key_config_frame, text="修改按键", width=8)
-            set_timed_key_btn.pack(side=tk.LEFT)
-            # 单独绑定事件，避免UnboundLocalError
-            set_timed_key_btn.config(command=lambda v=key_var, b=set_timed_key_btn: self.start_key_listening(v, b))
-            
-            # 按键延迟配置
-            delay_min_var = tk.IntVar(value=300)
-            delay_max_var = tk.IntVar(value=500)
-            
-            delay_frame = ttk.Frame(timed_key_config_frame)
-            delay_frame.pack(side=tk.LEFT, padx=(10, 0))
-            
-            # 添加"延迟："文本，确保使用全局字体样式
-            ttk.Label(delay_frame, text="按键时长：").pack(side=tk.LEFT)
-            
-            # 延迟最小值输入框
-            def validate_positive_int(P):
-                if P == "":
-                    return True
-                try:
-                    val = int(P)
-                    return val > 0
-                except ValueError:
-                    return False
-            
-            delay_min_entry = ttk.Entry(delay_frame, textvariable=delay_min_var, width=5, validate="key")
-            delay_min_entry.pack(side=tk.LEFT)
-            delay_min_entry.configure(validatecommand=(delay_min_entry.register(validate_positive_int), '%P'))
-            
-            # 失去焦点时的验证，确保值为正整数
-            def validate_min_on_focusout(event):
-                value = delay_min_var.get()
-                if value <= 0:
-                    delay_min_var.set(300)
-            delay_min_entry.bind("<FocusOut>", validate_min_on_focusout)
-            
-            ttk.Label(delay_frame, text=" - ", width=2).pack(side=tk.LEFT)
-            
-            delay_max_entry = ttk.Entry(delay_frame, textvariable=delay_max_var, width=5, validate="key")
-            delay_max_entry.pack(side=tk.LEFT)
-            delay_max_entry.configure(validatecommand=(delay_max_entry.register(validate_positive_int), '%P'))
-            
-            # 失去焦点时的验证，确保值为正整数且不小于最小值
-            def validate_max_on_focusout(event):
-                min_val = delay_min_var.get()
-                max_val = delay_max_var.get()
-                if max_val <= 0:
-                    delay_max_var.set(500)
-                elif max_val < min_val:
-                    delay_max_var.set(min_val)
-            delay_max_entry.bind("<FocusOut>", validate_max_on_focusout)
-            
-            ttk.Label(delay_frame, text="ms", width=3).pack(side=tk.LEFT)
-            
-            # 报警开关 - 为每个定时组创建独立变量
-            alarm_var = tk.BooleanVar(value=False)
-            alarm_switch = ttk.Checkbutton(timed_key_config_frame, text="启用报警", variable=alarm_var)
-            alarm_switch.pack(side=tk.LEFT, padx=(10, 0))
-            
-            self.timed_groups.append({
-                "enabled": enabled_var,
-                "interval": interval_var,
-                "key": key_var,
-                "delay_min": delay_min_var,
-                "delay_max": delay_max_var,
-                "alarm": alarm_var
-            })
+            self.create_timed_group(i)
         
-        # 操作按钮
-        action_frame = ttk.Frame(timed_frame)
-        action_frame.pack(fill=tk.X, pady=(10, 10))
+        # 为所有定时组绑定鼠标滚轮事件
+        def bind_mousewheel_to_group(group):
+            group_frame = group["frame"]
+            # 为组框架绑定鼠标滚轮事件
+            group_frame.bind("<MouseWheel>", on_mousewheel)
+            # 为组内所有子组件绑定鼠标滚轮事件
+            for child in group_frame.winfo_children():
+                child.bind("<MouseWheel>", on_mousewheel)
+                # 递归绑定到所有子组件的子组件
+                for grandchild in child.winfo_children():
+                    grandchild.bind("<MouseWheel>", on_mousewheel)
         
-        self.start_timed_btn = ttk.Button(action_frame, text="开始定时任务", command=self.start_timed_tasks, state="normal")
-        self.start_timed_btn.pack(side=tk.LEFT, padx=(0, 10))
+        # 绑定所有定时组的鼠标滚轮事件
+        for group in self.timed_groups:
+            bind_mousewheel_to_group(group)
         
-        self.stop_timed_btn = ttk.Button(action_frame, text="停止定时任务", command=self.stop_timed_tasks, state="disabled")
-        self.stop_timed_btn.pack(side=tk.LEFT)
+        # 操作按钮已移除，统一由首页全局控制
     
+    def create_timed_group(self, index):
+        """创建单个定时组，所有UI元素布局在一行中"""
+        # 定时组框架
+        group_frame = ttk.LabelFrame(self.timed_groups_frame, text=f"定时组{index+1}", padding="10")
+        group_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 所有UI元素都放在一个框架中，实现一行布局
+        content_frame = ttk.Frame(group_frame)
+        content_frame.pack(fill=tk.X)
+        
+        # 启用开关
+        enabled_var = tk.BooleanVar(value=False)
+        enabled_switch = ttk.Checkbutton(content_frame, text="启用", variable=enabled_var)
+        enabled_switch.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 时间间隔
+        interval_label = ttk.Label(content_frame, text="间隔(秒):", width=10)
+        interval_label.pack(side=tk.LEFT)
+        
+        interval_var = tk.IntVar(value=10*(index+1))
+        interval_entry = ttk.Entry(content_frame, textvariable=interval_var, width=6)  # 调整宽度为6，能显示4位整数
+        interval_entry.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 按键选择
+        key_label = ttk.Label(content_frame, text="按键:", width=5)
+        key_label.pack(side=tk.LEFT)
+        
+        key_var = tk.StringVar(value=["space", "enter", "tab", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"][index % 15])
+        
+        # 显示当前按键的标签
+        timed_current_key_label = ttk.Label(content_frame, textvariable=key_var, relief="sunken", padding=2, width=5)
+        timed_current_key_label.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # 设置按键按钮
+        set_timed_key_btn = ttk.Button(content_frame, text="修改按键", width=8)
+        set_timed_key_btn.pack(side=tk.LEFT, padx=(0, 10))
+        # 单独绑定事件，避免UnboundLocalError
+        set_timed_key_btn.config(command=lambda v=key_var, b=set_timed_key_btn: self.start_key_listening(v, b))
+        
+        # 按键延迟配置
+        delay_min_var = tk.IntVar(value=300)
+        delay_max_var = tk.IntVar(value=500)
+        
+        # 添加"按键时长："文本
+        ttk.Label(content_frame, text="按键时长：").pack(side=tk.LEFT)
+        
+        # 延迟最小值输入框
+        def validate_positive_int(P):
+            if P == "":
+                return True
+            try:
+                val = int(P)
+                return val > 0
+            except ValueError:
+                return False
+        
+        delay_min_entry = ttk.Entry(content_frame, textvariable=delay_min_var, width=5, validate="key")
+        delay_min_entry.pack(side=tk.LEFT)
+        delay_min_entry.configure(validatecommand=(delay_min_entry.register(validate_positive_int), '%P'))
+        
+        # 失去焦点时的验证，确保值为正整数
+        def validate_min_on_focusout(event):
+            value = delay_min_var.get()
+            if value <= 0:
+                delay_min_var.set(300)
+        delay_min_entry.bind("<FocusOut>", validate_min_on_focusout)
+        
+        ttk.Label(content_frame, text=" - ", width=2).pack(side=tk.LEFT)
+        
+        delay_max_entry = ttk.Entry(content_frame, textvariable=delay_max_var, width=5, validate="key")
+        delay_max_entry.pack(side=tk.LEFT)
+        delay_max_entry.configure(validatecommand=(delay_max_entry.register(validate_positive_int), '%P'))
+        
+        # 失去焦点时的验证，确保值为正整数且不小于最小值
+        def validate_max_on_focusout(event):
+            min_val = delay_min_var.get()
+            max_val = delay_max_var.get()
+            if max_val <= 0:
+                delay_max_var.set(500)
+            elif max_val < min_val:
+                delay_max_var.set(min_val)
+        delay_max_entry.bind("<FocusOut>", validate_max_on_focusout)
+        
+        ttk.Label(content_frame, text="ms", width=3).pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 报警开关 - 为每个定时组创建独立变量
+        alarm_var = tk.BooleanVar(value=False)
+        alarm_switch = ttk.Checkbutton(content_frame, text="启用报警", variable=alarm_var)
+        alarm_switch.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 右侧：删除按钮
+        delete_btn = ttk.Button(content_frame, text="删除", width=6, command=lambda idx=index: self.delete_timed_group(idx))
+        delete_btn.pack(side=tk.RIGHT, padx=(10, 0))
+        
+        # 保存组配置
+        group_config = {
+            "frame": group_frame,
+            "enabled": enabled_var,
+            "interval": interval_var,
+            "key": key_var,
+            "delay_min": delay_min_var,
+            "delay_max": delay_max_var,
+            "alarm": alarm_var
+        }
+        self.timed_groups.append(group_config)
+        
+        # 为新创建的定时组添加配置监听器
+        if hasattr(self, '_setup_group_listeners'):
+            self._setup_group_listeners(group_config)
+        
+        # 为新创建的定时组绑定鼠标滚轮事件
+        # 获取当前标签页的画布
+        canvas = self.timed_groups_frame.master
+        if isinstance(canvas, tk.Canvas):
+            def on_mousewheel(event):
+                # 使用yview_moveto方法实现平滑滚动
+                current_pos = canvas.yview()
+                scroll_amount = event.delta / 120 / 10  # 调整滚动速度
+                new_pos = current_pos[0] - scroll_amount
+                new_pos = max(0, min(1, new_pos))
+                canvas.yview_moveto(new_pos)
+                # 阻止事件继续传播
+                return "break"
+            
+            # 为组框架绑定鼠标滚轮事件
+            group_frame.bind("<MouseWheel>", on_mousewheel)
+            # 为组内所有子组件绑定鼠标滚轮事件
+            for child in group_frame.winfo_children():
+                child.bind("<MouseWheel>", on_mousewheel)
+                # 递归绑定到所有子组件的子组件
+                for grandchild in child.winfo_children():
+                    grandchild.bind("<MouseWheel>", on_mousewheel)
+    
+    def delete_timed_group(self, index, confirm=True):
+        """删除定时组
+        
+        Args:
+            index: 要删除的定时组索引
+            confirm: 是否显示确认对话框，默认为True
+        """
+        if len(self.timed_groups) <= 1:
+            messagebox.showwarning("警告", "至少需要保留一个定时组！")
+            return
+        
+        # 只有在confirm为True时才显示确认对话框
+        if confirm:
+            if not messagebox.askyesno("确认", f"确定要删除定时组{index+1}吗？"):
+                return
+        
+        # 移除组框架
+        self.timed_groups[index]["frame"].destroy()
+        # 从列表中删除
+        del self.timed_groups[index]
+        # 重新编号所有定时组
+        self.renumber_timed_groups()
+        self.log_message(f"已删除定时组{index+1}")
+    
+    def renumber_timed_groups(self):
+        """重新编号所有定时组"""
+        for i, group in enumerate(self.timed_groups):
+            # 更新组标题
+            group["frame"].configure(text=f"定时组{i+1}")
+    
+    def add_timed_group(self):
+        """新增定时组"""
+        if len(self.timed_groups) >= 15:
+            messagebox.showwarning("警告", "最多只能创建15个定时组！")
+            return
+        
+        self.create_timed_group(len(self.timed_groups))
+        self.log_message(f"新增定时组{len(self.timed_groups)}")
+        
     def create_number_tab(self, parent):
         """创建数字识别标签页"""
         number_frame = ttk.Frame(parent, padding="10")
         number_frame.pack(fill=tk.BOTH, expand=True)
         
+        # 顶部按钮栏
+        top_frame = ttk.Frame(number_frame)
+        top_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 新增区域按钮
+        self.add_number_region_btn = ttk.Button(top_frame, text="新增识别区域", command=self.add_number_region)
+        self.add_number_region_btn.pack(side=tk.LEFT)
+        
+        # 区域容器，带滚动条
+        regions_container = ttk.Frame(number_frame)
+        regions_container.pack(fill=tk.BOTH, expand=True)
+        
+        # 垂直滚动条
+        regions_scrollbar = ttk.Scrollbar(regions_container, orient=tk.VERTICAL)
+        regions_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # 画布，用于实现滚动
+        regions_canvas = tk.Canvas(regions_container, yscrollcommand=regions_scrollbar.set, highlightthickness=0)
+        regions_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        regions_scrollbar.config(command=regions_canvas.yview)
+        
+        # 内部容器，用于放置所有识别区域
+        self.number_regions_frame = ttk.Frame(regions_canvas)
+        regions_canvas.create_window((0, 0), window=self.number_regions_frame, anchor="nw", tags="inner_frame")
+        
+        # 配置画布尺寸和滚动区域
+        def configure_scroll_region(event):
+            regions_canvas.configure(scrollregion=regions_canvas.bbox("all"))
+            # 确保内部框架宽度与画布一致
+            regions_canvas.itemconfig("inner_frame", width=regions_canvas.winfo_width())
+        
+        regions_canvas.bind("<Configure>", configure_scroll_region)
+        self.number_regions_frame.bind("<Configure>", configure_scroll_region)
+        
+        # 添加鼠标滚轮支持
+        def on_mousewheel(event):
+            # 使用yview_moveto方法实现平滑滚动
+            # 获取当前滚动位置
+            current_pos = regions_canvas.yview()
+            # 计算新的滚动位置
+            scroll_amount = event.delta / 120 / 10  # 调整滚动速度
+            new_pos = current_pos[0] - scroll_amount
+            # 确保新位置在有效范围内
+            new_pos = max(0, min(1, new_pos))
+            # 设置新的滚动位置
+            regions_canvas.yview_moveto(new_pos)
+            # 阻止事件继续传播
+            return "break"
+        
+        # 为画布绑定鼠标滚轮事件
+        regions_canvas.bind("<MouseWheel>", on_mousewheel)
+        
+        # 为内部框架绑定鼠标滚轮事件
+        self.number_regions_frame.bind("<MouseWheel>", on_mousewheel)
+        
+        # 为整个标签页绑定鼠标滚轮事件
+        number_frame.bind("<MouseWheel>", on_mousewheel)
+        
+        # 保存数字识别的画布和框架引用
+        self.number_canvas = regions_canvas
+        self.number_frame = number_frame
+        self.number_regions_container = regions_container
+        
         # 区域配置
         self.number_regions = []
         for i in range(2):
-            region_frame = ttk.LabelFrame(number_frame, text=f"区域{i+1}", padding="10")
-            region_frame.pack(fill=tk.X, pady=(0, 10))
-            
-            # 第一行：启用开关、选择区域、区域坐标
-            row1_frame = ttk.Frame(region_frame)
-            row1_frame.pack(fill=tk.X, pady=(0, 10))
-            
-            # 启用开关
-            enabled_var = tk.BooleanVar(value=False)
-            enabled_switch = ttk.Checkbutton(row1_frame, text="启用", variable=enabled_var)
-            enabled_switch.pack(side=tk.LEFT, padx=(0, 10))
-            
-            # 区域选择
-            select_btn = ttk.Button(row1_frame, text="选择区域", command=lambda idx=i: self.start_number_region_selection(idx))
-            select_btn.pack(side=tk.LEFT, padx=(0, 10))
-            
-            region_var = tk.StringVar(value="未选择区域")
-            region_label = ttk.Label(row1_frame, textvariable=region_var, width=25)  # 设置固定宽度
-            region_label.pack(side=tk.LEFT, padx=(0, 10))
-            
-            # 第二行：阈值设置、按键设置、延迟配置、报警开关
-            row2_frame = ttk.Frame(region_frame)
-            row2_frame.pack(fill=tk.X)
-            
-            # 阈值设置
-            threshold_label = ttk.Label(row2_frame, text="阈值:", width=5)  # 减小宽度
-            threshold_label.pack(side=tk.LEFT)
-            
-            threshold_var = tk.IntVar(value=500 if i == 0 else 1000)
-            threshold_entry = ttk.Entry(row2_frame, textvariable=threshold_var, width=10)
-            threshold_entry.pack(side=tk.LEFT, padx=(0, 10))
-            
-            # 按键设置
-            key_label = ttk.Label(row2_frame, text="按键:", width=5)
-            key_label.pack(side=tk.LEFT)
-            
-            key_var = tk.StringVar(value=["f1", "f2"][i])
-            
-            # 按键配置区域
-            number_key_config_frame = ttk.Frame(row2_frame)
-            number_key_config_frame.pack(side=tk.LEFT)
-            
-            # 显示当前按键的标签
-            number_current_key_label = ttk.Label(number_key_config_frame, textvariable=key_var, relief="sunken", padding=2, width=5)
-            number_current_key_label.pack(side=tk.LEFT, padx=(0, 5))
-            
-            # 设置按键按钮
-            set_number_key_btn = ttk.Button(number_key_config_frame, text="修改按键", width=8)
-            set_number_key_btn.pack(side=tk.LEFT)
-            # 单独绑定事件，避免UnboundLocalError
-            set_number_key_btn.config(command=lambda v=key_var, b=set_number_key_btn: self.start_key_listening(v, b))
-            
-            # 按键延迟配置
-            delay_min_var = tk.IntVar(value=100)
-            delay_max_var = tk.IntVar(value=200)
-            
-            delay_frame = ttk.Frame(number_key_config_frame)
-            delay_frame.pack(side=tk.LEFT, padx=(10, 0))
-            
-            # 添加"延迟："文本，确保使用全局字体样式
-            ttk.Label(delay_frame, text="按键时长：").pack(side=tk.LEFT)
-            
-            # 延迟最小值输入框
-            def validate_positive_int(P):
-                if P == "":
-                    return True
-                try:
-                    val = int(P)
-                    return val > 0
-                except ValueError:
-                    return False
-            
-            delay_min_entry = ttk.Entry(delay_frame, textvariable=delay_min_var, width=5, validate="key")
-            delay_min_entry.pack(side=tk.LEFT)
-            delay_min_entry.configure(validatecommand=(delay_min_entry.register(validate_positive_int), '%P'))
-            
-            # 失去焦点时的验证，确保值为正整数
-            def validate_min_on_focusout(event):
-                value = delay_min_var.get()
-                if value <= 0:
-                    delay_min_var.set(100)
-            delay_min_entry.bind("<FocusOut>", validate_min_on_focusout)
-            
-            ttk.Label(delay_frame, text=" - ", width=2).pack(side=tk.LEFT)
-            
-            delay_max_entry = ttk.Entry(delay_frame, textvariable=delay_max_var, width=5, validate="key")
-            delay_max_entry.pack(side=tk.LEFT)
-            delay_max_entry.configure(validatecommand=(delay_max_entry.register(validate_positive_int), '%P'))
-            
-            # 失去焦点时的验证，确保值为正整数且不小于最小值
-            def validate_max_on_focusout(event):
-                min_val = delay_min_var.get()
-                max_val = delay_max_var.get()
-                if max_val <= 0:
-                    delay_max_var.set(200)
-                elif max_val < min_val:
-                    delay_max_var.set(min_val)
-            delay_max_entry.bind("<FocusOut>", validate_max_on_focusout)
-            
-            ttk.Label(delay_frame, text="ms", width=3).pack(side=tk.LEFT)
-            
-            # 报警开关 - 为每个数字识别区域创建独立变量
-            alarm_var = tk.BooleanVar(value=False)
-            alarm_switch = ttk.Checkbutton(number_key_config_frame, text="启用报警", variable=alarm_var)
-            alarm_switch.pack(side=tk.LEFT, padx=(10, 0))
-            
-            self.number_regions.append({
-                "enabled": enabled_var,
-                "region_var": region_var,
-                "region": None,
-                "threshold": threshold_var,
-                "key": key_var,
-                "delay_min": delay_min_var,
-                "delay_max": delay_max_var,
-                "alarm": alarm_var
-            })
+            self.create_number_region(i)
         
-        # 操作按钮
-        action_frame = ttk.Frame(number_frame)
-        action_frame.pack(fill=tk.X, pady=(10, 10))
+        # 为所有数字识别区域绑定鼠标滚轮事件
+        def bind_mousewheel_to_region(region):
+            region_frame = region["frame"]
+            # 为区域框架绑定鼠标滚轮事件
+            region_frame.bind("<MouseWheel>", on_mousewheel)
+            # 为区域内所有子组件绑定鼠标滚轮事件
+            for child in region_frame.winfo_children():
+                child.bind("<MouseWheel>", on_mousewheel)
+                # 递归绑定到所有子组件的子组件
+                for grandchild in child.winfo_children():
+                    grandchild.bind("<MouseWheel>", on_mousewheel)
         
-        self.start_number_btn = ttk.Button(action_frame, text="开始数字识别", command=self.start_number_recognition, state="normal")
-        self.start_number_btn.pack(side=tk.LEFT, padx=(0, 10))
+        # 绑定所有数字识别区域的鼠标滚轮事件
+        for region in self.number_regions:
+            bind_mousewheel_to_region(region)
         
-        self.stop_number_btn = ttk.Button(action_frame, text="停止数字识别", command=self.stop_number_recognition, state="disabled")
-        self.stop_number_btn.pack(side=tk.LEFT)
+        # 操作按钮已移除，统一由首页全局控制
+    
+    def create_number_region(self, index):
+        """创建单个数字识别区域"""
+        region_frame = ttk.LabelFrame(self.number_regions_frame, text=f"区域{index+1}", padding="10")
+        region_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 第一行：启用开关、选择区域、区域坐标、删除按钮
+        row1_frame = ttk.Frame(region_frame)
+        row1_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 左侧：启用开关
+        enabled_var = tk.BooleanVar(value=False)
+        enabled_switch = ttk.Checkbutton(row1_frame, text="启用", variable=enabled_var)
+        enabled_switch.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 中间：区域选择和区域坐标
+        select_btn = ttk.Button(row1_frame, text="选择区域", command=lambda idx=index: self.start_number_region_selection(idx))
+        select_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        region_var = tk.StringVar(value="未选择区域")
+        region_label = ttk.Label(row1_frame, textvariable=region_var, width=25)  # 设置固定宽度
+        region_label.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 右侧：删除按钮
+        delete_btn = ttk.Button(row1_frame, text="删除", width=6, command=lambda idx=index: self.delete_number_region(idx))
+        delete_btn.pack(side=tk.RIGHT, padx=(10, 0))
+        
+        # 第二行：阈值设置、按键设置、延迟配置、报警开关
+        row2_frame = ttk.Frame(region_frame)
+        row2_frame.pack(fill=tk.X)
+        
+        # 阈值设置
+        threshold_label = ttk.Label(row2_frame, text="阈值:", width=5)  # 减小宽度
+        threshold_label.pack(side=tk.LEFT)
+        
+        threshold_var = tk.IntVar(value=500 if index == 0 else 1000)
+        threshold_entry = ttk.Entry(row2_frame, textvariable=threshold_var, width=10)
+        threshold_entry.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 按键设置
+        key_label = ttk.Label(row2_frame, text="按键:", width=5)
+        key_label.pack(side=tk.LEFT)
+        
+        key_var = tk.StringVar(value=["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "space", "enter", "tab"][index % 15])
+        
+        # 按键配置区域
+        number_key_config_frame = ttk.Frame(row2_frame)
+        number_key_config_frame.pack(side=tk.LEFT)
+        
+        # 显示当前按键的标签
+        number_current_key_label = ttk.Label(number_key_config_frame, textvariable=key_var, relief="sunken", padding=2, width=5)
+        number_current_key_label.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # 设置按键按钮
+        set_number_key_btn = ttk.Button(number_key_config_frame, text="修改按键", width=8)
+        set_number_key_btn.pack(side=tk.LEFT)
+        # 单独绑定事件，避免UnboundLocalError
+        set_number_key_btn.config(command=lambda v=key_var, b=set_number_key_btn: self.start_key_listening(v, b))
+        
+        # 按键延迟配置
+        delay_min_var = tk.IntVar(value=100)
+        delay_max_var = tk.IntVar(value=200)
+        
+        delay_frame = ttk.Frame(number_key_config_frame)
+        delay_frame.pack(side=tk.LEFT, padx=(10, 0))
+        
+        # 添加"延迟："文本，确保使用全局字体样式
+        ttk.Label(delay_frame, text="按键时长：").pack(side=tk.LEFT)
+        
+        # 延迟最小值输入框
+        def validate_positive_int(P):
+            if P == "":
+                return True
+            try:
+                val = int(P)
+                return val > 0
+            except ValueError:
+                return False
+        
+        delay_min_entry = ttk.Entry(delay_frame, textvariable=delay_min_var, width=5, validate="key")
+        delay_min_entry.pack(side=tk.LEFT)
+        delay_min_entry.configure(validatecommand=(delay_min_entry.register(validate_positive_int), '%P'))
+        
+        # 失去焦点时的验证，确保值为正整数
+        def validate_min_on_focusout(event):
+            value = delay_min_var.get()
+            if value <= 0:
+                delay_min_var.set(100)
+        delay_min_entry.bind("<FocusOut>", validate_min_on_focusout)
+        
+        ttk.Label(delay_frame, text=" - ", width=2).pack(side=tk.LEFT)
+        
+        delay_max_entry = ttk.Entry(delay_frame, textvariable=delay_max_var, width=5, validate="key")
+        delay_max_entry.pack(side=tk.LEFT)
+        delay_max_entry.configure(validatecommand=(delay_max_entry.register(validate_positive_int), '%P'))
+        
+        # 失去焦点时的验证，确保值为正整数且不小于最小值
+        def validate_max_on_focusout(event):
+            min_val = delay_min_var.get()
+            max_val = delay_max_var.get()
+            if max_val <= 0:
+                delay_max_var.set(200)
+            elif max_val < min_val:
+                delay_max_var.set(min_val)
+        delay_max_entry.bind("<FocusOut>", validate_max_on_focusout)
+        
+        ttk.Label(delay_frame, text="ms", width=3).pack(side=tk.LEFT)
+        
+        # 报警开关 - 为每个数字识别区域创建独立变量
+        alarm_var = tk.BooleanVar(value=False)
+        alarm_switch = ttk.Checkbutton(number_key_config_frame, text="启用报警", variable=alarm_var)
+        alarm_switch.pack(side=tk.LEFT, padx=(10, 0))
+        
+        # 保存区域配置
+        region_config = {
+            "frame": region_frame,
+            "enabled": enabled_var,
+            "region_var": region_var,
+            "region": None,
+            "threshold": threshold_var,
+            "key": key_var,
+            "delay_min": delay_min_var,
+            "delay_max": delay_max_var,
+            "alarm": alarm_var
+        }
+        self.number_regions.append(region_config)
+        
+        # 为新创建的数字识别区域添加配置监听器
+        if hasattr(self, '_setup_region_listeners'):
+            self._setup_region_listeners(region_config)
+        
+        # 为新创建的数字识别区域绑定鼠标滚轮事件
+        # 获取当前标签页的画布
+        canvas = self.number_regions_frame.master
+        if isinstance(canvas, tk.Canvas):
+            def on_mousewheel(event):
+                # 使用yview_moveto方法实现平滑滚动
+                current_pos = canvas.yview()
+                scroll_amount = event.delta / 120 / 10  # 调整滚动速度
+                new_pos = current_pos[0] - scroll_amount
+                new_pos = max(0, min(1, new_pos))
+                canvas.yview_moveto(new_pos)
+                # 阻止事件继续传播
+                return "break"
+            
+            # 为区域框架绑定鼠标滚轮事件
+            region_frame.bind("<MouseWheel>", on_mousewheel)
+            # 为区域内所有子组件绑定鼠标滚轮事件
+            for child in region_frame.winfo_children():
+                child.bind("<MouseWheel>", on_mousewheel)
+                # 递归绑定到所有子组件的子组件
+                for grandchild in child.winfo_children():
+                    grandchild.bind("<MouseWheel>", on_mousewheel)
+    
+    def delete_number_region(self, index, confirm=True):
+        """删除数字识别区域
+        
+        Args:
+            index: 要删除的数字识别区域索引
+            confirm: 是否显示确认对话框，默认为True
+        """
+        if len(self.number_regions) <= 1:
+            messagebox.showwarning("警告", "至少需要保留一个识别区域！")
+            return
+        
+        # 只有在confirm为True时才显示确认对话框
+        if confirm:
+            if not messagebox.askyesno("确认", f"确定要删除区域{index+1}吗？"):
+                return
+        
+        # 移除区域框架
+        self.number_regions[index]["frame"].destroy()
+        # 从列表中删除
+        del self.number_regions[index]
+        # 重新编号所有区域
+        self.renumber_number_regions()
+        self.log_message(f"已删除区域{index+1}")
+    
+    def renumber_number_regions(self):
+        """重新编号所有数字识别区域"""
+        for i, region in enumerate(self.number_regions):
+            # 更新区域标题
+            region["frame"].configure(text=f"区域{i+1}")
+    
+    def add_number_region(self):
+        """新增数字识别区域"""
+        if len(self.number_regions) >= 15:
+            messagebox.showwarning("警告", "最多只能创建15个识别区域！")
+            return
+        
+        self.create_number_region(len(self.number_regions))
+        self.log_message(f"新增识别区域{len(self.number_regions)}")
     
     def create_basic_tab(self, parent):
         """创建基本设置标签页"""
@@ -923,6 +1236,32 @@ class AutoDoorOCR:
         volume_percent_label = ttk.Label(volume_frame, text="%")
         volume_percent_label.pack(side=tk.LEFT)
         
+        # 快捷键设置 - 从首页迁移
+        shortcut_frame = ttk.LabelFrame(basic_frame, text="快捷键设置", padding="10")
+        shortcut_frame.pack(fill=tk.X, pady=(10, 10))
+        
+        # 单行布局
+        shortcut_row = ttk.Frame(shortcut_frame)
+        shortcut_row.pack(fill=tk.X, pady=5)
+        
+        # 开始快捷键
+        ttk.Label(shortcut_row, text="开始快捷键:", width=12, anchor=tk.W).pack(side=tk.LEFT, padx=(0, 10))
+        self.start_shortcut_var = tk.StringVar(value="F10")
+        start_shortcut_label = ttk.Label(shortcut_row, textvariable=self.start_shortcut_var, relief="sunken", padding=5, width=10)
+        start_shortcut_label.pack(side=tk.LEFT, padx=(0, 5))
+        self.set_start_shortcut_btn = ttk.Button(shortcut_row, text="修改", width=8)
+        self.set_start_shortcut_btn.pack(side=tk.LEFT, padx=(0, 20))
+        self.set_start_shortcut_btn.config(command=lambda: self.start_key_listening(self.start_shortcut_var, self.set_start_shortcut_btn))
+        
+        # 结束快捷键
+        ttk.Label(shortcut_row, text="结束快捷键:", width=12, anchor=tk.W).pack(side=tk.LEFT, padx=(0, 10))
+        self.stop_shortcut_var = tk.StringVar(value="F12")
+        stop_shortcut_label = ttk.Label(shortcut_row, textvariable=self.stop_shortcut_var, relief="sunken", padding=5, width=10)
+        stop_shortcut_label.pack(side=tk.LEFT, padx=(0, 5))
+        self.set_stop_shortcut_btn = ttk.Button(shortcut_row, text="修改", width=8)
+        self.set_stop_shortcut_btn.pack(side=tk.LEFT)
+        self.set_stop_shortcut_btn.config(command=lambda: self.start_key_listening(self.stop_shortcut_var, self.set_stop_shortcut_btn))
+        
         # 配置管理
         config_frame = ttk.Frame(basic_frame)
         config_frame.pack(fill=tk.X, pady=(0, 10))
@@ -934,6 +1273,63 @@ class AutoDoorOCR:
         reset_btn.pack(side=tk.LEFT)
     
 
+    
+    def create_home_tab(self, parent):
+        """创建首页标签页"""
+        home_frame = ttk.Frame(parent, padding="20")
+        home_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 功能状态显示
+        status_frame = ttk.LabelFrame(home_frame, text="功能状态", padding="15")
+        status_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        # 状态标签和勾选框
+        self.status_labels = {
+            "ocr": tk.StringVar(value="文字识别: 未运行"),
+            "timed": tk.StringVar(value="定时功能: 未运行"),
+            "number": tk.StringVar(value="数字识别: 未运行")
+        }
+        
+        # 勾选框变量
+        self.module_check_vars = {
+            "ocr": tk.BooleanVar(value=True),
+            "timed": tk.BooleanVar(value=True),
+            "number": tk.BooleanVar(value=True)
+        }
+        
+        # 保存Checkbutton组件引用
+        self.module_check_buttons = {}
+        
+        # 模块名称映射
+        module_names = {
+            "ocr": "文字识别",
+            "timed": "定时功能",
+            "number": "数字识别"
+        }
+        
+        # 创建带勾选框的状态行
+        for module, var in self.status_labels.items():
+            row_frame = ttk.Frame(status_frame)
+            row_frame.pack(fill=tk.X, pady=5)
+            
+            # 勾选框
+            check_btn = ttk.Checkbutton(row_frame, variable=self.module_check_vars[module])
+            check_btn.pack(side=tk.LEFT, padx=(0, 10))
+            self.module_check_buttons[module] = check_btn
+            
+            # 状态标签
+            ttk.Label(row_frame, textvariable=var).pack(side=tk.LEFT)
+        
+        # 全局控制按钮 - 重新定位至功能状态区域下方
+        control_frame = ttk.Frame(status_frame)
+        control_frame.pack(fill=tk.X, pady=(15, 0))
+        
+        # 开始/结束按钮
+        self.global_start_btn = ttk.Button(control_frame, text="开始运行", command=self.start_all, style="TButton")
+        self.global_start_btn.pack(side=tk.LEFT, padx=(0, 15), fill=tk.X, expand=True)
+        
+        self.global_stop_btn = ttk.Button(control_frame, text="停止运行", command=self.stop_all, style="TButton")
+        self.global_stop_btn.pack(side=tk.LEFT, fill=tk.X, expand=True)
     
     def create_log_tab(self, parent):
         """创建日志标签页"""
@@ -1026,7 +1422,7 @@ class AutoDoorOCR:
                 button.config(state="normal")
                 
                 # 解除按键监听
-                self.root.unbind("<KeyPress>")
+                self.root.unbind("<KeyPress>", funcid=key_listener_id)
                 
                 # 恢复焦点
                 if current_focus:
@@ -1036,67 +1432,62 @@ class AutoDoorOCR:
                 self.log_message("已清空当前按键设置")
                 # 保存配置
                 self.save_config()
-                return
+                return "break"  # 阻止事件继续传播
             
-            # 特殊按键映射
-            key_mappings = {
-                "Return": "enter",
-                "Escape": "escape",
-                "Tab": "tab",
-                "BackSpace": "backspace",
-                "Delete": "delete",
-                "Insert": "insert",
-                "space": "space",
-                "minus": "minus",
-                "plus": "plus",
-                "asterisk": "asterisk",
-                "slash": "slash",
-                "backslash": "backslash",
-                "comma": "comma",
-                "period": "period",
-                "semicolon": "semicolon",
-                "apostrophe": "apostrophe",
-                "quoteleft": "quote",
-                "quoteright": "quote",
-                "Left": "left",
-                "Right": "right",
-                "Up": "up",
-                "Down": "down",
-                "Home": "home",
-                "End": "end",
-                "Page_Up": "pageup",
-                "Prior": "pageup",
-                "Page_Down": "pagedown",
-                "Next": "pagedown"
-            }
-            
-            # 映射特殊按键
-            if keysym in key_mappings:
-                key = key_mappings[keysym]
-            else:
-                key = keysym.lower()
+            # 直接使用keysym，不转换为小写，保持功能键的大小写一致性
+            key = keysym
             
             # 确保按键在可用列表中
             available_keys = self.get_available_keys()
-            if key not in available_keys:
+            if key.lower() not in available_keys:
                 self.log_message(f"不支持的按键: {key}")
                 # 恢复按钮状态
                 button.config(state="normal")
                 # 解除按键监听
-                self.root.unbind("<KeyPress>")
+                self.root.unbind("<KeyPress>", funcid=key_listener_id)
                 # 恢复焦点
                 if current_focus:
                     current_focus.focus_set()
-                return
+                return "break"  # 阻止事件继续传播
             
-            # 保存按键
+            # 快捷键唯一性校验
+            # 判断当前正在设置的是哪个快捷键
+            is_setting_start = target_var is self.start_shortcut_var
+            is_setting_stop = target_var is self.stop_shortcut_var
+            
+            if is_setting_start:
+                # 检查是否与结束快捷键冲突
+                if key == self.stop_shortcut_var.get():
+                    messagebox.showwarning("警告", "该按键已被设置为结束快捷键，请选择其他按键！")
+                    # 恢复按钮状态
+                    button.config(state="normal")
+                    # 解除按键监听
+                    self.root.unbind("<KeyPress>", funcid=key_listener_id)
+                    # 恢复焦点
+                    if current_focus:
+                        current_focus.focus_set()
+                    return "break"  # 阻止事件继续传播
+            elif is_setting_stop:
+                # 检查是否与开始快捷键冲突
+                if key == self.start_shortcut_var.get():
+                    messagebox.showwarning("警告", "该按键已被设置为开始快捷键，请选择其他按键！")
+                    # 恢复按钮状态
+                    button.config(state="normal")
+                    # 解除按键监听
+                    self.root.unbind("<KeyPress>", funcid=key_listener_id)
+                    # 恢复焦点
+                    if current_focus:
+                        current_focus.focus_set()
+                    return "break"  # 阻止事件继续传播
+            
+            # 保存按键（保持原始大小写，如F10而不是f10）
             target_var.set(key)
             
             # 恢复按钮状态
             button.config(state="normal")
             
             # 解除按键监听
-            self.root.unbind("<KeyPress>")
+            self.root.unbind("<KeyPress>", funcid=key_listener_id)
             
             # 恢复焦点
             if current_focus:
@@ -1107,9 +1498,11 @@ class AutoDoorOCR:
             
             # 保存配置
             self.save_config()
+            
+            return "break"  # 阻止事件继续传播
         
-        # 绑定按键事件
-        self.root.bind("<KeyPress>", on_key_press)
+        # 绑定按键事件，并保存绑定ID
+        key_listener_id = self.root.bind("<KeyPress>", on_key_press, add="+")
         
         # 设置超时，防止永久监听
         def timeout():
@@ -1118,7 +1511,7 @@ class AutoDoorOCR:
                 self.status_var.set(original_status)
                 # 恢复按钮状态
                 button.config(state="normal")
-                self.root.unbind("<KeyPress>")
+                self.root.unbind("<KeyPress>", funcid=key_listener_id)
                 if current_focus:
                     current_focus.focus_set()
                 self.log_message("按键监听已超时")
@@ -1213,7 +1606,6 @@ class AutoDoorOCR:
                     try:
                         self.selected_region = tuple(ocr_config['selected_region'])
                         self.region_var.set(f"区域: {self.selected_region[0]},{self.selected_region[1]} - {self.selected_region[2]},{self.selected_region[3]}")
-                        self.start_btn.config(state="normal")
                     except (TypeError, ValueError):
                         self.log_message(f"配置文件中的选择区域格式错误: {ocr_config['selected_region']}")
                 
@@ -1262,42 +1654,72 @@ class AutoDoorOCR:
                 timed_config = config.get('timed_key_press', {})
                 if 'groups' in timed_config and isinstance(timed_config['groups'], list):
                     groups = timed_config['groups']
-                    for i, group in enumerate(groups[:3]):
-                        if i < len(self.timed_groups) and isinstance(group, dict):
-                            if 'enabled' in group:
-                                self.timed_groups[i]['enabled'].set(group['enabled'])
-                            if 'interval' in group:
-                                self.timed_groups[i]['interval'].set(group['interval'])
-                            if 'key' in group:
-                                self.timed_groups[i]['key'].set(group['key'])
-                            if 'delay_min' in group:
-                                self.timed_groups[i]['delay_min'].set(group['delay_min'])
-                            if 'delay_max' in group:
-                                self.timed_groups[i]['delay_max'].set(group['delay_max'])
+                    
+                    # 直接清空所有定时组，不使用delete_timed_group方法（因为它不允许删除最后一个）
+                    for group in self.timed_groups:
+                        group['frame'].destroy()
+                    self.timed_groups.clear()
+                    
+                    # 然后根据配置重新创建所有定时组
+                    for i, group in enumerate(groups):
+                        if isinstance(group, dict):
+                            # 直接调用create_timed_group创建定时组
+                            self.create_timed_group(i)
+                            # 设置组配置
+                            if i < len(self.timed_groups):
+                                if 'enabled' in group:
+                                    self.timed_groups[i]['enabled'].set(group['enabled'])
+                                if 'interval' in group:
+                                    self.timed_groups[i]['interval'].set(group['interval'])
+                                if 'key' in group:
+                                    self.timed_groups[i]['key'].set(group['key'])
+                                if 'delay_min' in group:
+                                    self.timed_groups[i]['delay_min'].set(group['delay_min'])
+                                if 'delay_max' in group:
+                                    self.timed_groups[i]['delay_max'].set(group['delay_max'])
+                    
+                    # 如果没有配置，至少创建一个定时组
+                    if len(self.timed_groups) == 0:
+                        self.create_timed_group(0)
                 
                 # 5. 加载数字识别配置
                 number_config = config.get('number_recognition', {})
                 if 'regions' in number_config and isinstance(number_config['regions'], list):
                     regions = number_config['regions']
-                    for i, region_config in enumerate(regions[:2]):
-                        if i < len(self.number_regions) and isinstance(region_config, dict):
-                            if 'enabled' in region_config:
-                                self.number_regions[i]['enabled'].set(region_config['enabled'])
-                            if 'region' in region_config and region_config['region'] is not None:
-                                try:
-                                    region = tuple(region_config['region'])
-                                    self.number_regions[i]['region'] = region
-                                    self.number_regions[i]['region_var'].set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
-                                except (TypeError, ValueError):
-                                    self.log_message(f"配置文件中的数字识别区域格式错误: {region_config['region']}")
-                            if 'threshold' in region_config:
-                                self.number_regions[i]['threshold'].set(region_config['threshold'])
-                            if 'key' in region_config:
-                                self.number_regions[i]['key'].set(region_config['key'])
-                            if 'delay_min' in region_config:
-                                self.number_regions[i]['delay_min'].set(region_config['delay_min'])
-                            if 'delay_max' in region_config:
-                                self.number_regions[i]['delay_max'].set(region_config['delay_max'])
+                    
+                    # 直接清空所有数字识别区域，不使用delete_number_region方法（因为它不允许删除最后一个）
+                    for region in self.number_regions:
+                        region['frame'].destroy()
+                    self.number_regions.clear()
+                    
+                    # 然后根据配置重新创建所有数字识别区域
+                    for i, region_config in enumerate(regions):
+                        if isinstance(region_config, dict):
+                            # 直接调用create_number_region创建数字识别区域
+                            self.create_number_region(i)
+                            # 设置区域配置
+                            if i < len(self.number_regions):
+                                if 'enabled' in region_config:
+                                    self.number_regions[i]['enabled'].set(region_config['enabled'])
+                                if 'region' in region_config and region_config['region'] is not None:
+                                    try:
+                                        region = tuple(region_config['region'])
+                                        self.number_regions[i]['region'] = region
+                                        self.number_regions[i]['region_var'].set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
+                                    except (TypeError, ValueError):
+                                        self.log_message(f"配置文件中的数字识别区域格式错误: {region_config['region']}")
+                                if 'threshold' in region_config:
+                                    self.number_regions[i]['threshold'].set(region_config['threshold'])
+                                if 'key' in region_config:
+                                    self.number_regions[i]['key'].set(region_config['key'])
+                                if 'delay_min' in region_config:
+                                    self.number_regions[i]['delay_min'].set(region_config['delay_min'])
+                                if 'delay_max' in region_config:
+                                    self.number_regions[i]['delay_max'].set(region_config['delay_max'])
+                    
+                    # 如果没有配置，至少创建一个数字识别区域
+                    if len(self.number_regions) == 0:
+                        self.create_number_region(0)
                 
                 # 6. 加载报警配置
                 alarm_config = config.get('alarm', {})
@@ -1316,6 +1738,20 @@ class AutoDoorOCR:
                     module_config = alarm_config.get(module, {})
                     if 'enabled' in module_config:
                         self.alarm_enabled[module].set(module_config['enabled'])
+                
+                # 7. 加载快捷键配置
+                shortcuts_config = config.get('shortcuts', {})
+                if hasattr(self, 'start_shortcut_var') and 'start' in shortcuts_config:
+                    self.start_shortcut_var.set(shortcuts_config['start'])
+                if hasattr(self, 'stop_shortcut_var') and 'stop' in shortcuts_config:
+                    self.stop_shortcut_var.set(shortcuts_config['stop'])
+                
+                # 8. 加载首页勾选框配置
+                if 'home_checkboxes' in config and hasattr(self, 'module_check_vars'):
+                    home_checkboxes = config['home_checkboxes']
+                    for module in ['ocr', 'timed', 'number']:
+                        if module in home_checkboxes:
+                            self.module_check_vars[module].set(home_checkboxes[module])
                 
                 # 更新界面控件状态
                 self.update_axis_inputs()
@@ -1367,16 +1803,65 @@ class AutoDoorOCR:
         self.y_coord_var.trace_add("write", delayed_save)
         
         # 4. 定时任务配置监听器
-        for i, group in enumerate(self.timed_groups):
+        def setup_group_listeners(group):
             group["enabled"].trace_add("write", immediate_save)
             group["interval"].trace_add("write", delayed_save)
             group["key"].trace_add("write", immediate_save)
         
+        # 为所有现有定时组添加监听器
+        for group in self.timed_groups:
+            setup_group_listeners(group)
+        
+        # 保存监听器函数，以便后续新增定时组时使用
+        self._setup_group_listeners = setup_group_listeners
+        
         # 5. 数字识别配置监听器
-        for i, region_config in enumerate(self.number_regions):
+        def setup_region_listeners(region_config):
             region_config["enabled"].trace_add("write", immediate_save)
             region_config["threshold"].trace_add("write", delayed_save)
             region_config["key"].trace_add("write", immediate_save)
+        
+        # 为所有现有区域添加监听器
+        for region_config in self.number_regions:
+            setup_region_listeners(region_config)
+        
+        # 保存监听器函数，以便后续新增区域时使用
+        self._setup_region_listeners = setup_region_listeners
+        
+        # 6. 首页模块勾选状态监听器
+        if hasattr(self, 'module_check_vars'):
+            for module, var in self.module_check_vars.items():
+                var.trace_add("write", immediate_save)
+        
+        # 6. 快捷键配置监听器
+        self.start_shortcut_var.trace_add("write", lambda *args: (immediate_save(), self.setup_shortcuts()))
+        self.stop_shortcut_var.trace_add("write", lambda *args: (immediate_save(), self.setup_shortcuts()))
+    
+    def setup_shortcuts(self):
+        """设置快捷键绑定"""
+        # 先解绑旧的快捷键绑定（如果存在）
+        if hasattr(self, 'shortcut_bind_id'):
+            self.root.unbind("<KeyPress>", funcid=self.shortcut_bind_id)
+        
+        # 创建通用快捷键处理函数
+        def on_shortcut_press(event):
+            # 获取按键名称
+            keysym = event.keysym
+            
+            # 检查是否是开始快捷键
+            if keysym == self.start_shortcut_var.get():
+                self.start_all()
+                return "break"  # 阻止事件继续传播
+            
+            # 检查是否是结束快捷键
+            if keysym == self.stop_shortcut_var.get():
+                self.stop_all()
+                return "break"  # 阻止事件继续传播
+            
+            return None
+        
+        # 绑定全局按键事件，并保存绑定ID
+        self.shortcut_bind_id = self.root.bind("<KeyPress>", on_shortcut_press, add="+")
     
     def clear_log(self):
         """清除日志"""
@@ -1559,9 +2044,6 @@ class AutoDoorOCR:
         # 更新界面
         self.region_var.set(f"区域: {self.selected_region[0]},{self.selected_region[1]} - {self.selected_region[2]},{self.selected_region[3]}")
         
-        # 启用开始监控按钮
-        self.start_btn.config(state="normal")
-        
         self.log_message(f"已选择区域: {self.selected_region}")
         self.cancel_selection()
         
@@ -1587,9 +2069,8 @@ class AutoDoorOCR:
         self.is_running = True
         self.is_paused = False
         
-        # 更新按钮状态
-        self.start_btn.config(state="disabled")
-        self.stop_btn.config(state="normal")
+        # 更新状态标签
+        self.status_labels["ocr"].set("文字识别: 运行中")
         
         self.log_message("开始监控...")
         
@@ -1601,9 +2082,8 @@ class AutoDoorOCR:
         """停止监控"""
         self.is_running = False
         
-        # 更新按钮状态
-        self.start_btn.config(state="normal")
-        self.stop_btn.config(state="disabled")
+        # 更新状态标签
+        self.status_labels["ocr"].set("文字识别: 未运行")
         
         self.log_message("已停止监控")
     
@@ -1712,7 +2192,7 @@ class AutoDoorOCR:
             
             # 4. 完整的配置数据结构，确保所有配置项都被保存
             config = {
-                'version': '1.0.1',  # 版本升级，支持更完整的配置保存
+                'version': VERSION,  # 使用全局版本号，自动同步
                 'last_save_time': datetime.datetime.now().isoformat(),
                 
                 # 基本OCR配置
@@ -1749,6 +2229,12 @@ class AutoDoorOCR:
                     'regions': number_regions_config
                 },
                 
+                # 快捷键配置 - 新增
+                'shortcuts': {
+                    'start': self.start_shortcut_var.get(),
+                    'stop': self.stop_shortcut_var.get()
+                },
+                
                 # 报警功能配置
                 'alarm': {
                     'sound': self.alarm_sound.get(),
@@ -1762,6 +2248,13 @@ class AutoDoorOCR:
                     'number': {
                         'enabled': self.alarm_enabled['number'].get()
                     }
+                },
+                
+                # 首页功能状态勾选框配置
+                'home_checkboxes': {
+                    'ocr': self.module_check_vars['ocr'].get(),
+                    'timed': self.module_check_vars['timed'].get(),
+                    'number': self.module_check_vars['number'].get()
                 }
             }
             
@@ -1939,9 +2432,11 @@ class AutoDoorOCR:
                 thread.start()
                 start_count += 1
         
-        # 更新按钮状态
-        self.start_timed_btn.config(state="disabled")
-        self.stop_timed_btn.config(state="normal")
+        # 更新状态标签
+        if start_count > 0:
+            self.status_labels["timed"].set("定时功能: 运行中")
+        else:
+            self.status_labels["timed"].set("定时功能: 未运行")
         
         if start_count == 0:
             self.log_message("没有启用任何定时组")
@@ -1956,9 +2451,8 @@ class AutoDoorOCR:
             self.log_message(f"停止{len(self.timed_threads)}个定时任务线程")
             self.timed_threads.clear()
         
-        # 更新按钮状态
-        self.start_timed_btn.config(state="normal")
-        self.stop_timed_btn.config(state="disabled")
+        # 更新状态标签
+        self.status_labels["timed"].set("定时功能: 未运行")
         
         self.log_message("已停止定时任务")
     
@@ -2037,19 +2531,20 @@ class AutoDoorOCR:
             if region_config["enabled"].get():
                 region = region_config["region"]
                 if not region:
-                    messagebox.showwarning("警告", f"请先为数字识别区域{i+1}选择区域")
-                    return
-                
+                    continue
                 threshold = region_config["threshold"].get()
                 key = region_config["key"].get()
+                # 创建线程并存储
                 thread = threading.Thread(target=self.number_recognition_loop, args=(i, region, threshold, key), daemon=True)
                 self.number_threads.append(thread)
                 thread.start()
                 start_count += 1
         
-        # 更新按钮状态
-        self.start_number_btn.config(state="disabled")
-        self.stop_number_btn.config(state="normal")
+        # 更新状态标签
+        if start_count > 0:
+            self.status_labels["number"].set("数字识别: 运行中")
+        else:
+            self.status_labels["number"].set("数字识别: 未运行")
         
         if start_count == 0:
             self.log_message("没有启用任何数字识别区域")
@@ -2061,11 +2556,41 @@ class AutoDoorOCR:
             self.log_message(f"停止{len(self.number_threads)}个数字识别线程")
             self.number_threads.clear()
         
-        # 更新按钮状态
-        self.start_number_btn.config(state="normal")
-        self.stop_number_btn.config(state="disabled")
+        # 更新状态标签
+        self.status_labels["number"].set("数字识别: 未运行")
         
         self.log_message("已停止数字识别")
+    
+    def start_all(self):
+        """开始运行"""
+        self.log_message("开始运行")
+        
+        # 禁用所有勾选框
+        for button in self.module_check_buttons.values():
+            button.configure(state="disabled")
+        
+        # 开始勾选的功能
+        if self.module_check_vars["ocr"].get() and self.selected_region:
+            self.start_monitoring()
+        
+        if self.module_check_vars["timed"].get():
+            self.start_timed_tasks()
+        
+        if self.module_check_vars["number"].get():
+            self.start_number_recognition()
+    
+    def stop_all(self):
+        """停止运行"""
+        self.log_message("停止运行")
+        
+        # 停止运行
+        self.stop_monitoring()
+        self.stop_timed_tasks()
+        self.stop_number_recognition()
+        
+        # 启用所有勾选框
+        for button in self.module_check_buttons.values():
+            button.configure(state="normal")
     
     def number_recognition_loop(self, region_index, region, threshold, key):
         """数字识别循环"""
