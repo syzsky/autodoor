@@ -587,6 +587,37 @@ class AutoDoorOCR:
         
         # 操作按钮已移除，统一由首页全局控制
     
+    def _on_mousewheel(self, event, canvas):
+        """公共的鼠标滚轮事件处理函数"""
+        # 使用yview_moveto方法实现平滑滚动
+        current_pos = canvas.yview()
+        scroll_amount = event.delta / 120 / 10  # 调整滚动速度
+        new_pos = current_pos[0] - scroll_amount
+        new_pos = max(0, min(1, new_pos))
+        canvas.yview_moveto(new_pos)
+        # 阻止事件继续传播
+        return "break"
+    
+    def _configure_scroll_region(self, event, canvas, frame_tag):
+        """公共的滚动区域配置函数"""
+        canvas.configure(scrollregion=canvas.bbox("all"))
+        # 确保内部框架宽度与画布一致
+        canvas.itemconfig(frame_tag, width=canvas.winfo_width())
+    
+    def _bind_mousewheel_to_widgets(self, canvas, widgets):
+        """为指定的控件及其子控件绑定鼠标滚轮事件"""
+        def on_mousewheel(event):
+            return self._on_mousewheel(event, canvas)
+        
+        for widget in widgets:
+            widget.bind("<MouseWheel>", on_mousewheel)
+            # 为控件内所有子组件绑定鼠标滚轮事件
+            for child in widget.winfo_children():
+                child.bind("<MouseWheel>", on_mousewheel)
+                # 递归绑定到所有子组件的子组件
+                for grandchild in child.winfo_children():
+                    grandchild.bind("<MouseWheel>", on_mousewheel)
+    
     def create_timed_tab(self, parent):
         """创建定时功能标签页"""
         timed_frame = ttk.Frame(parent, padding="10")
@@ -619,36 +650,19 @@ class AutoDoorOCR:
         
         # 配置画布尺寸和滚动区域
         def configure_scroll_region(event):
-            groups_canvas.configure(scrollregion=groups_canvas.bbox("all"))
-            # 确保内部框架宽度与画布一致
-            groups_canvas.itemconfig("inner_frame", width=groups_canvas.winfo_width())
+            self._configure_scroll_region(event, groups_canvas, "inner_frame")
         
         groups_canvas.bind("<Configure>", configure_scroll_region)
         self.timed_groups_frame.bind("<Configure>", configure_scroll_region)
         
-        # 添加鼠标滚轮支持
-        def on_mousewheel(event):
-            # 使用yview_moveto方法实现平滑滚动
-            # 获取当前滚动位置
-            current_pos = groups_canvas.yview()
-            # 计算新的滚动位置
-            scroll_amount = event.delta / 120 / 10  # 调整滚动速度
-            new_pos = current_pos[0] - scroll_amount
-            # 确保新位置在有效范围内
-            new_pos = max(0, min(1, new_pos))
-            # 设置新的滚动位置
-            groups_canvas.yview_moveto(new_pos)
-            # 阻止事件继续传播
-            return "break"
-        
         # 为画布绑定鼠标滚轮事件
-        groups_canvas.bind("<MouseWheel>", on_mousewheel)
+        groups_canvas.bind("<MouseWheel>", lambda event: self._on_mousewheel(event, groups_canvas))
         
         # 为内部框架绑定鼠标滚轮事件
-        self.timed_groups_frame.bind("<MouseWheel>", on_mousewheel)
+        self.timed_groups_frame.bind("<MouseWheel>", lambda event: self._on_mousewheel(event, groups_canvas))
         
         # 为整个标签页绑定鼠标滚轮事件
-        timed_frame.bind("<MouseWheel>", on_mousewheel)
+        timed_frame.bind("<MouseWheel>", lambda event: self._on_mousewheel(event, groups_canvas))
         
         # 保存定时功能的画布和框架引用
         self.timed_canvas = groups_canvas
@@ -660,21 +674,8 @@ class AutoDoorOCR:
         for i in range(3):
             self.create_timed_group(i)
         
-        # 为所有定时组绑定鼠标滚轮事件
-        def bind_mousewheel_to_group(group):
-            group_frame = group["frame"]
-            # 为组框架绑定鼠标滚轮事件
-            group_frame.bind("<MouseWheel>", on_mousewheel)
-            # 为组内所有子组件绑定鼠标滚轮事件
-            for child in group_frame.winfo_children():
-                child.bind("<MouseWheel>", on_mousewheel)
-                # 递归绑定到所有子组件的子组件
-                for grandchild in child.winfo_children():
-                    grandchild.bind("<MouseWheel>", on_mousewheel)
-        
         # 绑定所有定时组的鼠标滚轮事件
-        for group in self.timed_groups:
-            bind_mousewheel_to_group(group)
+        self._bind_mousewheel_to_widgets(groups_canvas, [group["frame"] for group in self.timed_groups])
         
         # 操作按钮已移除，统一由首页全局控制
     
@@ -792,24 +793,7 @@ class AutoDoorOCR:
         # 获取当前标签页的画布
         canvas = self.timed_groups_frame.master
         if isinstance(canvas, tk.Canvas):
-            def on_mousewheel(event):
-                # 使用yview_moveto方法实现平滑滚动
-                current_pos = canvas.yview()
-                scroll_amount = event.delta / 120 / 10  # 调整滚动速度
-                new_pos = current_pos[0] - scroll_amount
-                new_pos = max(0, min(1, new_pos))
-                canvas.yview_moveto(new_pos)
-                # 阻止事件继续传播
-                return "break"
-            
-            # 为组框架绑定鼠标滚轮事件
-            group_frame.bind("<MouseWheel>", on_mousewheel)
-            # 为组内所有子组件绑定鼠标滚轮事件
-            for child in group_frame.winfo_children():
-                child.bind("<MouseWheel>", on_mousewheel)
-                # 递归绑定到所有子组件的子组件
-                for grandchild in child.winfo_children():
-                    grandchild.bind("<MouseWheel>", on_mousewheel)
+            self._bind_mousewheel_to_widgets(canvas, [group_frame])
     
     def delete_timed_group(self, index, confirm=True):
         """删除定时组
@@ -882,36 +866,19 @@ class AutoDoorOCR:
         
         # 配置画布尺寸和滚动区域
         def configure_scroll_region(event):
-            regions_canvas.configure(scrollregion=regions_canvas.bbox("all"))
-            # 确保内部框架宽度与画布一致
-            regions_canvas.itemconfig("inner_frame", width=regions_canvas.winfo_width())
+            self._configure_scroll_region(event, regions_canvas, "inner_frame")
         
         regions_canvas.bind("<Configure>", configure_scroll_region)
         self.number_regions_frame.bind("<Configure>", configure_scroll_region)
         
-        # 添加鼠标滚轮支持
-        def on_mousewheel(event):
-            # 使用yview_moveto方法实现平滑滚动
-            # 获取当前滚动位置
-            current_pos = regions_canvas.yview()
-            # 计算新的滚动位置
-            scroll_amount = event.delta / 120 / 10  # 调整滚动速度
-            new_pos = current_pos[0] - scroll_amount
-            # 确保新位置在有效范围内
-            new_pos = max(0, min(1, new_pos))
-            # 设置新的滚动位置
-            regions_canvas.yview_moveto(new_pos)
-            # 阻止事件继续传播
-            return "break"
-        
         # 为画布绑定鼠标滚轮事件
-        regions_canvas.bind("<MouseWheel>", on_mousewheel)
+        regions_canvas.bind("<MouseWheel>", lambda event: self._on_mousewheel(event, regions_canvas))
         
         # 为内部框架绑定鼠标滚轮事件
-        self.number_regions_frame.bind("<MouseWheel>", on_mousewheel)
+        self.number_regions_frame.bind("<MouseWheel>", lambda event: self._on_mousewheel(event, regions_canvas))
         
         # 为整个标签页绑定鼠标滚轮事件
-        number_frame.bind("<MouseWheel>", on_mousewheel)
+        number_frame.bind("<MouseWheel>", lambda event: self._on_mousewheel(event, regions_canvas))
         
         # 保存数字识别的画布和框架引用
         self.number_canvas = regions_canvas
@@ -923,21 +890,8 @@ class AutoDoorOCR:
         for i in range(2):
             self.create_number_region(i)
         
-        # 为所有数字识别区域绑定鼠标滚轮事件
-        def bind_mousewheel_to_region(region):
-            region_frame = region["frame"]
-            # 为区域框架绑定鼠标滚轮事件
-            region_frame.bind("<MouseWheel>", on_mousewheel)
-            # 为区域内所有子组件绑定鼠标滚轮事件
-            for child in region_frame.winfo_children():
-                child.bind("<MouseWheel>", on_mousewheel)
-                # 递归绑定到所有子组件的子组件
-                for grandchild in child.winfo_children():
-                    grandchild.bind("<MouseWheel>", on_mousewheel)
-        
         # 绑定所有数字识别区域的鼠标滚轮事件
-        for region in self.number_regions:
-            bind_mousewheel_to_region(region)
+        self._bind_mousewheel_to_widgets(regions_canvas, [region["frame"] for region in self.number_regions])
         
         # 操作按钮已移除，统一由首页全局控制
     
@@ -1075,24 +1029,7 @@ class AutoDoorOCR:
         # 获取当前标签页的画布
         canvas = self.number_regions_frame.master
         if isinstance(canvas, tk.Canvas):
-            def on_mousewheel(event):
-                # 使用yview_moveto方法实现平滑滚动
-                current_pos = canvas.yview()
-                scroll_amount = event.delta / 120 / 10  # 调整滚动速度
-                new_pos = current_pos[0] - scroll_amount
-                new_pos = max(0, min(1, new_pos))
-                canvas.yview_moveto(new_pos)
-                # 阻止事件继续传播
-                return "break"
-            
-            # 为区域框架绑定鼠标滚轮事件
-            region_frame.bind("<MouseWheel>", on_mousewheel)
-            # 为区域内所有子组件绑定鼠标滚轮事件
-            for child in region_frame.winfo_children():
-                child.bind("<MouseWheel>", on_mousewheel)
-                # 递归绑定到所有子组件的子组件
-                for grandchild in child.winfo_children():
-                    grandchild.bind("<MouseWheel>", on_mousewheel)
+            self._bind_mousewheel_to_widgets(canvas, [region_frame])
     
     def delete_number_region(self, index, confirm=True):
         """删除数字识别区域
@@ -1537,6 +1474,222 @@ class AutoDoorOCR:
         self.log_message("已恢复默认关键词设置")
         self.save_config()
     
+    def _get_config_value(self, config, key_path, default=None):
+        """获取配置值，支持嵌套路径
+        
+        Args:
+            config: 配置字典
+            key_path: 键路径，如 'tesseract.path' 或 ['tesseract', 'path']
+            default: 默认值
+        
+        Returns:
+            配置值
+        """
+        if isinstance(key_path, str):
+            key_path = key_path.split('.')
+        
+        value = config
+        for key in key_path:
+            if isinstance(value, dict) and key in value:
+                value = value[key]
+            else:
+                return default
+        return value
+    
+    def _load_tesseract_config(self, config):
+        """加载Tesseract配置"""
+        tesseract_path = self._get_config_value(config, 'tesseract.path')
+        if not tesseract_path:
+            # 兼容旧格式
+            tesseract_path = config.get('tesseract_path')
+        
+        if tesseract_path and tesseract_path.strip():
+            temp_path = tesseract_path.strip()
+            # 检查路径是否存在
+            if os.path.exists(temp_path):
+                self.tesseract_path = temp_path
+                self.log_message(f"从配置文件加载Tesseract路径: {self.tesseract_path}")
+            else:
+                self.log_message(f"配置文件中的Tesseract路径不存在: {temp_path}")
+    
+    def _load_ocr_config(self, config):
+        """加载OCR配置"""
+        ocr_config = self._get_config_value(config, 'ocr', {})
+        if not ocr_config:
+            # 兼容旧格式
+            ocr_config = {
+                'interval': config.get('ocr_interval'),
+                'pause_duration': config.get('pause_duration'),
+                'selected_region': config.get('selected_region'),
+                'custom_key': config.get('custom_key'),
+                'custom_keywords': config.get('custom_keywords'),
+                'language': config.get('ocr_language')
+            }
+        
+        # 加载时间间隔
+        if 'interval' in ocr_config and ocr_config['interval'] is not None:
+            self.ocr_interval = ocr_config['interval']
+            self.ocr_interval_var.set(self.ocr_interval)
+        
+        if 'pause_duration' in ocr_config and ocr_config['pause_duration'] is not None:
+            self.pause_duration = ocr_config['pause_duration']
+            self.pause_duration_var.set(self.pause_duration)
+        
+        # 加载选择区域
+        if 'selected_region' in ocr_config and ocr_config['selected_region'] is not None:
+            try:
+                self.selected_region = tuple(ocr_config['selected_region'])
+                self.region_var.set(f"区域: {self.selected_region[0]},{self.selected_region[1]} - {self.selected_region[2]},{self.selected_region[3]}")
+            except (TypeError, ValueError):
+                self.log_message(f"配置文件中的选择区域格式错误: {ocr_config['selected_region']}")
+        
+        # 加载自定义按键
+        if 'custom_key' in ocr_config:
+            self.custom_key = ocr_config['custom_key']
+            self.key_var.set(self.custom_key)
+        
+        # 加载关键词
+        if 'custom_keywords' in ocr_config and ocr_config['custom_keywords']:
+            self.custom_keywords = ocr_config['custom_keywords']
+            self.keywords_var.set(",".join(self.custom_keywords))
+        
+        # 加载语言设置
+        if 'language' in ocr_config:
+            self.ocr_language = ocr_config['language']
+            self.language_var.set(self.ocr_language)
+        
+        # 加载按键延迟配置
+        if 'delay_min' in ocr_config:
+            self.ocr_delay_min.set(ocr_config['delay_min'])
+        if 'delay_max' in ocr_config:
+            self.ocr_delay_max.set(ocr_config['delay_max'])
+    
+    def _load_click_config(self, config):
+        """加载点击模式和坐标配置"""
+        click_config = self._get_config_value(config, 'click', {})
+        if not click_config:
+            # 兼容旧格式
+            click_config = {
+                'mode': config.get('click_mode'),
+                'x': config.get('click_x'),
+                'y': config.get('click_y')
+            }
+        
+        if 'mode' in click_config:
+            self.click_mode_var.set(click_config['mode'])
+        if 'x' in click_config and click_config['x'] is not None:
+            self.x_coord_var.set(click_config['x'])
+        if 'y' in click_config and click_config['y'] is not None:
+            self.y_coord_var.set(click_config['y'])
+    
+    def _load_timed_config(self, config):
+        """加载定时功能配置"""
+        timed_config = config.get('timed_key_press', {})
+        groups = self._get_config_value(timed_config, 'groups', [])
+        
+        if isinstance(groups, list):
+            # 直接清空所有定时组
+            for group in self.timed_groups:
+                group['frame'].destroy()
+            self.timed_groups.clear()
+            
+            # 然后根据配置重新创建所有定时组
+            for i, group in enumerate(groups):
+                if isinstance(group, dict):
+                    # 直接调用create_timed_group创建定时组
+                    self.create_timed_group(i)
+                    # 设置组配置
+                    if i < len(self.timed_groups):
+                        if 'enabled' in group:
+                            self.timed_groups[i]['enabled'].set(group['enabled'])
+                        if 'interval' in group:
+                            self.timed_groups[i]['interval'].set(group['interval'])
+                        if 'key' in group:
+                            self.timed_groups[i]['key'].set(group['key'])
+                        if 'delay_min' in group:
+                            self.timed_groups[i]['delay_min'].set(group['delay_min'])
+                        if 'delay_max' in group:
+                            self.timed_groups[i]['delay_max'].set(group['delay_max'])
+            
+            # 如果没有配置，至少创建一个定时组
+            if len(self.timed_groups) == 0:
+                self.create_timed_group(0)
+    
+    def _load_number_config(self, config):
+        """加载数字识别配置"""
+        number_config = config.get('number_recognition', {})
+        regions = self._get_config_value(number_config, 'regions', [])
+        
+        if isinstance(regions, list):
+            # 直接清空所有数字识别区域
+            for region in self.number_regions:
+                region['frame'].destroy()
+            self.number_regions.clear()
+            
+            # 然后根据配置重新创建所有数字识别区域
+            for i, region_config in enumerate(regions):
+                if isinstance(region_config, dict):
+                    # 直接调用create_number_region创建数字识别区域
+                    self.create_number_region(i)
+                    # 设置区域配置
+                    if i < len(self.number_regions):
+                        if 'enabled' in region_config:
+                            self.number_regions[i]['enabled'].set(region_config['enabled'])
+                        if 'region' in region_config and region_config['region'] is not None:
+                            try:
+                                region = tuple(region_config['region'])
+                                self.number_regions[i]['region'] = region
+                                self.number_regions[i]['region_var'].set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
+                            except (TypeError, ValueError):
+                                self.log_message(f"配置文件中的数字识别区域格式错误: {region_config['region']}")
+                        if 'threshold' in region_config:
+                            self.number_regions[i]['threshold'].set(region_config['threshold'])
+                        if 'key' in region_config:
+                            self.number_regions[i]['key'].set(region_config['key'])
+                        if 'delay_min' in region_config:
+                            self.number_regions[i]['delay_min'].set(region_config['delay_min'])
+                        if 'delay_max' in region_config:
+                            self.number_regions[i]['delay_max'].set(region_config['delay_max'])
+            
+            # 如果没有配置，至少创建一个数字识别区域
+            if len(self.number_regions) == 0:
+                self.create_number_region(0)
+    
+    def _load_alarm_config(self, config):
+        """加载报警配置"""
+        alarm_config = self._get_config_value(config, 'alarm', {})
+        
+        # 加载全局报警声音
+        if 'sound' in alarm_config:
+            self.alarm_sound.set(alarm_config['sound'])
+        
+        # 加载报警音量
+        if 'volume' in alarm_config:
+            self.alarm_volume.set(alarm_config['volume'])
+            self.alarm_volume_str.set(str(alarm_config['volume']))
+        
+        # 加载各模块报警开关状态
+        for module in ["ocr", "timed", "number"]:
+            module_config = alarm_config.get(module, {})
+            if 'enabled' in module_config:
+                self.alarm_enabled[module].set(module_config['enabled'])
+    
+    def _load_shortcuts_config(self, config):
+        """加载快捷键配置"""
+        shortcuts_config = self._get_config_value(config, 'shortcuts', {})
+        if hasattr(self, 'start_shortcut_var') and 'start' in shortcuts_config:
+            self.start_shortcut_var.set(shortcuts_config['start'])
+        if hasattr(self, 'stop_shortcut_var') and 'stop' in shortcuts_config:
+            self.stop_shortcut_var.set(shortcuts_config['stop'])
+    
+    def _load_home_checkboxes_config(self, config):
+        """加载首页勾选框配置"""
+        if 'home_checkboxes' in config and hasattr(self, 'module_check_vars'):
+            home_checkboxes = config['home_checkboxes']
+            for module in ['ocr', 'timed', 'number']:
+                if module in home_checkboxes:
+                    self.module_check_vars[module].set(home_checkboxes[module])
+    
     def load_config(self):
         """加载配置
         增强错误处理，能够处理文件不存在、格式错误或路径配置缺失等异常情况
@@ -1554,204 +1707,18 @@ class AutoDoorOCR:
                 self.log_message(f"开始加载配置: {self.config_file}")
                 
                 # 获取配置版本，默认为1.0.0
-                config_version = config.get('version', '1.0.0')
+                config_version = self._get_config_value(config, 'version', '1.0.0')
                 self.log_message(f"配置版本: {config_version}")
                 
-                # 1. 加载Tesseract配置
-                # 兼容旧格式和新格式
-                tesseract_path = None
-                if 'tesseract' in config and isinstance(config['tesseract'], dict):
-                    # 新格式
-                    tesseract_path = config['tesseract'].get('path')
-                else:
-                    # 旧格式
-                    tesseract_path = config.get('tesseract_path')
-                
-                if tesseract_path and tesseract_path.strip():
-                    temp_path = tesseract_path.strip()
-                    # 检查路径是否存在
-                    if os.path.exists(temp_path):
-                        self.tesseract_path = temp_path
-                        self.log_message(f"从配置文件加载Tesseract路径: {self.tesseract_path}")
-                    else:
-                        self.log_message(f"配置文件中的Tesseract路径不存在: {temp_path}")
-                
-                # 2. 加载基本OCR配置
-                ocr_config = {}
-                if 'ocr' in config and isinstance(config['ocr'], dict):
-                    # 新格式
-                    ocr_config = config['ocr']
-                else:
-                    # 旧格式
-                    ocr_config = {
-                        'interval': config.get('ocr_interval'),
-                        'pause_duration': config.get('pause_duration'),
-                        'selected_region': config.get('selected_region'),
-                        'custom_key': config.get('custom_key'),
-                        'custom_keywords': config.get('custom_keywords'),
-                        'language': config.get('ocr_language')
-                    }
-                
-                # 加载时间间隔
-                if 'interval' in ocr_config and ocr_config['interval'] is not None:
-                    self.ocr_interval = ocr_config['interval']
-                    self.ocr_interval_var.set(self.ocr_interval)
-                
-                if 'pause_duration' in ocr_config and ocr_config['pause_duration'] is not None:
-                    self.pause_duration = ocr_config['pause_duration']
-                    self.pause_duration_var.set(self.pause_duration)
-                
-                # 加载选择区域
-                if 'selected_region' in ocr_config and ocr_config['selected_region'] is not None:
-                    try:
-                        self.selected_region = tuple(ocr_config['selected_region'])
-                        self.region_var.set(f"区域: {self.selected_region[0]},{self.selected_region[1]} - {self.selected_region[2]},{self.selected_region[3]}")
-                    except (TypeError, ValueError):
-                        self.log_message(f"配置文件中的选择区域格式错误: {ocr_config['selected_region']}")
-                
-                # 加载自定义按键
-                if 'custom_key' in ocr_config:
-                    self.custom_key = ocr_config['custom_key']
-                    self.key_var.set(self.custom_key)
-                
-                # 加载关键词
-                if 'custom_keywords' in ocr_config and ocr_config['custom_keywords']:
-                    self.custom_keywords = ocr_config['custom_keywords']
-                    self.keywords_var.set(",".join(self.custom_keywords))
-                
-                # 加载语言设置
-                if 'language' in ocr_config:
-                    self.ocr_language = ocr_config['language']
-                    self.language_var.set(self.ocr_language)
-                
-                # 加载按键延迟配置
-                if 'delay_min' in ocr_config:
-                    self.ocr_delay_min.set(ocr_config['delay_min'])
-                if 'delay_max' in ocr_config:
-                    self.ocr_delay_max.set(ocr_config['delay_max'])
-                
-                # 3. 加载点击模式和坐标配置
-                click_config = {}
-                if 'click' in config and isinstance(config['click'], dict):
-                    # 新格式
-                    click_config = config['click']
-                else:
-                    # 旧格式
-                    click_config = {
-                        'mode': config.get('click_mode'),
-                        'x': config.get('click_x'),
-                        'y': config.get('click_y')
-                    }
-                
-                if 'mode' in click_config:
-                    self.click_mode_var.set(click_config['mode'])
-                if 'x' in click_config and click_config['x'] is not None:
-                    self.x_coord_var.set(click_config['x'])
-                if 'y' in click_config and click_config['y'] is not None:
-                    self.y_coord_var.set(click_config['y'])
-                
-                # 4. 加载定时功能配置
-                timed_config = config.get('timed_key_press', {})
-                if 'groups' in timed_config and isinstance(timed_config['groups'], list):
-                    groups = timed_config['groups']
-                    
-                    # 直接清空所有定时组，不使用delete_timed_group方法（因为它不允许删除最后一个）
-                    for group in self.timed_groups:
-                        group['frame'].destroy()
-                    self.timed_groups.clear()
-                    
-                    # 然后根据配置重新创建所有定时组
-                    for i, group in enumerate(groups):
-                        if isinstance(group, dict):
-                            # 直接调用create_timed_group创建定时组
-                            self.create_timed_group(i)
-                            # 设置组配置
-                            if i < len(self.timed_groups):
-                                if 'enabled' in group:
-                                    self.timed_groups[i]['enabled'].set(group['enabled'])
-                                if 'interval' in group:
-                                    self.timed_groups[i]['interval'].set(group['interval'])
-                                if 'key' in group:
-                                    self.timed_groups[i]['key'].set(group['key'])
-                                if 'delay_min' in group:
-                                    self.timed_groups[i]['delay_min'].set(group['delay_min'])
-                                if 'delay_max' in group:
-                                    self.timed_groups[i]['delay_max'].set(group['delay_max'])
-                    
-                    # 如果没有配置，至少创建一个定时组
-                    if len(self.timed_groups) == 0:
-                        self.create_timed_group(0)
-                
-                # 5. 加载数字识别配置
-                number_config = config.get('number_recognition', {})
-                if 'regions' in number_config and isinstance(number_config['regions'], list):
-                    regions = number_config['regions']
-                    
-                    # 直接清空所有数字识别区域，不使用delete_number_region方法（因为它不允许删除最后一个）
-                    for region in self.number_regions:
-                        region['frame'].destroy()
-                    self.number_regions.clear()
-                    
-                    # 然后根据配置重新创建所有数字识别区域
-                    for i, region_config in enumerate(regions):
-                        if isinstance(region_config, dict):
-                            # 直接调用create_number_region创建数字识别区域
-                            self.create_number_region(i)
-                            # 设置区域配置
-                            if i < len(self.number_regions):
-                                if 'enabled' in region_config:
-                                    self.number_regions[i]['enabled'].set(region_config['enabled'])
-                                if 'region' in region_config and region_config['region'] is not None:
-                                    try:
-                                        region = tuple(region_config['region'])
-                                        self.number_regions[i]['region'] = region
-                                        self.number_regions[i]['region_var'].set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
-                                    except (TypeError, ValueError):
-                                        self.log_message(f"配置文件中的数字识别区域格式错误: {region_config['region']}")
-                                if 'threshold' in region_config:
-                                    self.number_regions[i]['threshold'].set(region_config['threshold'])
-                                if 'key' in region_config:
-                                    self.number_regions[i]['key'].set(region_config['key'])
-                                if 'delay_min' in region_config:
-                                    self.number_regions[i]['delay_min'].set(region_config['delay_min'])
-                                if 'delay_max' in region_config:
-                                    self.number_regions[i]['delay_max'].set(region_config['delay_max'])
-                    
-                    # 如果没有配置，至少创建一个数字识别区域
-                    if len(self.number_regions) == 0:
-                        self.create_number_region(0)
-                
-                # 6. 加载报警配置
-                alarm_config = config.get('alarm', {})
-                
-                # 加载全局报警声音
-                if 'sound' in alarm_config:
-                    self.alarm_sound.set(alarm_config['sound'])
-                
-                # 加载报警音量
-                if 'volume' in alarm_config:
-                    self.alarm_volume.set(alarm_config['volume'])
-                    self.alarm_volume_str.set(str(alarm_config['volume']))
-                
-                # 加载各模块报警开关状态
-                for module in ["ocr", "timed", "number"]:
-                    module_config = alarm_config.get(module, {})
-                    if 'enabled' in module_config:
-                        self.alarm_enabled[module].set(module_config['enabled'])
-                
-                # 7. 加载快捷键配置
-                shortcuts_config = config.get('shortcuts', {})
-                if hasattr(self, 'start_shortcut_var') and 'start' in shortcuts_config:
-                    self.start_shortcut_var.set(shortcuts_config['start'])
-                if hasattr(self, 'stop_shortcut_var') and 'stop' in shortcuts_config:
-                    self.stop_shortcut_var.set(shortcuts_config['stop'])
-                
-                # 8. 加载首页勾选框配置
-                if 'home_checkboxes' in config and hasattr(self, 'module_check_vars'):
-                    home_checkboxes = config['home_checkboxes']
-                    for module in ['ocr', 'timed', 'number']:
-                        if module in home_checkboxes:
-                            self.module_check_vars[module].set(home_checkboxes[module])
+                # 加载各部分配置
+                self._load_tesseract_config(config)
+                self._load_ocr_config(config)
+                self._load_click_config(config)
+                self._load_timed_config(config)
+                self._load_number_config(config)
+                self._load_alarm_config(config)
+                self._load_shortcuts_config(config)
+                self._load_home_checkboxes_config(config)
                 
                 # 更新界面控件状态
                 self.update_axis_inputs()
@@ -2021,30 +1988,41 @@ class AutoDoorOCR:
             outline="red", width=2, fill="red"
         )
     
+    def _save_selection(self, start_x, start_y, end_x, end_y):
+        """保存选择区域的公共方法"""
+        # 确保选择区域有效
+        if abs(end_x - start_x) < 10 or abs(end_y - start_y) < 10:
+            messagebox.showwarning("警告", "选择的区域太小，请重新选择")
+            self.cancel_selection()
+            return None
+        
+        # 保存选择区域（使用绝对坐标）
+        region = (
+            min(start_x, end_x),
+            min(start_y, end_y),
+            max(start_x, end_x),
+            max(start_y, end_y)
+        )
+        
+        return region
+    
     def on_mouse_up(self, event):
         """鼠标释放事件"""
         # 获取结束绝对坐标
         end_x_abs = event.x_root
         end_y_abs = event.y_root
         
-        # 确保选择区域有效
-        if abs(end_x_abs - self.start_x_abs) < 10 or abs(end_y_abs - self.start_y_abs) < 10:
-            messagebox.showwarning("警告", "选择的区域太小，请重新选择")
-            self.cancel_selection()
+        # 保存选择区域
+        region = self._save_selection(self.start_x_abs, self.start_y_abs, end_x_abs, end_y_abs)
+        if region is None:
             return
         
-        # 保存选择区域（使用绝对坐标）
-        self.selected_region = (
-            min(self.start_x_abs, end_x_abs),
-            min(self.start_y_abs, end_y_abs),
-            max(self.start_x_abs, end_x_abs),
-            max(self.start_y_abs, end_y_abs)
-        )
+        self.selected_region = region
         
         # 更新界面
-        self.region_var.set(f"区域: {self.selected_region[0]},{self.selected_region[1]} - {self.selected_region[2]},{self.selected_region[3]}")
+        self.region_var.set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
         
-        self.log_message(f"已选择区域: {self.selected_region}")
+        self.log_message(f"已选择区域: {region}")
         self.cancel_selection()
         
         # 保存配置
@@ -2152,72 +2130,126 @@ class AutoDoorOCR:
         except Exception as e:
             self.log_message(f"OCR错误: {str(e)}")
     
+    def _get_keywords_config(self):
+        """获取关键词配置"""
+        keywords_str = self.keywords_var.get().strip()
+        current_keywords = [keyword.strip().lower() for keyword in keywords_str.split(",") if keyword.strip()]
+        if not current_keywords:
+            current_keywords = self.custom_keywords  # 保留原有关键词作为备份
+        
+        # 更新内部关键词列表，确保一致性
+        self.custom_keywords = current_keywords
+        return current_keywords
+    
+    def _get_timed_config(self):
+        """获取定时功能配置"""
+        timed_groups_config = []
+        for group in self.timed_groups:
+            timed_groups_config.append({
+                'enabled': group['enabled'].get(),
+                'interval': group['interval'].get(),
+                'key': group['key'].get(),
+                'delay_min': group['delay_min'].get(),
+                'delay_max': group['delay_max'].get()
+            })
+        return timed_groups_config
+    
+    def _get_number_config(self):
+        """获取数字识别配置"""
+        number_regions_config = []
+        for region_config in self.number_regions:
+            number_regions_config.append({
+                'enabled': region_config['enabled'].get(),
+                'region': list(region_config['region']) if region_config['region'] else None,
+                'threshold': region_config['threshold'].get(),
+                'key': region_config['key'].get(),
+                'delay_min': region_config['delay_min'].get(),
+                'delay_max': region_config['delay_max'].get()
+            })
+        return number_regions_config
+    
+    def _get_ocr_config(self):
+        """获取OCR配置"""
+        current_keywords = self._get_keywords_config()
+        return {
+            'interval': self.ocr_interval_var.get(),
+            'pause_duration': self.pause_duration_var.get(),
+            'selected_region': list(self.selected_region) if self.selected_region else None,
+            'custom_key': self.key_var.get(),
+            'custom_keywords': current_keywords,
+            'language': self.language_var.get(),
+            'delay_min': self.ocr_delay_min.get(),
+            'delay_max': self.ocr_delay_max.get()
+        }
+    
+    def _get_tesseract_config(self):
+        """获取Tesseract配置"""
+        return {
+            'path': self.tesseract_path
+        }
+    
+    def _get_click_config(self):
+        """获取点击模式和坐标配置"""
+        return {
+            'mode': self.click_mode_var.get(),
+            'x': self.x_coord_var.get(),
+            'y': self.y_coord_var.get()
+        }
+    
+    def _get_shortcuts_config(self):
+        """获取快捷键配置"""
+        return {
+            'start': self.start_shortcut_var.get(),
+            'stop': self.stop_shortcut_var.get()
+        }
+    
+    def _get_alarm_config(self):
+        """获取报警功能配置"""
+        return {
+            'sound': self.alarm_sound.get(),
+            'volume': self.alarm_volume.get(),
+            'ocr': {
+                'enabled': self.alarm_enabled['ocr'].get()
+            },
+            'timed': {
+                'enabled': self.alarm_enabled['timed'].get()
+            },
+            'number': {
+                'enabled': self.alarm_enabled['number'].get()
+            }
+        }
+    
+    def _get_home_checkboxes_config(self):
+        """获取首页勾选框配置"""
+        return {
+            'ocr': self.module_check_vars['ocr'].get(),
+            'timed': self.module_check_vars['timed'].get(),
+            'number': self.module_check_vars['number'].get()
+        }
+    
     def save_config(self):
         """保存配置
         保存所有前端用户设置，包括新增功能的相关配置
         确保数据结构完整、一致，并处理边界情况
         """
         try:
-            # 1. 保存定时功能配置
-            timed_groups_config = []
-            for group in self.timed_groups:
-                timed_groups_config.append({
-                    'enabled': group['enabled'].get(),
-                    'interval': group['interval'].get(),
-                    'key': group['key'].get(),
-                    'delay_min': group['delay_min'].get(),
-                    'delay_max': group['delay_max'].get()
-                })
+            # 获取各部分配置
+            timed_groups_config = self._get_timed_config()
+            number_regions_config = self._get_number_config()
             
-            # 2. 保存数字识别配置
-            number_regions_config = []
-            for region_config in self.number_regions:
-                number_regions_config.append({
-                    'enabled': region_config['enabled'].get(),
-                    'region': list(region_config['region']) if region_config['region'] else None,
-                    'threshold': region_config['threshold'].get(),
-                    'key': region_config['key'].get(),
-                    'delay_min': region_config['delay_min'].get(),
-                    'delay_max': region_config['delay_max'].get()
-                })
-            
-            # 3. 确保关键词列表是最新的
-            keywords_str = self.keywords_var.get().strip()
-            current_keywords = [keyword.strip().lower() for keyword in keywords_str.split(",") if keyword.strip()]
-            if not current_keywords:
-                current_keywords = self.custom_keywords  # 保留原有关键词作为备份
-            
-            # 更新内部关键词列表，确保一致性
-            self.custom_keywords = current_keywords
-            
-            # 4. 完整的配置数据结构，确保所有配置项都被保存
+            # 完整的配置数据结构，确保所有配置项都被保存
             config = {
                 'version': VERSION,  # 使用全局版本号，自动同步
                 'last_save_time': datetime.datetime.now().isoformat(),
                 
                 # 基本OCR配置
-                'ocr': {
-                    'interval': self.ocr_interval_var.get(),
-                    'pause_duration': self.pause_duration_var.get(),
-                    'selected_region': list(self.selected_region) if self.selected_region else None,
-                    'custom_key': self.key_var.get(),
-                    'custom_keywords': current_keywords,
-                    'language': self.language_var.get(),
-                    'delay_min': self.ocr_delay_min.get(),
-                    'delay_max': self.ocr_delay_max.get()
-                },
+                'ocr': self._get_ocr_config(),
                 
                 # Tesseract配置
-                'tesseract': {
-                    'path': self.tesseract_path
-                },
+                'tesseract': self._get_tesseract_config(),
                 
                 # 坐标模式配置
-                'click': {
-                    'mode': self.click_mode_var.get(),
-                    'x': self.x_coord_var.get(),
-                    'y': self.y_coord_var.get()
-                },
+                'click': self._get_click_config(),
                 
                 # 定时功能配置
                 'timed_key_press': {
@@ -2230,38 +2262,19 @@ class AutoDoorOCR:
                 },
                 
                 # 快捷键配置 - 新增
-                'shortcuts': {
-                    'start': self.start_shortcut_var.get(),
-                    'stop': self.stop_shortcut_var.get()
-                },
+                'shortcuts': self._get_shortcuts_config(),
                 
                 # 报警功能配置
-                'alarm': {
-                    'sound': self.alarm_sound.get(),
-                    'volume': self.alarm_volume.get(),
-                    'ocr': {
-                        'enabled': self.alarm_enabled['ocr'].get()
-                    },
-                    'timed': {
-                        'enabled': self.alarm_enabled['timed'].get()
-                    },
-                    'number': {
-                        'enabled': self.alarm_enabled['number'].get()
-                    }
-                },
+                'alarm': self._get_alarm_config(),
                 
                 # 首页功能状态勾选框配置
-                'home_checkboxes': {
-                    'ocr': self.module_check_vars['ocr'].get(),
-                    'timed': self.module_check_vars['timed'].get(),
-                    'number': self.module_check_vars['number'].get()
-                }
+                'home_checkboxes': self._get_home_checkboxes_config()
             }
             
-            # 5. 确保配置文件目录存在
+            # 确保配置文件目录存在
             os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
             
-            # 6. 写入配置文件，使用更紧凑的格式
+            # 写入配置文件，使用更紧凑的格式
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False, default=str)
             
@@ -2413,48 +2426,60 @@ class AutoDoorOCR:
             pass
         # 其他事件类型...
     
-    def start_timed_tasks(self):
-        """开始定时任务"""
-        # 停止现有的定时任务
-        self.stop_timed_tasks()
+    def _manage_threads(self, module_type, start_func, stop_func, thread_list, status_var_key, log_prefix):
+        """线程管理的公共方法"""
+        # 停止现有线程
+        stop_func()
         
-        self.log_message("开始定时任务")
+        self.log_message(f"开始{log_prefix}")
         
-        # 统计要启动的定时组数量
-        start_count = 0
-        for i, group in enumerate(self.timed_groups):
-            if group["enabled"].get():
-                interval = group["interval"].get()
-                key = group["key"].get()
-                # 创建线程并存储
-                thread = threading.Thread(target=self.timed_task_loop, args=(i, interval, key), daemon=True)
-                self.timed_threads.append(thread)
-                thread.start()
-                start_count += 1
+        # 统计要启动的线程数量
+        start_count = start_func()
         
         # 更新状态标签
         if start_count > 0:
-            self.status_labels["timed"].set("定时功能: 运行中")
+            self.status_labels[status_var_key].set(f"{log_prefix[:-1]}: 运行中")
         else:
-            self.status_labels["timed"].set("定时功能: 未运行")
+            self.status_labels[status_var_key].set(f"{log_prefix[:-1]}: 未运行")
         
         if start_count == 0:
-            self.log_message("没有启用任何定时组")
+            self.log_message(f"没有启用任何{log_prefix[:-2]}")
+    
+    def _stop_threads(self, thread_list, module_name, status_var_key):
+        """停止线程的公共方法"""
+        # 停止所有线程
+        self.log_message(f"停止所有{module_name}")
+        
+        # 清空线程列表
+        if thread_list:
+            self.log_message(f"停止{len(thread_list)}个{module_name}线程")
+            thread_list.clear()
+        
+        # 更新状态标签
+        self.status_labels[status_var_key].set(f"{module_name[:-1]}: 未运行")
+        
+        self.log_message(f"已停止{module_name}")
+    
+    def start_timed_tasks(self):
+        """开始定时任务"""
+        def start_func():
+            start_count = 0
+            for i, group in enumerate(self.timed_groups):
+                if group["enabled"].get():
+                    interval = group["interval"].get()
+                    key = group["key"].get()
+                    # 创建线程并存储
+                    thread = threading.Thread(target=self.timed_task_loop, args=(i, interval, key), daemon=True)
+                    self.timed_threads.append(thread)
+                    thread.start()
+                    start_count += 1
+            return start_count
+        
+        self._manage_threads("timed", start_func, self.stop_timed_tasks, self.timed_threads, "timed", "定时任务")
     
     def stop_timed_tasks(self):
         """停止定时任务"""
-        # 停止所有定时任务
-        self.log_message("停止所有定时任务")
-        
-        # 清空线程列表
-        if self.timed_threads:
-            self.log_message(f"停止{len(self.timed_threads)}个定时任务线程")
-            self.timed_threads.clear()
-        
-        # 更新状态标签
-        self.status_labels["timed"].set("定时功能: 未运行")
-        
-        self.log_message("已停止定时任务")
+        self._stop_threads(self.timed_threads, "定时任务", "timed")
     
     def timed_task_loop(self, group_index, interval, key):
         """定时任务循环"""
@@ -2493,19 +2518,10 @@ class AutoDoorOCR:
         end_x_abs = event.x_root
         end_y_abs = event.y_root
         
-        # 确保选择区域有效
-        if abs(end_x_abs - self.start_x_abs) < 10 or abs(end_y_abs - self.start_y_abs) < 10:
-            messagebox.showwarning("警告", "选择的区域太小，请重新选择")
-            self.cancel_selection()
+        # 保存选择区域
+        region = self._save_selection(self.start_x_abs, self.start_y_abs, end_x_abs, end_y_abs)
+        if region is None:
             return
-        
-        # 保存选择区域（使用绝对坐标）
-        region = (
-            min(self.start_x_abs, end_x_abs),
-            min(self.start_y_abs, end_y_abs),
-            max(self.start_x_abs, end_x_abs),
-            max(self.start_y_abs, end_y_abs)
-        )
         
         # 更新界面
         region_index = self.current_number_region
@@ -2520,46 +2536,27 @@ class AutoDoorOCR:
     
     def start_number_recognition(self):
         """开始数字识别"""
-        # 停止现有的数字识别任务
-        self.stop_number_recognition()
+        def start_func():
+            start_count = 0
+            for i, region_config in enumerate(self.number_regions):
+                if region_config["enabled"].get():
+                    region = region_config["region"]
+                    if not region:
+                        continue
+                    threshold = region_config["threshold"].get()
+                    key = region_config["key"].get()
+                    # 创建线程并存储
+                    thread = threading.Thread(target=self.number_recognition_loop, args=(i, region, threshold, key), daemon=True)
+                    self.number_threads.append(thread)
+                    thread.start()
+                    start_count += 1
+            return start_count
         
-        self.log_message("开始数字识别")
-        
-        # 统计要启动的数字识别区域数量
-        start_count = 0
-        for i, region_config in enumerate(self.number_regions):
-            if region_config["enabled"].get():
-                region = region_config["region"]
-                if not region:
-                    continue
-                threshold = region_config["threshold"].get()
-                key = region_config["key"].get()
-                # 创建线程并存储
-                thread = threading.Thread(target=self.number_recognition_loop, args=(i, region, threshold, key), daemon=True)
-                self.number_threads.append(thread)
-                thread.start()
-                start_count += 1
-        
-        # 更新状态标签
-        if start_count > 0:
-            self.status_labels["number"].set("数字识别: 运行中")
-        else:
-            self.status_labels["number"].set("数字识别: 未运行")
-        
-        if start_count == 0:
-            self.log_message("没有启用任何数字识别区域")
+        self._manage_threads("number", start_func, self.stop_number_recognition, self.number_threads, "number", "数字识别")
     
     def stop_number_recognition(self):
         """停止数字识别"""
-        # 清空线程列表
-        if self.number_threads:
-            self.log_message(f"停止{len(self.number_threads)}个数字识别线程")
-            self.number_threads.clear()
-        
-        # 更新状态标签
-        self.status_labels["number"].set("数字识别: 未运行")
-        
-        self.log_message("已停止数字识别")
+        self._stop_threads(self.number_threads, "数字识别", "number")
     
     def start_all(self):
         """开始运行"""
@@ -2689,15 +2686,7 @@ class AutoDoorOCR:
         """识别数字，支持X/Y格式
         简化图像预处理，保留字符白名单以避免'ee'错误识别
         """
-        # 1. 转换为灰度图像
         image = image.convert('L')
-        
-        # 2. 不使用复杂的OpenCV预处理，只使用基本的阈值处理
-        # 这样可以保留更多原始信息，提高识别率
-        
-        # 3. 优化OCR配置，平衡识别率和错误率
-        # 使用--psm 7（单行文本）和--oem 3（默认OCR引擎模式）
-        # 添加字符白名单，只识别数字和/符号，防止'ee'错误
         config = '--psm 7 --oem 3 -c tessedit_char_whitelist=0123456789/'
         text = pytesseract.image_to_string(image, lang='eng', config=config)
         
