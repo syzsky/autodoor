@@ -110,9 +110,10 @@ jobs:
         AUTODOOR_TAG="${{ steps.get_version.outputs._autodoor_TAG }}"
         
         echo "当前版本：$CURRENT_TAG"
+        echo "Autodoor标签：$AUTODOOR_TAG"
         
-        # 检查标签是否存在
-        TAG_EXISTS=$(git tag -l "$CURRENT_TAG" | wc -l)
+        # 检查autodoor_V格式的标签是否存在
+        TAG_EXISTS=$(git tag -l "$AUTODOOR_TAG" | wc -l)
         
         if [[ "$TAG_EXISTS" == "0" ]]; then
           echo "标签不存在，需要创建"
