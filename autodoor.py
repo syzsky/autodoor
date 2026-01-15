@@ -23,7 +23,7 @@ except ImportError:
     PYGAME_AVAILABLE = False
 
 # 全局版本号配置
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 
 # 尝试导入screeninfo库，如果不可用则提供安装提示
 try:
@@ -2558,13 +2558,45 @@ class AutoDoorOCR:
         """停止数字识别"""
         self._stop_threads(self.number_threads, "数字识别", "number")
     
+    def _toggle_ui_state(self, root_widget, state):
+        """递归地禁用或启用根控件及其所有子控件
+        
+        Args:
+            root_widget: 根控件
+            state: 控件状态，"disabled" 或 "normal"
+        """
+        # 跳过停止运行按钮，始终保持可用
+        if root_widget == self.global_stop_btn:
+            return
+        
+        try:
+            # 尝试设置控件状态
+            root_widget.configure(state=state)
+        except (tk.TclError, AttributeError):
+            # 某些控件（如Frame）没有state属性，跳过
+            pass
+        
+        # 递归处理所有子控件
+        for child in root_widget.winfo_children():
+            self._toggle_ui_state(child, state)
+    
     def start_all(self):
         """开始运行"""
         self.log_message("开始运行")
         
-        # 禁用所有勾选框
+        # 禁用首页的功能状态勾选框
         for button in self.module_check_buttons.values():
             button.configure(state="disabled")
+        
+        # 禁用开始运行按钮
+        self.global_start_btn.configure(state="disabled")
+        
+        # 禁用所有其他UI控件
+        for child in self.root.winfo_children():
+            self._toggle_ui_state(child, "disabled")
+        
+        # 确保停止运行按钮可用
+        self.global_stop_btn.configure(state="normal")
         
         # 开始勾选的功能
         if self.module_check_vars["ocr"].get() and self.selected_region:
@@ -2585,9 +2617,19 @@ class AutoDoorOCR:
         self.stop_timed_tasks()
         self.stop_number_recognition()
         
-        # 启用所有勾选框
+        # 启用首页的功能状态勾选框
         for button in self.module_check_buttons.values():
             button.configure(state="normal")
+        
+        # 启用开始运行按钮
+        self.global_start_btn.configure(state="normal")
+        
+        # 启用所有其他UI控件
+        for child in self.root.winfo_children():
+            self._toggle_ui_state(child, "normal")
+        
+        # 确保开始运行按钮可用
+        self.global_start_btn.configure(state="normal")
     
     def number_recognition_loop(self, region_index, region, threshold, key):
         """数字识别循环"""

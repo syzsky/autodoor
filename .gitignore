@@ -14,5 +14,5 @@ __pycache__/
 !tesseract/**/*.zip
 .DS_Store
 Thumbs.db
-video_*.md
 autodoor_config.json
+/md/

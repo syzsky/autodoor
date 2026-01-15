@@ -45,7 +45,10 @@ a = Analysis(
     pathex=[project_root],
     binaries=[],
     datas=data_files,
-    hiddenimports=[],
+    hiddenimports=[
+        'pygame',
+        'pygame.mixer',
+    ],
     hookspath=[],
     hooksconfig={},
 
