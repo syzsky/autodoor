@@ -59,6 +59,8 @@ a = Analysis(
         'screeninfo',
         'screeninfo.common',
         'screeninfo.monitors',
+        'pynput',
+        'pynput.keyboard',
     ],
     hookspath=[],
     hooksconfig={},

@@ -14,6 +14,13 @@ import json
 import platform
 from collections import deque
 
+# 导入pynput用于全局键盘监听
+try:
+    from pynput import keyboard
+    PYINPUT_AVAILABLE = True
+except ImportError:
+    PYINPUT_AVAILABLE = False
+
 # 导入pygame用于音频播放
 try:
     import pygame
@@ -1823,29 +1830,68 @@ class AutoDoorOCR:
     
     def setup_shortcuts(self):
         """设置快捷键绑定"""
-        # 先解绑旧的快捷键绑定（如果存在）
-        if hasattr(self, 'shortcut_bind_id'):
-            self.root.unbind("<KeyPress>", funcid=self.shortcut_bind_id)
+        # 停止旧的全局键盘监听器（如果存在）
+        if hasattr(self, 'global_listener') and self.global_listener:
+            self.global_listener.stop()
         
-        # 创建通用快捷键处理函数
-        def on_shortcut_press(event):
-            # 获取按键名称
-            keysym = event.keysym
+        # 使用pynput实现全局键盘监听
+        if PYINPUT_AVAILABLE:
+            def on_press(key):
+                try:
+                    # 获取按键名称
+                    if hasattr(key, 'name'):
+                        # 普通按键
+                        key_name = key.name.upper()
+                    elif hasattr(key, 'char') and key.char:
+                        # 字符按键
+                        key_name = key.char.upper()
+                    elif hasattr(key, 'vk'):
+                        # 特殊按键（F键等）
+                        if 112 <= key.vk <= 123:  # VK_F1=112, VK_F12=123
+                            key_name = f"F{key.vk - 111}"  # F1=112-111=1, 依此类推
+                        else:
+                            key_name = str(key)
+                    else:
+                        key_name = str(key)
+                        
+                    # 检查是否是开始快捷键
+                    if key_name == self.start_shortcut_var.get().upper():
+                        self.root.after(0, self.start_all)
+                    # 检查是否是结束快捷键
+                    if key_name == self.stop_shortcut_var.get().upper():
+                        self.root.after(0, self.stop_all)
+                except Exception as e:
+                    self.log_message(f"全局快捷键处理错误: {str(e)}")
             
-            # 检查是否是开始快捷键
-            if keysym == self.start_shortcut_var.get():
-                self.start_all()
-                return "break"  # 阻止事件继续传播
+            # 创建并启动全局键盘监听器
+            self.global_listener = keyboard.Listener(on_press=on_press)
+            self.global_listener.start()
+            self.log_message("全局快捷键监听已启动")
+        else:
+            # 回退到Tkinter的窗口内快捷键绑定
+            # 先解绑旧的快捷键绑定（如果存在）
+            if hasattr(self, 'shortcut_bind_id'):
+                self.root.unbind("<KeyPress>", funcid=self.shortcut_bind_id)
             
-            # 检查是否是结束快捷键
-            if keysym == self.stop_shortcut_var.get():
-                self.stop_all()
-                return "break"  # 阻止事件继续传播
+            def on_shortcut_press(event):
+                # 获取按键名称
+                keysym = event.keysym
+                
+                # 检查是否是开始快捷键
+                if keysym == self.start_shortcut_var.get():
+                    self.start_all()
+                    return "break"  # 阻止事件继续传播
+                
+                # 检查是否是结束快捷键
+                if keysym == self.stop_shortcut_var.get():
+                    self.stop_all()
+                    return "break"  # 阻止事件继续传播
+                
+                return None
             
-            return None
-        
-        # 绑定全局按键事件，并保存绑定ID
-        self.shortcut_bind_id = self.root.bind("<KeyPress>", on_shortcut_press, add="+")
+            # 绑定窗口内按键事件，并保存绑定ID
+            self.shortcut_bind_id = self.root.bind("<KeyPress>", on_shortcut_press, add="+")
+            self.log_message("窗口内快捷键绑定已设置")
     
     def clear_log(self):
         """清除日志"""
@@ -2815,6 +2861,10 @@ class AutoDoorOCR:
             self.stop_monitoring()
         self.stop_timed_tasks()
         self.stop_number_recognition()
+        
+        # 停止全局键盘监听器
+        if hasattr(self, 'global_listener') and self.global_listener:
+            self.global_listener.stop()
         
         # 停止事件线程
         self.is_event_running = False
