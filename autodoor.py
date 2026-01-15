@@ -188,11 +188,14 @@ class AutoDoorOCR:
             tesseract_path = os.path.join(app_root, "tesseract", "tesseract.exe")
         elif platform.system() == "Darwin":
             # macOS平台
-            # 检查可能的路径
+            # 检查可能的路径 - 针对.app包结构优化
             possible_paths = [
                 os.path.join(app_root, "tesseract", "tesseract"),  # 主要路径
                 os.path.join(app_root, "tesseract"),  # 备选路径
-                os.path.join(os.path.dirname(app_root), "tesseract", "tesseract")  # 应用包外部路径
+                os.path.join(os.path.dirname(app_root), "tesseract", "tesseract"),  # 应用包外部路径
+                # 针对.app包结构的额外路径
+                os.path.join(os.path.dirname(os.path.dirname(app_root)), "Resources", "tesseract", "tesseract"),
+                os.path.join(os.path.dirname(os.path.dirname(app_root)), "Resources", "tesseract")
             ]
             
             for path in possible_paths:
@@ -297,20 +300,29 @@ class AutoDoorOCR:
                         self.log_message(f"无法解析Tesseract版本: {version_str}")
                         # 继续执行，不因为版本解析失败而直接返回False
             
-            # 3. 基础功能测试
+            # 3. 基础功能测试 - 在macOS上添加更安全的处理
             # 配置pytesseract使用找到的路径
             pytesseract.pytesseract.tesseract_cmd = self.tesseract_path
             
+            # 在macOS上，确保测试文件保存在可写位置
+            test_file_path = 'test_tesseract.png'
+            if platform.system() == "Darwin":
+                # 在macOS上，使用用户主目录或临时目录保存测试文件
+                test_file_path = os.path.join(os.path.expanduser("~"), "test_tesseract.png")
+            
             # 创建一个简单的测试图像
             test_image = Image.new('RGB', (100, 30), color='white')
-            test_image.save('test_tesseract.png')
+            test_image.save(test_file_path)
             
             # 尝试执行OCR识别
-            test_result = pytesseract.image_to_string('test_tesseract.png', lang='eng', timeout=5)
+            test_result = pytesseract.image_to_string(test_file_path, lang='eng', timeout=5)
             
             # 清理测试文件
-            if os.path.exists('test_tesseract.png'):
-                os.remove('test_tesseract.png')
+            if os.path.exists(test_file_path):
+                try:
+                    os.remove(test_file_path)
+                except Exception as e:
+                    self.log_message(f"清理测试文件失败: {str(e)}")
             
             # 配置界面中的路径变量
             if hasattr(self, 'tesseract_path_var'):
@@ -331,8 +343,13 @@ class AutoDoorOCR:
         except pytesseract.TesseractError as e:
             self.log_message(f"Tesseract OCR测试失败: {e}")
             return False
+        except PermissionError as e:
+            self.log_message(f"Tesseract权限错误: {str(e)}")
+            # 在macOS上，权限错误可能是由于安全机制导致，返回False但不崩溃
+            return False
         except Exception as e:
             self.log_message(f"Tesseract检测发生未知错误: {str(e)}")
+            # 在macOS上，未知错误也应该返回False而不是崩溃
             return False
         
     def create_widgets(self):

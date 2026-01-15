@@ -48,6 +48,17 @@ a = Analysis(
     hiddenimports=[
         'pygame',
         'pygame.mixer',
+        'pygame.mixer.music',
+        'pygame._sdl2.mixer',
+        'tkinter',
+        'tkinter.ttk',
+        'PIL',
+        'PIL.Image',
+        'PIL.ImageGrab',
+        'pytesseract',
+        'screeninfo',
+        'screeninfo.common',
+        'screeninfo.monitors',
     ],
     hookspath=[],
     hooksconfig={},
@@ -123,7 +134,7 @@ if platform.system() == 'Darwin':
         a.datas,
         name='AutoDoor.app',
         icon='',  # 如果有图标文件，可以在这里设置
-        bundle_identifier=None,
+        bundle_identifier='com.autodoor.ocr',
         info_plist={
             'CFBundleName': 'AutoDoor',
             'CFBundleDisplayName': 'AutoDoor OCR',
@@ -131,7 +142,16 @@ if platform.system() == 'Darwin':
             'CFBundleVersion': '1.0',
             'CFBundleShortVersionString': '1.0',
             'NSHighResolutionCapable': True,
+            'NSAppleEventsUsageDescription': 'AutoDoor需要访问系统事件以执行自动化操作',
+            'NSMicrophoneUsageDescription': 'AutoDoor可能需要使用音频功能进行报警',
+            'NSCameraUsageDescription': 'AutoDoor可能需要访问屏幕截图功能',
+            'NSScreenCaptureUsageDescription': 'AutoDoor需要访问屏幕截图功能以进行OCR识别',
+            'LSBackgroundOnly': False,
+            'LSMinimumSystemVersion': '10.14',
         },
+        # 确保tesseract有执行权限
+        strip=False,
+        upx=False,  # 禁用UPX压缩，避免macOS安全问题
     )
 else:
     # Windows/Linux平台：使用COLLECT创建目录结构
