@@ -40,9 +40,19 @@ set /p tag_description=版本描述：
 
 rem 创建并推送标签
 echo 5. 创建并推送标签...
-git tag -a "%new_tag%" -m "%tag_description%"
-git push origin "%new_tag%"
-echo ✅ 标签 %new_tag% 已创建并推送成功！
+rem 检查标签是否已存在
+git tag -l "%new_tag%" > git_tag_check.txt
+set /p tag_exists=<git_tag_check.txt
+del git_tag_check.txt
+if not "%tag_exists%" == "" (
+    echo ℹ️  标签 %new_tag% 已存在，跳过创建步骤
+) else (
+    git tag -a "%new_tag%" -m "%tag_description%"
+    echo ✅ 标签 %new_tag% 已创建成功！
+)
+rem 推送标签（无论是否新创建，确保远程仓库有该标签）
+git push origin "%new_tag%" 2>nul || echo ℹ️  标签 %new_tag% 已存在于远程仓库，跳过推送步骤
+echo ✅ 标签 %new_tag% 处理完成！
 
 rem 推送代码到master分支
 echo 6. 推送代码到master分支...
