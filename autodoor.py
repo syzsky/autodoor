@@ -30,7 +30,7 @@ except ImportError:
     PYGAME_AVAILABLE = False
 
 # 全局版本号配置
-VERSION = "1.3.1"
+VERSION = "1.3.2"
 
 # 尝试导入screeninfo库，如果不可用则提供安装提示
 try:
@@ -45,9 +45,9 @@ class AutoDoorOCR:
         
         self.root = tk.Tk()
         self.root.title(f"AutoDoor OCR 识别系统 v{VERSION}")
-        self.root.geometry("800x700") 
+        self.root.geometry("800x850")  # 增加默认高度
         self.root.resizable(True, True) 
-        self.root.minsize(750, 650)
+        self.root.minsize(750, 800)  # 增加最小高度
         
         # 配置参数
         self.ocr_interval = 5
@@ -299,7 +299,9 @@ class AutoDoorOCR:
                     
                     # 检查主要版本号，确保至少是4.x
                     try:
-                        major_version = int(version_str.split('.')[0])
+                        # 移除版本号开头的'v'字符（如果存在）
+                        cleaned_version = version_str.lstrip('v')
+                        major_version = int(cleaned_version.split('.')[0])
                         if major_version < 4:
                             self.log_message(f"Tesseract版本太旧 ({version_str})，建议使用4.x或更高版本")
                             return False
@@ -412,33 +414,43 @@ class AutoDoorOCR:
         notebook.add(basic_frame, text="基本设置")
         self.create_basic_tab(basic_frame)
         
-        # 日志标签页
-        log_frame = ttk.Frame(notebook)
-        notebook.add(log_frame, text="日志")
-        self.create_log_tab(log_frame)
+        # 日志功能已迁移到首页，删除独立的日志标签页
         
-        # 控制按钮区域
+        # 控制按钮区域 - 简化布局，让退出按钮靠近右下角
         control_frame = ttk.Frame(main_frame, padding="10 5 10 0")
         control_frame.pack(fill=tk.X, pady=(10, 0))
         
-        # 退出按钮在右侧
-        exit_btn = ttk.Button(control_frame, text="退出程序", command=self.exit_program)
-        exit_btn.pack(side=tk.RIGHT)
-        
-        # 底部声明区域（与退出按钮同行）
+        # 左侧声明区域
         footer_frame = ttk.Frame(control_frame)
-        footer_frame.pack(side=tk.LEFT, padx=(0, 20), anchor=tk.W)
+        footer_frame.pack(side=tk.LEFT, anchor=tk.W)
         
         # 禁止商用声明
         footer_label = ttk.Label(footer_frame, text="本程序仅供个人学习研究使用，禁止商用 | 制作人：", 
                                   font=("等线", 10), foreground="#888888", cursor="arrow")
         footer_label.pack(side=tk.LEFT)
         
-        # 制作人Bilibili超链接（使用Label模拟链接样式）
+        # 制作人Bilibili超链接
         author_label = ttk.Label(footer_frame, text="Flown王砖家", 
                                   font=("等线", 10), foreground="blue", cursor="hand2")
         author_label.pack(side=tk.LEFT)
         author_label.bind("<Button-1>", lambda e: self.open_bilibili())
+        
+        # 右侧按钮区域 - 简化布局
+        buttons_frame = ttk.Frame(control_frame)
+        buttons_frame.pack(side=tk.RIGHT, anchor=tk.E)
+        
+        # 定义工具介绍按钮的点击事件
+        def open_tool_intro():
+            import webbrowser
+            webbrowser.open("https://my.feishu.cn/wiki/GqoWwddPMizkLYkogn8cdoynn3c?from=from_copylink")
+        
+        # 退出程序按钮（右侧）
+        exit_btn = ttk.Button(buttons_frame, text="退出程序", command=self.exit_program)
+        exit_btn.pack(side=tk.RIGHT)
+        
+        # 工具介绍按钮（左侧），与退出按钮保持20px间距
+        tool_intro_btn = ttk.Button(buttons_frame, text="工具介绍", command=open_tool_intro)
+        tool_intro_btn.pack(side=tk.RIGHT, padx=(0, 20))
     
     def open_bilibili(self):
         """打开Bilibili主页"""
@@ -1271,7 +1283,7 @@ class AutoDoorOCR:
         # 创建带勾选框的状态行
         for module, var in self.status_labels.items():
             row_frame = ttk.Frame(status_frame)
-            row_frame.pack(fill=tk.X, pady=5)
+            row_frame.pack(fill=tk.X, pady=2)  # 减少行间隔
             
             # 勾选框
             check_btn = ttk.Checkbutton(row_frame, variable=self.module_check_vars[module])
@@ -1291,24 +1303,29 @@ class AutoDoorOCR:
         
         self.global_stop_btn = ttk.Button(control_frame, text="停止运行", command=self.stop_all, style="TButton")
         self.global_stop_btn.pack(side=tk.LEFT, fill=tk.X, expand=True)
-    
-    def create_log_tab(self, parent):
-        """创建日志标签页"""
-        log_frame = ttk.Frame(parent, padding="10")
-        log_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 日志展示模块 - 添加到首页功能状态模块下方
+        log_frame = ttk.LabelFrame(home_frame, text="运行日志", padding="15")
+        log_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+        
+        # 日志显示区域
+        log_display_frame = ttk.Frame(log_frame)
+        log_display_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         
         # 日志文本框
-        self.log_text = tk.Text(log_frame, height=20, width=80, font=("Arial", 9), state=tk.DISABLED)
-        self.log_text.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+        self.home_log_text = tk.Text(log_display_frame, height=15, width=80, font=("Arial", 9), state=tk.DISABLED)
+        self.home_log_text.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
         
-        # 滚动条
-        log_scrollbar = ttk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
-        log_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.log_text.configure(yscrollcommand=log_scrollbar.set)
+        # 日志滚动条
+        home_log_scrollbar = ttk.Scrollbar(log_display_frame, orient=tk.VERTICAL, command=self.home_log_text.yview)
+        home_log_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.home_log_text.configure(yscrollcommand=home_log_scrollbar.set)
         
-        # 清除日志按钮
-        clear_btn = ttk.Button(parent, text="清除日志", command=self.clear_log)
-        clear_btn.pack(side=tk.BOTTOM, pady=5, anchor=tk.E)
+        # 清除日志按钮 - 放置在日志展示窗口下方，固定宽度
+        home_clear_btn = ttk.Button(log_frame, text="清除日志", command=self.clear_log, width=12)
+        home_clear_btn.pack(side=tk.RIGHT, pady=5)
+    
+    # 日志功能已迁移到首页，删除create_log_tab方法
     
 
         
@@ -1895,9 +1912,12 @@ class AutoDoorOCR:
     
     def clear_log(self):
         """清除日志"""
-        self.log_text.config(state=tk.NORMAL)
-        self.log_text.delete("1.0", tk.END)
-        self.log_text.config(state=tk.DISABLED)
+        # 清除首页的日志文本框
+        if hasattr(self, 'home_log_text'):
+            self.home_log_text.config(state=tk.NORMAL)
+            self.home_log_text.delete("1.0", tk.END)
+            self.home_log_text.config(state=tk.DISABLED)
+            
         self.log_message("已清除日志")
     
     def set_tesseract_path(self):
@@ -1959,12 +1979,12 @@ class AutoDoorOCR:
         except Exception as e:
             print(f"写入日志文件失败: {str(e)}")
         
-        # 只有当log_text已经创建时才写入界面日志
-        if hasattr(self, 'log_text'):
-            self.log_text.config(state=tk.NORMAL)
-            self.log_text.insert(tk.END, log_entry)
-            self.log_text.see(tk.END)
-            self.log_text.config(state=tk.DISABLED)
+        # 写入首页的日志文本框
+        if hasattr(self, 'home_log_text'):
+            self.home_log_text.config(state=tk.NORMAL)
+            self.home_log_text.insert(tk.END, log_entry)
+            self.home_log_text.see(tk.END)
+            self.home_log_text.config(state=tk.DISABLED)
         
         # 更新状态标签（仅当status_var已创建）
         if hasattr(self, 'status_var'):
