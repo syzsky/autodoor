@@ -2713,12 +2713,12 @@ class AutoDoorOCR:
                         # 播放数字识别模块报警声音
                         self.play_alarm_sound(self.number_regions[region_index]["alarm"])
                         
-                        # 只有当按键不为空时才执行按键操作
-                    if key:
-                        self.add_event(('keypress', key), ('number', region_index))
-                        self.log_message(f"数字识别{region_index+1}触发按键: {key}")
-                    else:
-                        self.log_message(f"数字识别{region_index+1}按键配置为空，仅执行报警操作")
+                        # 只有当数字小于阈值且按键不为空时才执行按键操作
+                        if key:
+                            self.add_event(('keypress', key), ('number', region_index))
+                            self.log_message(f"数字识别{region_index+1}触发按键: {key}")
+                        else:
+                            self.log_message(f"数字识别{region_index+1}按键配置为空，仅执行报警操作")
                 
                 time.sleep(1)  # 1秒间隔
             except Exception as e:
