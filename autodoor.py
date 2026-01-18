@@ -1778,6 +1778,16 @@ class AutoDoorOCR:
         else:
             self.log_message(f"配置文件不存在: {self.config_file}")
         
+        # 更新配置文件版本号（如果与当前版本不一致）
+        if config_loaded:
+            if config_version != VERSION:
+                self.log_message(f"配置版本更新: {config_version} → {VERSION}")
+                # 更新配置版本并保存
+                config['version'] = VERSION
+                config['last_save_time'] = datetime.datetime.now().isoformat()
+                with open(self.config_file, 'w', encoding='utf-8') as f:
+                    json.dump(config, f, indent=2, ensure_ascii=False)
+        
         # 无论配置是否加载成功，都更新界面中的Tesseract路径变量
         if hasattr(self, 'tesseract_path_var'):
             self.tesseract_path_var.set(self.tesseract_path)
