@@ -847,13 +847,15 @@ class AutoDoorOCR:
             if not messagebox.askyesno("确认", f"确定要删除定时组{index+1}吗？"):
                 return
         
-        # 移除组框架
-        self.timed_groups[index]["frame"].destroy()
-        # 从列表中删除
-        del self.timed_groups[index]
-        # 重新编号所有定时组
-        self.renumber_timed_groups()
-        self.log_message(f"已删除定时组{index+1}")
+        # 检查索引是否有效，避免删除后索引过期导致的IndexError
+        if 0 <= index < len(self.timed_groups):
+            # 移除组框架
+            self.timed_groups[index]["frame"].destroy()
+            # 从列表中删除
+            del self.timed_groups[index]
+            # 重新编号所有定时组
+            self.renumber_timed_groups()
+            self.log_message(f"已删除定时组{index+1}")
     
     def renumber_timed_groups(self):
         """重新编号所有定时组"""
@@ -1071,7 +1073,7 @@ class AutoDoorOCR:
         """删除数字识别区域
         
         Args:
-            index: 要删除的数字识别区域索引
+            index: 要删除的区域索引
             confirm: 是否显示确认对话框，默认为True
         """
         if len(self.number_regions) <= 1:
@@ -1083,13 +1085,15 @@ class AutoDoorOCR:
             if not messagebox.askyesno("确认", f"确定要删除区域{index+1}吗？"):
                 return
         
-        # 移除区域框架
-        self.number_regions[index]["frame"].destroy()
-        # 从列表中删除
-        del self.number_regions[index]
-        # 重新编号所有区域
-        self.renumber_number_regions()
-        self.log_message(f"已删除区域{index+1}")
+        # 检查索引是否有效，避免删除后索引过期导致的IndexError
+        if 0 <= index < len(self.number_regions):
+            # 移除区域框架
+            self.number_regions[index]["frame"].destroy()
+            # 从列表中删除
+            del self.number_regions[index]
+            # 重新编号所有区域
+            self.renumber_number_regions()
+            self.log_message(f"已删除区域{index+1}")
     
     def renumber_number_regions(self):
         """重新编号所有数字识别区域"""
