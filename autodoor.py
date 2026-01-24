@@ -30,7 +30,7 @@ except ImportError:
     PYGAME_AVAILABLE = False
 
 # 全局版本号配置
-VERSION = "1.3.2"
+VERSION = "1.4.0"
 
 # 尝试导入screeninfo库，如果不可用则提供安装提示
 try:
@@ -132,6 +132,10 @@ class AutoDoorOCR:
         # 按键延迟配置 - 文字识别模块
         self.ocr_delay_min = tk.IntVar(value=300)
         self.ocr_delay_max = tk.IntVar(value=500)
+        
+        # OCR组管理相关变量
+        self.ocr_groups = []
+        self.current_ocr_region = None
         
         # 先创建界面元素，确保所有UI变量都被初始化
         self.create_widgets()
@@ -364,10 +368,37 @@ class AutoDoorOCR:
     def create_widgets(self):
         # 设置全局样式
         style = ttk.Style()
-        style.configure("TFrame", background="#f0f0f0")
-        style.configure("TLabel", background="#f0f0f0", font=("Arial", 10))
-        style.configure("Header.TLabel", font=("Arial", 12, "bold"))
-        style.configure("TButton", padding=5)
+        # 统一背景色
+        bg_color = "#f0f0f0"
+        green_bg_color = "#e8f4e8"
+        
+        # 基本样式配置，所有组件背景色与整体背景色一致
+        style.configure("TFrame", background=bg_color)
+        style.configure("TLabel", background=bg_color, font=("Arial", 10))
+        style.configure("Header.TLabel", font=("Arial", 12, "bold"), background=bg_color)
+        style.configure("TButton", padding=5, background=bg_color)
+        style.configure("TEntry", background=bg_color, fieldbackground=bg_color)
+        style.configure("TCheckbutton", background=bg_color)
+        style.configure("TCombobox", background=bg_color, fieldbackground=bg_color)
+        style.configure("TLabelFrame", background=bg_color, bordercolor=bg_color)
+        style.configure("TLabelFrame.Label", background=bg_color)
+        
+        # 修复文本元素底部灰色问题，确保所有标签相关组件都使用正确背景色
+        style.configure(".", background=bg_color)  # 设置所有组件的默认背景色
+        style.configure("TLabel", relief="flat")  # 移除标签的默认边框
+        style.map("TLabel", background=[("active", bg_color)])  # 确保选中时背景色正确
+        style.map("TLabelFrame.Label", background=[("active", bg_color)])  # 标签框架标题选中时背景色
+        style.map("TFrame", background=[("active", bg_color)])  # 框架选中时背景色
+        
+        # 添加绿色边框样式，用于标记启用的识别组
+        style.configure("Green.TFrame", background=green_bg_color)
+        style.configure("Green.TLabelframe", background=green_bg_color, borderwidth=2, relief=tk.SOLID)
+        style.configure("Green.TLabelframe.Label", foreground="green", font=("Arial", 10, "bold"), background=green_bg_color)
+        style.configure("Green.TLabel", background=green_bg_color)
+        style.configure("Green.TEntry", background=green_bg_color, fieldbackground=bg_color)
+        style.configure("Green.TButton", background=green_bg_color)
+        style.configure("Green.TCheckbutton", background=green_bg_color)
+        style.configure("Green.TCombobox", background=green_bg_color, fieldbackground=bg_color)
         
         # 主容器
         main_frame = ttk.Frame(self.root, padding="10")
@@ -462,77 +493,157 @@ class AutoDoorOCR:
         ocr_frame = ttk.Frame(parent, padding="10")
         ocr_frame.pack(fill=tk.BOTH, expand=True)
         
-        # 区域选择
-        region_frame = ttk.LabelFrame(ocr_frame, text="区域选择", padding="10")
-        region_frame.pack(fill=tk.X, pady=(0, 10))
+        # 顶部按钮栏
+        top_frame = ttk.Frame(ocr_frame)
+        top_frame.pack(fill=tk.X, pady=(0, 10))
         
-        region_btn = ttk.Button(region_frame, text="选择区域", command=self.start_region_selection)
-        region_btn.pack(side=tk.LEFT, padx=(0, 10))
+        # 新增组按钮
+        self.add_ocr_group_btn = ttk.Button(top_frame, text="新增识别组", command=self.add_ocr_group)
+        self.add_ocr_group_btn.pack(side=tk.LEFT)
         
-        region_label = ttk.Label(region_frame, textvariable=self.region_var)
-        region_label.pack(side=tk.LEFT)
+        # 识别组容器，带滚动条
+        groups_container = ttk.Frame(ocr_frame)
+        groups_container.pack(fill=tk.BOTH, expand=True)
         
-        # 识别设置 - 第一行：识别间隔、暂停时长、按键设置
-        setting_frame = ttk.LabelFrame(ocr_frame, text="识别设置", padding="10")
-        setting_frame.pack(fill=tk.X, pady=(0, 10))
+        # 垂直滚动条
+        groups_scrollbar = ttk.Scrollbar(groups_container, orient=tk.VERTICAL)
+        groups_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # 第一行：识别间隔、暂停时长、按键设置
-        row1_frame = ttk.Frame(setting_frame)
+        # 画布，用于实现滚动
+        groups_canvas = tk.Canvas(groups_container, yscrollcommand=groups_scrollbar.set, highlightthickness=0)
+        groups_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        groups_scrollbar.config(command=groups_canvas.yview)
+        
+        # 内部容器，用于放置所有识别组
+        self.ocr_groups_frame = ttk.Frame(groups_canvas)
+        groups_canvas.create_window((0, 0), window=self.ocr_groups_frame, anchor="nw", tags="inner_frame")
+        
+        # 配置画布尺寸和滚动区域
+        def configure_scroll_region(event):
+            self._configure_scroll_region(event, groups_canvas, "inner_frame")
+        
+        groups_canvas.bind("<Configure>", configure_scroll_region)
+        self.ocr_groups_frame.bind("<Configure>", configure_scroll_region)
+        
+        # 为画布绑定鼠标滚轮事件
+        groups_canvas.bind("<MouseWheel>", lambda event: self._on_mousewheel(event, groups_canvas))
+        
+        # 为内部框架绑定鼠标滚轮事件
+        self.ocr_groups_frame.bind("<MouseWheel>", lambda event: self._on_mousewheel(event, groups_canvas))
+        
+        # 为整个标签页绑定鼠标滚轮事件
+        ocr_frame.bind("<MouseWheel>", lambda event: self._on_mousewheel(event, groups_canvas))
+        
+        # 保存文字识别的画布和框架引用
+        self.ocr_canvas = groups_canvas
+        self.ocr_frame = ocr_frame
+        self.ocr_groups_container = groups_container
+        
+        # 区域配置
+        self.ocr_groups = []
+        for i in range(2):
+            self.create_ocr_group(i)
+        
+        # 绑定所有文字识别区域的鼠标滚轮事件
+        self._bind_mousewheel_to_widgets(groups_canvas, [group["frame"] for group in self.ocr_groups])
+    
+    def create_ocr_group(self, index):
+        """创建单个文字识别组"""
+        # 创建识别组框架，移除名称前的空格，使用默认样式
+        group_frame = ttk.LabelFrame(self.ocr_groups_frame, text=f"识别组{index+1}", padding="10")
+        group_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 设置初始边框样式
+        group_frame.configure(relief=tk.GROOVE, borderwidth=2)
+        
+        # 定义背景色变量，用于样式设置
+        bg_color = "#f0f0f0"
+        
+        # 启用状态变量
+        enabled_var = tk.BooleanVar(value=False)
+        
+        # 点击事件处理函数
+        def on_group_click(event):
+            # 检查点击事件是否来自输入控件
+            if isinstance(event.widget, (ttk.Entry, ttk.Button, ttk.Combobox, ttk.Checkbutton)):
+                return  # 输入控件事件不处理
+            
+            # 切换启用状态
+            enabled_var.set(not enabled_var.get())
+            
+            # 根据启用状态调整样式
+            update_group_style(enabled_var.get())
+        
+        # 使用类方法更新组样式
+        def update_group_style(enabled):
+            self.update_group_style(group_frame, enabled)
+        
+        # 为enabled变量添加trace监听，当状态变化时自动更新样式
+        enabled_var.trace_add("write", lambda *args: update_group_style(enabled_var.get()))
+        
+        # 绑定点击事件到框架及其子组件
+        group_frame.bind("<Button-1>", on_group_click)
+        
+        # 为子组件绑定事件
+        def bind_child_events(widget):
+            for child in widget.winfo_children():
+                if isinstance(child, (ttk.Entry, ttk.Button, ttk.Combobox, ttk.Checkbutton)):
+                    # 输入控件保持原有功能
+                    pass
+                else:
+                    # 其他组件继续绑定点击事件
+                    child.bind("<Button-1>", on_group_click)
+                    bind_child_events(child)
+        
+        bind_child_events(group_frame)
+        
+        # 初始应用样式
+        update_group_style(enabled_var.get())
+        
+        # 第一行：区域选择、区域坐标、删除按钮
+        row1_frame = ttk.Frame(group_frame)
         row1_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # 识别间隔
-        interval_frame = ttk.Frame(row1_frame)
-        interval_frame.pack(side=tk.LEFT, padx=(0, 20))
-        ocr_interval_label = ttk.Label(interval_frame, text="识别间隔(秒):")
-        ocr_interval_label.pack(anchor=tk.W, pady=(0, 5))
+        # 区域选择和区域坐标
+        select_btn = ttk.Button(row1_frame, text="选择区域", command=lambda idx=index: self.start_ocr_region_selection(idx))
+        select_btn.pack(side=tk.LEFT, padx=(0, 10))
         
-        self.ocr_interval_var = tk.IntVar(value=self.ocr_interval)
-        ocr_interval_entry = ttk.Entry(interval_frame, textvariable=self.ocr_interval_var, width=15)
-        ocr_interval_entry.pack(fill=tk.X)
+        region_var = tk.StringVar(value="未选择区域")
+        region_label = ttk.Label(row1_frame, textvariable=region_var, width=25)
+        region_label.pack(side=tk.LEFT, padx=(0, 10))
         
-        # 暂停时长
-        pause_frame = ttk.Frame(row1_frame)
-        pause_frame.pack(side=tk.LEFT, padx=(0, 20))
-        pause_duration_label = ttk.Label(pause_frame, text="暂停时长(秒):")
-        pause_duration_label.pack(anchor=tk.W, pady=(0, 5))
+        # 删除按钮
+        delete_btn = ttk.Button(row1_frame, text="删除", width=6, command=lambda idx=index: self.delete_ocr_group(idx))
+        delete_btn.pack(side=tk.RIGHT, padx=(10, 0))
         
-        self.pause_duration_var = tk.IntVar(value=self.pause_duration)
-        pause_duration_entry = ttk.Entry(pause_frame, textvariable=self.pause_duration_var, width=15)
-        pause_duration_entry.pack(fill=tk.X)
+        # 第二行：间隔(秒)、暂停时长（秒）、触发按键、按键时长、启用报警
+        row2_frame = ttk.Frame(group_frame)
+        row2_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # 按键设置
-        key_setting_frame = ttk.Frame(row1_frame)
-        key_setting_frame.pack(side=tk.LEFT, padx=(0, 20))
-        key_label = ttk.Label(key_setting_frame, text="触发按键:")
-        key_label.pack(anchor=tk.W, pady=(0, 5))
+        # 间隔(秒)输入框 - 水平排列
+        ttk.Label(row2_frame, text="间隔(秒):", width=10).pack(side=tk.LEFT, padx=(0, 5))
+        interval_var = tk.IntVar(value=5)
+        ttk.Entry(row2_frame, textvariable=interval_var, width=6).pack(side=tk.LEFT, padx=(0, 10))
         
-        # 按键配置区域
-        key_config_frame = ttk.Frame(key_setting_frame)
-        key_config_frame.pack(fill=tk.X)
+        # 暂停时长（秒）输入框 - 水平排列
+        ttk.Label(row2_frame, text="暂停时长(秒):", width=12).pack(side=tk.LEFT, padx=(0, 5))
+        pause_var = tk.IntVar(value=180)
+        ttk.Entry(row2_frame, textvariable=pause_var, width=6).pack(side=tk.LEFT, padx=(0, 10))
         
-        self.key_var = tk.StringVar(value=self.custom_key)
+        # 触发按键选择器 - 水平排列
+        ttk.Label(row2_frame, text="按键:", width=10).pack(side=tk.LEFT, padx=(0, 5))
+        key_var = tk.StringVar(value="equal")
+        key_label = ttk.Label(row2_frame, textvariable=key_var, relief="sunken", padding=2, width=8)
+        key_label.pack(side=tk.LEFT, padx=(0, 5))
+        set_key_btn = ttk.Button(row2_frame, text="修改", width=6)
+        set_key_btn.pack(side=tk.LEFT, padx=(0, 10))
+        set_key_btn.config(command=lambda v=key_var, b=set_key_btn: self.start_key_listening(v, b))
         
-        # 显示当前按键的标签
-        current_key_label = ttk.Label(key_config_frame, textvariable=self.key_var, relief="sunken", padding=5, width=10)
-        current_key_label.pack(side=tk.LEFT, padx=(0, 5))
+        # 按键时长设置框 - 水平排列
+        ttk.Label(row2_frame, text="按键时长:", width=10).pack(side=tk.LEFT, padx=(0, 5))
+        delay_min_var = tk.IntVar(value=300)
+        delay_max_var = tk.IntVar(value=500)
         
-        # 设置按键按钮
-        self.set_key_btn = ttk.Button(key_config_frame, text="修改按键", 
-                                    command=lambda: self.start_key_listening(self.key_var, self.set_key_btn))
-        self.set_key_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
-
-        
-        # 延迟配置 - 与识别间隔、暂停时长保持一致的垂直布局
-        delay_setting_frame = ttk.Frame(row1_frame)
-        delay_setting_frame.pack(side=tk.LEFT, padx=(0, 20))
-        delay_label = ttk.Label(delay_setting_frame, text="按键时长：")
-        delay_label.pack(anchor=tk.W, pady=(0, 5))
-        
-        delay_config_frame = ttk.Frame(delay_setting_frame)
-        delay_config_frame.pack(fill=tk.X)
-        
-        # 延迟最小值输入框
         def validate_positive_int(P):
             if P == "":
                 return True
@@ -542,86 +653,100 @@ class AutoDoorOCR:
             except ValueError:
                 return False
         
-        delay_min_entry = ttk.Entry(delay_config_frame, textvariable=self.ocr_delay_min, width=5, validate="key")
+        delay_min_entry = ttk.Entry(row2_frame, textvariable=delay_min_var, width=5, validate="key")
         delay_min_entry.pack(side=tk.LEFT)
         delay_min_entry.configure(validatecommand=(delay_min_entry.register(validate_positive_int), '%P'))
-        
-        # 失去焦点时的验证，确保值为正整数
-        def validate_min_on_focusout(event):
-            value = self.ocr_delay_min.get()
-            if value <= 0:
-                self.ocr_delay_min.set(300)
-        delay_min_entry.bind("<FocusOut>", validate_min_on_focusout)
-        
-        ttk.Label(delay_config_frame, text=" - ", width=2).pack(side=tk.LEFT)
-        
-        delay_max_entry = ttk.Entry(delay_config_frame, textvariable=self.ocr_delay_max, width=5, validate="key")
+        ttk.Label(row2_frame, text=" - ", width=2).pack(side=tk.LEFT)
+        delay_max_entry = ttk.Entry(row2_frame, textvariable=delay_max_var, width=5, validate="key")
         delay_max_entry.pack(side=tk.LEFT)
         delay_max_entry.configure(validatecommand=(delay_max_entry.register(validate_positive_int), '%P'))
+        ttk.Label(row2_frame, text="ms", width=3).pack(side=tk.LEFT, padx=(0, 10))
         
-        # 失去焦点时的验证，确保值为正整数且不小于最小值
-        def validate_max_on_focusout(event):
-            min_val = self.ocr_delay_min.get()
-            max_val = self.ocr_delay_max.get()
-            if max_val <= 0:
-                self.ocr_delay_max.set(500)
-            elif max_val < min_val:
-                self.ocr_delay_max.set(min_val)
-        delay_max_entry.bind("<FocusOut>", validate_max_on_focusout)
+        # 启用报警复选框 - 水平排列
+        alarm_var = tk.BooleanVar(value=False)
+        alarm_switch = ttk.Checkbutton(row2_frame, text="启用报警", variable=alarm_var)
+        alarm_switch.pack(side=tk.LEFT, padx=(0, 10))
         
-        ttk.Label(delay_config_frame, text="ms", width=3).pack(side=tk.LEFT)
+        # 第三行：识别关键词、识别语言、是否点击识别文字
+        row3_frame = ttk.Frame(group_frame)
+        row3_frame.pack(fill=tk.X)
         
-        # 报警开关 - 移动到按键时长右侧
-        alarm_switch = ttk.Checkbutton(delay_config_frame, text="启用报警", variable=self.alarm_enabled["ocr"],
-                                     command=lambda: self.toggle_alarm("ocr"))
-        alarm_switch.pack(side=tk.LEFT, padx=(10, 0))
+        # 识别关键词输入框 - 水平排列
+        ttk.Label(row3_frame, text="识别关键词:", width=12, anchor=tk.W).pack(side=tk.LEFT, padx=(0, 5))
+        keywords_var = tk.StringVar(value="men,door")
+        ttk.Entry(row3_frame, textvariable=keywords_var, width=20).pack(side=tk.LEFT, padx=(0, 10))
         
-        # 第二部分：关键词和语言设置
-        keyword_language_frame = ttk.LabelFrame(setting_frame, text="关键词和语言", padding="10")
-        keyword_language_frame.pack(fill=tk.X, pady=(0, 0))
+        # 识别语言选择下拉菜单 - 水平排列
+        ttk.Label(row3_frame, text="识别语言:", width=10, anchor=tk.W).pack(side=tk.LEFT, padx=(0, 5))
+        language_var = tk.StringVar(value="eng")
+        ttk.Combobox(row3_frame, textvariable=language_var, values=["eng", "chi_sim", "chi_tra"], width=12).pack(side=tk.LEFT, padx=(0, 10))
         
-        # 关键词设置行
-        keyword_row = ttk.Frame(keyword_language_frame)
-        keyword_row.pack(fill=tk.X, pady=(0, 10))
+        # 是否点击识别文字复选框 - 水平排列
+        click_var = tk.BooleanVar(value=True)
+        click_switch = ttk.Checkbutton(row3_frame, text="点击识别文字", variable=click_var)
+        click_switch.pack(side=tk.LEFT, padx=(0, 10))
         
-        keywords_label = ttk.Label(keyword_row, text="识别关键词:", width=12, anchor=tk.W)
-        keywords_label.pack(side=tk.LEFT, padx=(0, 10))
+        # 保存组配置
+        group_config = {
+            "frame": group_frame,
+            "enabled": enabled_var,
+            "region_var": region_var,
+            "region": None,
+            "interval": interval_var,
+            "pause": pause_var,
+            "key": key_var,
+            "delay_min": delay_min_var,
+            "delay_max": delay_max_var,
+            "alarm": alarm_var,
+            "keywords": keywords_var,
+            "language": language_var,
+            "click": click_var
+        }
+        self.ocr_groups.append(group_config)
         
-        # 关键词输入框
-        self.keywords_var = tk.StringVar(value=",".join(self.custom_keywords))
-        self.keywords_entry = ttk.Entry(keyword_row, textvariable=self.keywords_var, width=20)
-        self.keywords_entry.pack(side=tk.LEFT)
+        # 为新创建的识别组添加配置监听器
+        if hasattr(self, '_setup_ocr_group_listeners'):
+            self._setup_ocr_group_listeners(group_config)
         
-        # 语言设置行
-        language_row = ttk.Frame(keyword_language_frame)
-        language_row.pack(fill=tk.X, pady=(0, 5))
+        # 为新创建的识别组绑定鼠标滚轮事件
+        canvas = self.ocr_groups_frame.master
+        if isinstance(canvas, tk.Canvas):
+            self._bind_mousewheel_to_widgets(canvas, [group_frame])
+    
+    def add_ocr_group(self):
+        """新增文字识别组"""
+        if len(self.ocr_groups) >= 15:
+            messagebox.showwarning("警告", "最多只能创建15个识别组！")
+            return
         
-        language_label = ttk.Label(language_row, text="OCR识别语言:", width=12, anchor=tk.W)
-        language_label.pack(side=tk.LEFT, padx=(0, 10))
+        self.create_ocr_group(len(self.ocr_groups))
+        self.log_message(f"新增文字识别组{len(self.ocr_groups)}")
+    
+    def delete_ocr_group(self, index, confirm=True):
+        """删除文字识别组"""
+        if len(self.ocr_groups) <= 1:
+            messagebox.showwarning("警告", "至少需要保留一个识别组！")
+            return
         
-        # 语言选择
-        self.language_var = tk.StringVar(value=self.ocr_language)
-        language_combobox = ttk.Combobox(language_row, textvariable=self.language_var, 
-                                        values=["eng", "chi_sim", "chi_tra"], 
-                                        width=15)
-        language_combobox.pack(side=tk.LEFT)
+        if confirm:
+            if not messagebox.askyesno("确认", f"确定要删除识别组{index+1}吗？"):
+                return
         
-        # 语言说明（放在输入框下方）
-        language_desc = ttk.Label(keyword_language_frame, text="eng: 英文 | chi_sim: 简体中文 | chi_tra: 繁体中文", 
-                                font=("Arial", 8), foreground="gray")
-        language_desc.pack(anchor=tk.W, pady=(5, 10))
-        
-        # 按钮行（放在提示文字下方）
-        btn_frame = ttk.Frame(keyword_language_frame)
-        btn_frame.pack(fill=tk.X, pady=(0, 5))
-        
-        set_keyword_btn = ttk.Button(btn_frame, text="保存关键词", command=self.set_custom_keywords)
-        set_keyword_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
-        restore_keyword_btn = ttk.Button(btn_frame, text="恢复默认", command=self.restore_default_keywords)
-        restore_keyword_btn.pack(side=tk.LEFT)
-        
-        # 操作按钮已移除，统一由首页全局控制
+        if 0 <= index < len(self.ocr_groups):
+            self.ocr_groups[index]["frame"].destroy()
+            del self.ocr_groups[index]
+            self.renumber_ocr_groups()
+            self.log_message(f"已删除文字识别组{index+1}")
+    
+    def renumber_ocr_groups(self):
+        """重新编号所有文字识别组"""
+        for i, group in enumerate(self.ocr_groups):
+            # 保持组名称前的空格，确保布局一致
+            group["frame"].configure(text=f"  识别组{i+1}")
+    
+    def start_ocr_region_selection(self, index):
+        """开始选择OCR识别区域"""
+        self._start_selection("ocr", index)
     
     def _on_mousewheel(self, event, canvas):
         """公共的鼠标滚轮事件处理函数"""
@@ -717,39 +842,78 @@ class AutoDoorOCR:
     
     def create_timed_group(self, index):
         """创建单个定时组，所有UI元素布局在一行中"""
-        # 定时组框架
+        # 创建定时组框架，移除名称前的空格，使用默认样式
         group_frame = ttk.LabelFrame(self.timed_groups_frame, text=f"定时组{index+1}", padding="10")
         group_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # 所有UI元素都放在一个框架中，实现一行布局
-        content_frame = ttk.Frame(group_frame)
-        content_frame.pack(fill=tk.X)
+        # 设置初始边框样式
+        group_frame.configure(relief=tk.GROOVE, borderwidth=2)
         
-        # 启用开关
+        # 定义背景色变量，用于样式设置
+        bg_color = "#f0f0f0"
+        
+        # 启用状态变量
         enabled_var = tk.BooleanVar(value=False)
-        enabled_switch = ttk.Checkbutton(content_frame, text="启用", variable=enabled_var)
-        enabled_switch.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 点击事件处理函数
+        def on_group_click(event):
+            # 检查点击事件是否来自输入控件
+            if isinstance(event.widget, (ttk.Entry, ttk.Button, ttk.Combobox, ttk.Checkbutton)):
+                return  # 输入控件事件不处理
+            
+            # 切换启用状态
+            enabled_var.set(not enabled_var.get())
+            
+            # 根据启用状态调整样式
+            update_group_style(enabled_var.get())
+        
+        # 使用类方法更新组样式
+        def update_group_style(enabled):
+            self.update_group_style(group_frame, enabled)
+        
+        # 为enabled变量添加trace监听，当状态变化时自动更新样式
+        enabled_var.trace_add("write", lambda *args: update_group_style(enabled_var.get()))
+        
+        # 绑定点击事件到框架及其子组件
+        group_frame.bind("<Button-1>", on_group_click)
+        
+        # 为子组件绑定事件
+        def bind_child_events(widget):
+            for child in widget.winfo_children():
+                if isinstance(child, (ttk.Entry, ttk.Button, ttk.Combobox, ttk.Checkbutton)):
+                    # 输入控件保持原有功能
+                    pass
+                else:
+                    # 其他组件继续绑定点击事件
+                    child.bind("<Button-1>", on_group_click)
+                    bind_child_events(child)
+        
+        bind_child_events(group_frame)
+        
+        # 第一行：基本配置
+        row1_frame = ttk.Frame(group_frame)
+        row1_frame.pack(fill=tk.X, pady=(0, 10))
         
         # 时间间隔
-        interval_label = ttk.Label(content_frame, text="间隔(秒):", width=10)
+        interval_label = ttk.Label(row1_frame, text="间隔(秒):", width=10)
         interval_label.pack(side=tk.LEFT)
         
         interval_var = tk.IntVar(value=10*(index+1))
-        interval_entry = ttk.Entry(content_frame, textvariable=interval_var, width=6)  # 调整宽度为6，能显示4位整数
+        interval_entry = ttk.Entry(row1_frame, textvariable=interval_var, width=6)  # 调整宽度为6，能显示4位整数
         interval_entry.pack(side=tk.LEFT, padx=(0, 10))
         
         # 按键选择
-        key_label = ttk.Label(content_frame, text="按键:", width=5)
+        key_label = ttk.Label(row1_frame, text="按键:", width=5)
         key_label.pack(side=tk.LEFT)
         
         key_var = tk.StringVar(value=["space", "enter", "tab", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"][index % 15])
         
         # 显示当前按键的标签
-        timed_current_key_label = ttk.Label(content_frame, textvariable=key_var, relief="sunken", padding=2, width=5)
+        timed_current_key_label = ttk.Label(row1_frame, textvariable=key_var, relief="sunken", padding=2, width=5)
         timed_current_key_label.pack(side=tk.LEFT, padx=(0, 5))
         
         # 设置按键按钮
-        set_timed_key_btn = ttk.Button(content_frame, text="修改按键", width=8)
+        set_timed_key_btn = ttk.Button(row1_frame, text="修改按键", width=8)
         set_timed_key_btn.pack(side=tk.LEFT, padx=(0, 10))
         # 单独绑定事件，避免UnboundLocalError
         set_timed_key_btn.config(command=lambda v=key_var, b=set_timed_key_btn: self.start_key_listening(v, b))
@@ -759,7 +923,7 @@ class AutoDoorOCR:
         delay_max_var = tk.IntVar(value=500)
         
         # 添加"按键时长："文本
-        ttk.Label(content_frame, text="按键时长：").pack(side=tk.LEFT)
+        ttk.Label(row1_frame, text="按键时长：").pack(side=tk.LEFT)
         
         # 延迟最小值输入框
         def validate_positive_int(P):
@@ -771,7 +935,7 @@ class AutoDoorOCR:
             except ValueError:
                 return False
         
-        delay_min_entry = ttk.Entry(content_frame, textvariable=delay_min_var, width=5, validate="key")
+        delay_min_entry = ttk.Entry(row1_frame, textvariable=delay_min_var, width=5, validate="key")
         delay_min_entry.pack(side=tk.LEFT)
         delay_min_entry.configure(validatecommand=(delay_min_entry.register(validate_positive_int), '%P'))
         
@@ -782,9 +946,9 @@ class AutoDoorOCR:
                 delay_min_var.set(300)
         delay_min_entry.bind("<FocusOut>", validate_min_on_focusout)
         
-        ttk.Label(content_frame, text=" - ", width=2).pack(side=tk.LEFT)
+        ttk.Label(row1_frame, text=" - ", width=2).pack(side=tk.LEFT)
         
-        delay_max_entry = ttk.Entry(content_frame, textvariable=delay_max_var, width=5, validate="key")
+        delay_max_entry = ttk.Entry(row1_frame, textvariable=delay_max_var, width=5, validate="key")
         delay_max_entry.pack(side=tk.LEFT)
         delay_max_entry.configure(validatecommand=(delay_max_entry.register(validate_positive_int), '%P'))
         
@@ -798,16 +962,34 @@ class AutoDoorOCR:
                 delay_max_var.set(min_val)
         delay_max_entry.bind("<FocusOut>", validate_max_on_focusout)
         
-        ttk.Label(content_frame, text="ms", width=3).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Label(row1_frame, text="ms", width=3).pack(side=tk.LEFT, padx=(0, 10))
         
         # 报警开关 - 为每个定时组创建独立变量
         alarm_var = tk.BooleanVar(value=False)
-        alarm_switch = ttk.Checkbutton(content_frame, text="启用报警", variable=alarm_var)
+        alarm_switch = ttk.Checkbutton(row1_frame, text="启用报警", variable=alarm_var)
         alarm_switch.pack(side=tk.LEFT, padx=(0, 10))
         
         # 右侧：删除按钮
-        delete_btn = ttk.Button(content_frame, text="删除", width=6, command=lambda idx=index: self.delete_timed_group(idx))
+        delete_btn = ttk.Button(row1_frame, text="删除", width=6, command=lambda idx=index: self.delete_timed_group(idx))
         delete_btn.pack(side=tk.RIGHT, padx=(10, 0))
+        
+        # 第二行：鼠标点击配置
+        row2_frame = ttk.Frame(group_frame)
+        row2_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 启用鼠标点击复选框
+        click_enabled_var = tk.BooleanVar(value=False)
+        click_enabled_switch = ttk.Checkbutton(row2_frame, text="启用鼠标点击", variable=click_enabled_var)
+        click_enabled_switch.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 左侧：选择位置按钮
+        select_pos_btn = ttk.Button(row2_frame, text="选择位置", width=8, command=lambda idx=index: self.start_timed_position_selection(idx))
+        select_pos_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 右侧：位置显示 - 移除边框和凹陷效果，与文字识别和数字识别的显示风格保持一致
+        position_var = tk.StringVar(value="未选择位置")
+        position_label = ttk.Label(row2_frame, textvariable=position_var, width=15, anchor=tk.W)
+        position_label.pack(side=tk.LEFT, padx=(5, 0))
         
         # 保存组配置
         group_config = {
@@ -817,7 +999,11 @@ class AutoDoorOCR:
             "key": key_var,
             "delay_min": delay_min_var,
             "delay_max": delay_max_var,
-            "alarm": alarm_var
+            "alarm": alarm_var,
+            "click_enabled": click_enabled_var,
+            "position": position_var,
+            "position_x": tk.IntVar(value=0),
+            "position_y": tk.IntVar(value=0)
         }
         self.timed_groups.append(group_config)
         
@@ -860,8 +1046,8 @@ class AutoDoorOCR:
     def renumber_timed_groups(self):
         """重新编号所有定时组"""
         for i, group in enumerate(self.timed_groups):
-            # 更新组标题
-            group["frame"].configure(text=f"定时组{i+1}")
+            # 保持组名称前的空格，确保布局一致
+            group["frame"].configure(text=f"  定时组{i+1}")
     
     def add_timed_group(self):
         """新增定时组"""
@@ -882,7 +1068,7 @@ class AutoDoorOCR:
         top_frame.pack(fill=tk.X, pady=(0, 10))
         
         # 新增区域按钮
-        self.add_number_region_btn = ttk.Button(top_frame, text="新增识别区域", command=self.add_number_region)
+        self.add_number_region_btn = ttk.Button(top_frame, text="新增识别组", command=self.add_number_region)
         self.add_number_region_btn.pack(side=tk.LEFT)
         
         # 区域容器，带滚动条
@@ -935,17 +1121,60 @@ class AutoDoorOCR:
     
     def create_number_region(self, index):
         """创建单个数字识别区域"""
-        region_frame = ttk.LabelFrame(self.number_regions_frame, text=f"区域{index+1}", padding="10")
+        # 创建识别组框架，移除名称前的空格，使用默认样式
+        region_frame = ttk.LabelFrame(self.number_regions_frame, text=f"识别组{index+1}", padding="10")
         region_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # 第一行：启用开关、选择区域、区域坐标、删除按钮
+        # 设置初始边框样式
+        region_frame.configure(relief=tk.GROOVE, borderwidth=2)
+        
+        # 定义背景色变量，用于样式设置
+        bg_color = "#f0f0f0"
+        
+        # 启用状态变量
+        enabled_var = tk.BooleanVar(value=False)
+        
+        # 点击事件处理函数
+        def on_group_click(event):
+            # 检查点击事件是否来自输入控件
+            if isinstance(event.widget, (ttk.Entry, ttk.Button, ttk.Combobox, ttk.Checkbutton)):
+                return  # 输入控件事件不处理
+            
+            # 切换启用状态
+            enabled_var.set(not enabled_var.get())
+            
+            # 根据启用状态调整样式
+            update_group_style(enabled_var.get())
+        
+        # 使用类方法更新组样式
+        def update_group_style(enabled):
+            self.update_group_style(region_frame, enabled)
+        
+        # 为enabled变量添加trace监听，当状态变化时自动更新样式
+        enabled_var.trace_add("write", lambda *args: update_group_style(enabled_var.get()))
+        
+        # 绑定点击事件到框架及其子组件
+        region_frame.bind("<Button-1>", on_group_click)
+        
+        # 为子组件绑定事件
+        def bind_child_events(widget):
+            for child in widget.winfo_children():
+                if isinstance(child, (ttk.Entry, ttk.Button, ttk.Combobox, ttk.Checkbutton)):
+                    # 输入控件保持原有功能
+                    pass
+                else:
+                    # 其他组件继续绑定点击事件
+                    child.bind("<Button-1>", on_group_click)
+                    bind_child_events(child)
+        
+        bind_child_events(region_frame)
+        
+        # 初始应用样式
+        update_group_style(enabled_var.get())
+        
+        # 第一行：区域选择、区域坐标、删除按钮
         row1_frame = ttk.Frame(region_frame)
         row1_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        # 左侧：启用开关
-        enabled_var = tk.BooleanVar(value=False)
-        enabled_switch = ttk.Checkbutton(row1_frame, text="启用", variable=enabled_var)
-        enabled_switch.pack(side=tk.LEFT, padx=(0, 10))
         
         # 中间：区域选择和区域坐标
         select_btn = ttk.Button(row1_frame, text="选择区域", command=lambda idx=index: self.start_number_region_selection(idx))
@@ -1093,13 +1322,13 @@ class AutoDoorOCR:
             del self.number_regions[index]
             # 重新编号所有区域
             self.renumber_number_regions()
-            self.log_message(f"已删除区域{index+1}")
+            self.log_message(f"已删除识别组{index+1}")
     
     def renumber_number_regions(self):
         """重新编号所有数字识别区域"""
         for i, region in enumerate(self.number_regions):
-            # 更新区域标题
-            region["frame"].configure(text=f"区域{i+1}")
+            # 更新区域标题为"识别组"，保持名称前的空格
+            region["frame"].configure(text=f"  识别组{i+1}")
     
     def add_number_region(self):
         """新增数字识别区域"""
@@ -1560,54 +1789,75 @@ class AutoDoorOCR:
     def _load_ocr_config(self, config):
         """加载OCR配置"""
         ocr_config = self._get_config_value(config, 'ocr', {})
-        if not ocr_config:
+        groups = self._get_config_value(ocr_config, 'groups', [])
+        
+        if isinstance(groups, list):
+            # 直接清空所有OCR组
+            for group in self.ocr_groups:
+                group['frame'].destroy()
+            self.ocr_groups.clear()
+            
+            # 然后根据配置重新创建所有OCR组
+            for i, group_config in enumerate(groups):
+                if isinstance(group_config, dict):
+                    # 直接调用create_ocr_group创建OCR组
+                    self.create_ocr_group(i)
+                    # 设置组配置
+                    if i < len(self.ocr_groups):
+                        if 'enabled' in group_config:
+                            enabled = group_config['enabled']
+                            self.ocr_groups[i]['enabled'].set(enabled)
+                            # 使用类方法更新样式
+                            group_frame = self.ocr_groups[i]['frame']
+                            self.update_group_style(group_frame, enabled)
+                        if 'region' in group_config and group_config['region'] is not None:
+                            try:
+                                region = tuple(group_config['region'])
+                                self.ocr_groups[i]['region'] = region
+                                self.ocr_groups[i]['region_var'].set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
+                            except (TypeError, ValueError):
+                                self.log_message(f"配置文件中的OCR区域格式错误: {group_config['region']}")
+                        if 'interval' in group_config:
+                            self.ocr_groups[i]['interval'].set(group_config['interval'])
+                        if 'pause' in group_config:
+                            self.ocr_groups[i]['pause'].set(group_config['pause'])
+                        if 'key' in group_config:
+                            self.ocr_groups[i]['key'].set(group_config['key'])
+                        if 'delay_min' in group_config:
+                            self.ocr_groups[i]['delay_min'].set(group_config['delay_min'])
+                        if 'delay_max' in group_config:
+                            self.ocr_groups[i]['delay_max'].set(group_config['delay_max'])
+                        if 'alarm' in group_config:
+                            self.ocr_groups[i]['alarm'].set(group_config['alarm'])
+                        if 'keywords' in group_config:
+                            self.ocr_groups[i]['keywords'].set(group_config['keywords'])
+                        if 'language' in group_config:
+                            self.ocr_groups[i]['language'].set(group_config['language'])
+                        if 'click' in group_config:
+                            self.ocr_groups[i]['click'].set(group_config['click'])
+                        
+
+            
+            # 如果没有配置，至少创建一个OCR组
+            if len(self.ocr_groups) == 0:
+                self.create_ocr_group(0)
+        else:
             # 兼容旧格式
-            ocr_config = {
-                'interval': config.get('ocr_interval'),
-                'pause_duration': config.get('pause_duration'),
-                'selected_region': config.get('selected_region'),
-                'custom_key': config.get('custom_key'),
-                'custom_keywords': config.get('custom_keywords'),
-                'language': config.get('ocr_language')
-            }
-        
-        # 加载时间间隔
-        if 'interval' in ocr_config and ocr_config['interval'] is not None:
-            self.ocr_interval = ocr_config['interval']
-            self.ocr_interval_var.set(self.ocr_interval)
-        
-        if 'pause_duration' in ocr_config and ocr_config['pause_duration'] is not None:
-            self.pause_duration = ocr_config['pause_duration']
-            self.pause_duration_var.set(self.pause_duration)
-        
-        # 加载选择区域
-        if 'selected_region' in ocr_config and ocr_config['selected_region'] is not None:
-            try:
-                self.selected_region = tuple(ocr_config['selected_region'])
-                self.region_var.set(f"区域: {self.selected_region[0]},{self.selected_region[1]} - {self.selected_region[2]},{self.selected_region[3]}")
-            except (TypeError, ValueError):
-                self.log_message(f"配置文件中的选择区域格式错误: {ocr_config['selected_region']}")
-        
-        # 加载自定义按键
-        if 'custom_key' in ocr_config:
-            self.custom_key = ocr_config['custom_key']
-            self.key_var.set(self.custom_key)
-        
-        # 加载关键词
-        if 'custom_keywords' in ocr_config and ocr_config['custom_keywords']:
-            self.custom_keywords = ocr_config['custom_keywords']
-            self.keywords_var.set(",".join(self.custom_keywords))
-        
-        # 加载语言设置
-        if 'language' in ocr_config:
-            self.ocr_language = ocr_config['language']
-            self.language_var.set(self.ocr_language)
-        
-        # 加载按键延迟配置
-        if 'delay_min' in ocr_config:
-            self.ocr_delay_min.set(ocr_config['delay_min'])
-        if 'delay_max' in ocr_config:
-            self.ocr_delay_max.set(ocr_config['delay_max'])
+            if 'interval' in ocr_config and ocr_config['interval'] is not None:
+                self.ocr_interval = ocr_config['interval']
+            if 'pause_duration' in ocr_config and ocr_config['pause_duration'] is not None:
+                self.pause_duration = ocr_config['pause_duration']
+            if 'selected_region' in ocr_config and ocr_config['selected_region'] is not None:
+                try:
+                    self.selected_region = tuple(ocr_config['selected_region'])
+                except (TypeError, ValueError):
+                    self.log_message(f"配置文件中的选择区域格式错误: {ocr_config['selected_region']}")
+            if 'custom_key' in ocr_config:
+                self.custom_key = ocr_config['custom_key']
+            if 'custom_keywords' in ocr_config and ocr_config['custom_keywords']:
+                self.custom_keywords = ocr_config['custom_keywords']
+            if 'language' in ocr_config:
+                self.ocr_language = ocr_config['language']
     
     def _load_click_config(self, config):
         """加载点击模式和坐标配置"""
@@ -1646,7 +1896,11 @@ class AutoDoorOCR:
                     # 设置组配置
                     if i < len(self.timed_groups):
                         if 'enabled' in group:
-                            self.timed_groups[i]['enabled'].set(group['enabled'])
+                            enabled = group['enabled']
+                            self.timed_groups[i]['enabled'].set(enabled)
+                            # 使用类方法更新样式
+                            group_frame = self.timed_groups[i]['frame']
+                            self.update_group_style(group_frame, enabled)
                         if 'interval' in group:
                             self.timed_groups[i]['interval'].set(group['interval'])
                         if 'key' in group:
@@ -1655,6 +1909,14 @@ class AutoDoorOCR:
                             self.timed_groups[i]['delay_min'].set(group['delay_min'])
                         if 'delay_max' in group:
                             self.timed_groups[i]['delay_max'].set(group['delay_max'])
+                        if 'click_enabled' in group:
+                            self.timed_groups[i]['click_enabled'].set(group['click_enabled'])
+                        if 'position_x' in group:
+                            self.timed_groups[i]['position_x'].set(group['position_x'])
+                        if 'position_y' in group:
+                            self.timed_groups[i]['position_y'].set(group['position_y'])
+                        if 'position' in group:
+                            self.timed_groups[i]['position'].set(group['position'])
             
             # 如果没有配置，至少创建一个定时组
             if len(self.timed_groups) == 0:
@@ -1679,7 +1941,11 @@ class AutoDoorOCR:
                     # 设置区域配置
                     if i < len(self.number_regions):
                         if 'enabled' in region_config:
-                            self.number_regions[i]['enabled'].set(region_config['enabled'])
+                            enabled = region_config['enabled']
+                            self.number_regions[i]['enabled'].set(enabled)
+                            # 使用类方法更新样式
+                            region_frame = self.number_regions[i]['frame']
+                            self.update_group_style(region_frame, enabled)
                         if 'region' in region_config and region_config['region'] is not None:
                             try:
                                 region = tuple(region_config['region'])
@@ -1810,16 +2076,7 @@ class AutoDoorOCR:
         def immediate_save(*args):
             self.save_config()
         
-        # 1. 基本OCR配置监听器
-        self.ocr_interval_var.trace_add("write", delayed_save)
-        self.pause_duration_var.trace_add("write", delayed_save)
-        self.key_var.trace_add("write", immediate_save)
-        self.language_var.trace_add("write", immediate_save)
-        
-        # 2. 关键词配置监听器
-        self.keywords_var.trace_add("write", delayed_save)
-        
-        # 3. 点击模式和坐标监听器
+        # 1. 点击模式和坐标监听器
         self.click_mode_var.trace_add("write", immediate_save)
         self.x_coord_var.trace_add("write", delayed_save)
         self.y_coord_var.trace_add("write", delayed_save)
@@ -1849,6 +2106,26 @@ class AutoDoorOCR:
         
         # 保存监听器函数，以便后续新增区域时使用
         self._setup_region_listeners = setup_region_listeners
+        
+        # 6. OCR组配置监听器
+        def setup_ocr_group_listeners(group):
+            group["enabled"].trace_add("write", immediate_save)
+            group["interval"].trace_add("write", delayed_save)
+            group["pause"].trace_add("write", delayed_save)
+            group["key"].trace_add("write", immediate_save)
+            group["delay_min"].trace_add("write", delayed_save)
+            group["delay_max"].trace_add("write", delayed_save)
+            group["alarm"].trace_add("write", immediate_save)
+            group["keywords"].trace_add("write", delayed_save)
+            group["language"].trace_add("write", immediate_save)
+            group["click"].trace_add("write", immediate_save)
+        
+        # 为所有现有OCR组添加监听器
+        for group in self.ocr_groups:
+            setup_ocr_group_listeners(group)
+        
+        # 保存监听器函数，以便后续新增OCR组时使用
+        self._setup_ocr_group_listeners = setup_ocr_group_listeners
         
         # 6. 首页模块勾选状态监听器
         if hasattr(self, 'module_check_vars'):
@@ -2005,19 +2282,27 @@ class AutoDoorOCR:
             self.status_var.set(message.split(":")[0] if ":" in message else message)
     
     def start_region_selection(self):
-        """开始区域选择"""
-        self._start_selection("normal", None)
+        """开始区域选择（兼容旧方法）"""
+        if self.ocr_groups:
+            self.start_ocr_region_selection(0)
+        else:
+            self._start_selection("ocr", 0)
     
     def _start_selection(self, selection_type, region_index):
         """通用的区域选择方法
         
         Args:
-            selection_type: 选择类型，"normal"或"number"
-            region_index: 数字识别区域索引，仅当selection_type为"number"时有效
+            selection_type: 选择类型，"normal"、"number"或"ocr"
+            region_index: 识别区域索引，仅当selection_type为"number"或"ocr"时有效
         """
-        self.log_message(f"开始{'数字识别区域' if selection_type == 'number' else ''}区域选择...")
+        self.log_message(f"开始{'数字识别区域' if selection_type == 'number' else '文字识别区域' if selection_type == 'ocr' else ''}区域选择...")
         self.is_selecting = True
-        self.current_number_region = region_index
+        self.selection_type = selection_type
+        
+        if selection_type == "number":
+            self.current_number_region = region_index
+        elif selection_type == "ocr":
+            self.current_ocr_region = region_index
         
         # 检查screeninfo库是否可用
         if screeninfo is None:
@@ -2114,12 +2399,20 @@ class AutoDoorOCR:
         if region is None:
             return
         
-        self.selected_region = region
+        # 根据选择类型保存区域
+        if hasattr(self, 'selection_type') and self.selection_type == 'ocr':
+            # OCR组区域选择
+            if self.current_ocr_region is not None and 0 <= self.current_ocr_region < len(self.ocr_groups):
+                self.ocr_groups[self.current_ocr_region]['region'] = region
+                self.ocr_groups[self.current_ocr_region]['region_var'].set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
+                self.log_message(f"已为识别组{self.current_ocr_region+1}选择区域: {region}")
+        else:
+            # 兼容旧方法
+            self.selected_region = region
+            if hasattr(self, 'region_var'):
+                self.region_var.set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
+            self.log_message(f"已选择区域: {region}")
         
-        # 更新界面
-        self.region_var.set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
-        
-        self.log_message(f"已选择区域: {region}")
         self.cancel_selection()
         
         # 保存配置
@@ -2136,9 +2429,16 @@ class AutoDoorOCR:
         if not self.tesseract_available:
             messagebox.showwarning("警告", "Tesseract OCR引擎不可用，请先安装并配置环境变量！")
             return
-            
-        if not self.selected_region:
-            messagebox.showwarning("警告", "请先选择监控区域")
+        
+        # 检查是否有启用的OCR组且已选择区域
+        has_enabled_group = False
+        for group in self.ocr_groups:
+            if group["enabled"].get() and group["region"]:
+                has_enabled_group = True
+                break
+        
+        if not has_enabled_group:
+            messagebox.showwarning("警告", "请至少启用一个识别组并选择区域")
             return
         
         self.is_running = True
@@ -2164,6 +2464,9 @@ class AutoDoorOCR:
     
     def ocr_loop(self):
         """OCR识别循环"""
+        # 记录每个组的上次触发时间
+        last_trigger_times = {i: 0 for i in range(len(self.ocr_groups))}
+        
         while self.is_running:
             try:
                 current_time = time.time()
@@ -2173,20 +2476,26 @@ class AutoDoorOCR:
                     time.sleep(1)
                     continue
                 
-                # 检查是否在暂停期
-                pause_duration = self.pause_duration_var.get()
-                if current_time - self.last_trigger_time < pause_duration:
-                    remaining = int(pause_duration - (current_time - self.last_trigger_time))
-                    self.status_var.set(f"暂停中... {remaining}秒")
-                    time.sleep(1)
-                    continue
+                # 遍历所有OCR组，并行处理
+                for i, group in enumerate(self.ocr_groups):
+                    # 检查组是否启用且已选择区域
+                    if not group["enabled"].get() or not group["region"]:
+                        continue
+                    
+                    # 检查是否在暂停期
+                    pause_duration = group["pause"].get()
+                    if current_time - last_trigger_times[i] < pause_duration:
+                        continue
+                    
+                    # 执行OCR识别
+                    self.perform_ocr_for_group(group, i)
+                    
+                    # 更新上次触发时间
+                    last_trigger_times[i] = current_time
                 
-                # 执行OCR识别
-                self.perform_ocr()
-                
-                # 等待下一次识别
-                ocr_interval = self.ocr_interval_var.get()
-                for _ in range(ocr_interval):
+                # 等待下一次识别，使用最小间隔
+                min_interval = min(group["interval"].get() for group in self.ocr_groups if group["enabled"].get()) if any(group["enabled"].get() for group in self.ocr_groups) else 5
+                for _ in range(min_interval):
                     if not self.is_running:
                         break
                     time.sleep(1)
@@ -2196,10 +2505,53 @@ class AutoDoorOCR:
                 time.sleep(5)
     
     def perform_ocr(self):
-        """执行OCR识别"""
+        """执行OCR识别（兼容旧方法）"""
+        # 如果有OCR组，使用第一个组的配置
+        if self.ocr_groups:
+            self.perform_ocr_for_group(self.ocr_groups[0], 0)
+        else:
+            try:
+                # 截取屏幕区域
+                if hasattr(self, 'selected_region') and self.selected_region:
+                    x1, y1, x2, y2 = self.selected_region
+                    
+                    # 确保坐标是(left, top, right, bottom)格式，且left < right, top < bottom
+                    left = min(x1, x2)
+                    top = min(y1, y2)
+                    right = max(x1, x2)
+                    bottom = max(y1, y2)
+                    
+                    # 使用PIL的ImageGrab.grab()方法，设置all_screens=True捕获所有屏幕
+                    screenshot = ImageGrab.grab(bbox=(left, top, right, bottom), all_screens=True)
+                    
+                    # 转换为灰度图像以提高识别率
+                    screenshot = screenshot.convert('L')
+                    
+                    # 进行OCR识别
+                    current_lang = self.language_var.get() if hasattr(self, 'language_var') else 'eng'
+                    text = pytesseract.image_to_string(screenshot, lang=current_lang)
+                    
+                    self.log_message(f"识别结果: '{text.strip()}'")
+                    
+                    # 检查是否包含关键词
+                    lower_text = text.lower()
+                    keywords = self.custom_keywords if hasattr(self, 'custom_keywords') else ['men', 'door']
+                    if any(keyword in lower_text for keyword in keywords):
+                        self.trigger_action()
+            except Exception as e:
+                self.log_message(f"OCR错误: {str(e)}")
+    
+    def perform_ocr_for_group(self, group, group_index):
+        """为单个OCR组执行OCR识别"""
         try:
+            # 获取组配置
+            region = group["region"]
+            keywords_str = group["keywords"].get().strip()
+            current_lang = group["language"].get()
+            click_enabled = group["click"].get()
+            
             # 截取屏幕区域
-            x1, y1, x2, y2 = self.selected_region
+            x1, y1, x2, y2 = region
             
             # 确保坐标是(left, top, right, bottom)格式，且left < right, top < bottom
             left = min(x1, x2)
@@ -2214,18 +2566,44 @@ class AutoDoorOCR:
             screenshot = screenshot.convert('L')
             
             # 进行OCR识别
-            current_lang = self.language_var.get()
             text = pytesseract.image_to_string(screenshot, lang=current_lang)
             
-            self.log_message(f"识别结果: '{text.strip()}'")
+            self.log_message(f"识别组{group_index+1}识别结果: '{text.strip()}'")
             
             # 检查是否包含关键词
             lower_text = text.lower()
-            if any(keyword in lower_text for keyword in self.custom_keywords):
-                self.trigger_action()
-                
+            if keywords_str:
+                keywords = [keyword.strip().lower() for keyword in keywords_str.split(",") if keyword.strip()]
+                if any(keyword in lower_text for keyword in keywords):
+                    self.trigger_action_for_group(group, group_index, click_enabled)
+                    
         except Exception as e:
-            self.log_message(f"OCR错误: {str(e)}")
+            self.log_message(f"识别组{group_index+1}OCR错误: {str(e)}")
+    
+    def trigger_action_for_group(self, group, group_index, click_enabled):
+        """为单个OCR组触发动作"""
+        key = group["key"].get()
+        delay_min = group["delay_min"].get()
+        delay_max = group["delay_max"].get()
+        alarm_enabled = group["alarm"].get()
+        
+        self.log_message(f"识别组{group_index+1}触发动作，按键: {key}")
+        
+        # 生成随机延迟
+        delay = random.randint(delay_min, delay_max) / 1000.0
+        
+        # 执行按键操作（如果启用点击）
+        if click_enabled:
+            try:
+                # 模拟按键
+                pyautogui.press(key, interval=delay)
+                self.log_message(f"识别组{group_index+1}已模拟按键: {key}，延迟: {delay*1000}ms")
+            except Exception as e:
+                self.log_message(f"识别组{group_index+1}按键模拟失败: {str(e)}")
+        
+        # 播放报警声音（如果启用）
+        if alarm_enabled and PYGAME_AVAILABLE:
+            self.play_alarm_sound()
     
     def _get_keywords_config(self):
         """获取关键词配置"""
@@ -2247,7 +2625,11 @@ class AutoDoorOCR:
                 'interval': group['interval'].get(),
                 'key': group['key'].get(),
                 'delay_min': group['delay_min'].get(),
-                'delay_max': group['delay_max'].get()
+                'delay_max': group['delay_max'].get(),
+                'click_enabled': group['click_enabled'].get(),
+                'position_x': group['position_x'].get(),
+                'position_y': group['position_y'].get(),
+                'position': group['position'].get()
             })
         return timed_groups_config
     
@@ -2267,16 +2649,23 @@ class AutoDoorOCR:
     
     def _get_ocr_config(self):
         """获取OCR配置"""
-        current_keywords = self._get_keywords_config()
+        ocr_groups_config = []
+        for group in self.ocr_groups:
+            ocr_groups_config.append({
+                'enabled': group['enabled'].get(),
+                'region': list(group['region']) if group['region'] else None,
+                'interval': group['interval'].get(),
+                'pause': group['pause'].get(),
+                'key': group['key'].get(),
+                'delay_min': group['delay_min'].get(),
+                'delay_max': group['delay_max'].get(),
+                'alarm': group['alarm'].get(),
+                'keywords': group['keywords'].get(),
+                'language': group['language'].get(),
+                'click': group['click'].get()
+            })
         return {
-            'interval': self.ocr_interval_var.get(),
-            'pause_duration': self.pause_duration_var.get(),
-            'selected_region': list(self.selected_region) if self.selected_region else None,
-            'custom_key': self.key_var.get(),
-            'custom_keywords': current_keywords,
-            'language': self.language_var.get(),
-            'delay_min': self.ocr_delay_min.get(),
-            'delay_max': self.ocr_delay_max.get()
+            'groups': ocr_groups_config
         }
     
     def _get_tesseract_config(self):
@@ -2585,15 +2974,32 @@ class AutoDoorOCR:
         # 检查线程是否在timed_threads列表中，以及定时组是否启用
         while current_thread in self.timed_threads and self.timed_groups[group_index]["enabled"].get():
             try:
+                # 获取定时组配置
+                group = self.timed_groups[group_index]
+                
                 # 播放定时模块报警声音
-                self.play_alarm_sound(self.timed_groups[group_index]["alarm"])
+                self.play_alarm_sound(group["alarm"])
+                
+                # 检查是否启用了鼠标点击
+                if group["click_enabled"].get():
+                    # 获取保存的位置坐标
+                    pos_x = group["position_x"].get()
+                    pos_y = group["position_y"].get()
+                    
+                    if pos_x != 0 or pos_y != 0:  # 确保位置已选择
+                        # 执行鼠标点击操作
+                        pyautogui.click(pos_x, pos_y)
+                        self.log_message(f"定时任务{group_index+1}执行鼠标点击: ({pos_x}, {pos_y})")
+                        
+                        # 等待0.5秒后触发按键
+                        time.sleep(0.5)
                 
                 # 只有当按键不为空时才执行按键操作
                 if key:
                     self.add_event(('keypress', key), ('timed', group_index))
                     self.log_message(f"定时任务{group_index+1}触发按键: {key}")
                 else:
-                    self.log_message(f"定时任务{group_index+1}按键配置为空，仅执行报警操作")
+                    self.log_message(f"定时任务{group_index+1}按键配置为空")
                 
                 # 等待指定的时间间隔
                 for _ in range(interval):
@@ -2608,6 +3014,67 @@ class AutoDoorOCR:
     def start_number_region_selection(self, region_index):
         """开始数字识别区域选择"""
         self._start_selection("number", region_index)
+    
+    def start_timed_position_selection(self, group_index):
+        """开始定时任务屏幕位置选择"""
+        self.log_message(f"开始定时组{group_index+1}屏幕位置选择...")
+        self.is_selecting = True
+        self.current_timed_group = group_index
+        
+        # 检查screeninfo库是否可用
+        if screeninfo is None:
+            messagebox.showerror("错误", "screeninfo库未安装，无法支持多显示器选择。请运行 'pip install screeninfo' 安装该库。")
+            return
+        
+        # 获取虚拟屏幕的尺寸（包含所有显示器）
+        monitors = screeninfo.get_monitors()
+        
+        # 计算整个虚拟屏幕的边界
+        self.min_x = min(monitor.x for monitor in monitors)
+        self.min_y = min(monitor.y for monitor in monitors)
+        max_x = max(monitor.x + monitor.width for monitor in monitors)
+        max_y = max(monitor.y + monitor.height for monitor in monitors)
+        
+        # 创建透明的位置选择窗口，覆盖整个虚拟屏幕
+        self.select_window = tk.Toplevel(self.root)
+        self.select_window.geometry(f"{max_x - self.min_x}x{max_y - self.min_y}+{self.min_x}+{self.min_y}")
+        self.select_window.overrideredirect(True)  # 移除窗口装饰
+        self.select_window.attributes("-alpha", 0.3)
+        self.select_window.attributes("-topmost", True)
+        
+        # 创建画布用于显示提示
+        self.canvas = tk.Canvas(self.select_window, cursor="cross", 
+                               width=max_x - self.min_x, height=max_y - self.min_y)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+        
+        # 显示提示文字
+        self.canvas.create_text((max_x - self.min_x) // 2, (max_y - self.min_y) // 2, 
+                              text="请点击要记录的屏幕位置", font=("Arial", 16), fill="red")
+        
+        # 绑定鼠标事件
+        self.canvas.bind("<Button-1>", self.on_timed_position_click)
+        
+        self.select_window.protocol("WM_DELETE_WINDOW", self.cancel_selection)
+    
+    def on_timed_position_click(self, event):
+        """定时任务位置选择鼠标点击事件"""
+        # 获取绝对坐标
+        pos_x = event.x_root
+        pos_y = event.y_root
+        
+        self.log_message(f"定时组{self.current_timed_group+1}已选择位置: {pos_x},{pos_y}")
+        
+        # 更新配置
+        if 0 <= self.current_timed_group < len(self.timed_groups):
+            group = self.timed_groups[self.current_timed_group]
+            group["position_x"].set(pos_x)
+            group["position_y"].set(pos_y)
+            group["position"].set(f"位置：{pos_x},{pos_y}")
+            
+            # 保存配置
+            self.save_config()
+        
+        self.cancel_selection()
     
     def on_number_region_mouse_up(self, event):
         """数字识别区域鼠标释放事件"""
@@ -2886,6 +3353,53 @@ class AutoDoorOCR:
         """
         self.log_message(f"{module}模块报警状态已{'启用' if self.alarm_enabled[module].get() else '禁用'}")
         self.save_config()
+    
+    def update_child_styles(self, widget, is_enabled):
+        """递归更新所有子组件样式
+        
+        Args:
+            widget: 要更新样式的组件
+            is_enabled: 组件是否启用
+        """
+        # 根据组件类型应用不同样式
+        if isinstance(widget, ttk.Frame):
+            widget.configure(style="Green.TFrame" if is_enabled else "TFrame")
+        elif isinstance(widget, ttk.Label):
+            # 检查是否为显示按键的标签（有sunken relief）
+            if widget.cget("relief") == "sunken":
+                widget.configure(style="TLabel")  # 始终使用默认样式
+            else:
+                widget.configure(style="Green.TLabel" if is_enabled else "TLabel")
+        elif isinstance(widget, ttk.Entry):
+            widget.configure(style="TEntry")  # 始终使用默认样式，不随组启用状态变化
+        elif isinstance(widget, ttk.Button):
+            widget.configure(style="Green.TButton" if is_enabled else "TButton")
+        elif isinstance(widget, ttk.Checkbutton):
+            widget.configure(style="Green.TCheckbutton" if is_enabled else "TCheckbutton")
+        elif isinstance(widget, ttk.Combobox):
+            widget.configure(style="Green.TCombobox" if is_enabled else "TCombobox")
+        elif isinstance(widget, ttk.LabelFrame):
+            widget.configure(style="Green.TLabelframe" if is_enabled else "TLabelframe")
+        
+        # 递归处理所有子组件
+        for child in widget.winfo_children():
+            self.update_child_styles(child, is_enabled)
+    
+    def update_group_style(self, group_frame, enabled):
+        """更新组样式
+        
+        Args:
+            group_frame: 要更新样式的组框架
+            enabled: 组是否启用
+        """
+        # 更新当前框架样式
+        if enabled:
+            group_frame.configure(style="Green.TLabelframe")
+        else:
+            group_frame.configure(style="TLabelframe")
+        
+        # 递归更新所有子组件样式
+        self.update_child_styles(group_frame, enabled)
     
 
     
