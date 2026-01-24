@@ -71,6 +71,10 @@ class AutoDoorOCR:
         self.is_selecting = False
         self.last_trigger_time = 0
         
+        # 用于OCR组的触发时间跟踪
+        self.last_recognition_times = {}  # 用于识别间隔
+        self.last_trigger_times = {}  # 用于暂停期
+        
         # 配置文件路径 - 使用系统标准配置目录
         app_name = "AutoDoorOCR"
         
@@ -2464,17 +2468,26 @@ class AutoDoorOCR:
     
     def ocr_loop(self):
         """OCR识别循环"""
-        # 记录每个组的上次触发时间
-        last_trigger_times = {i: 0 for i in range(len(self.ocr_groups))}
+        # 初始化每个组的上次识别时间和上次触发时间
+        self.last_recognition_times = {i: 0 for i in range(len(self.ocr_groups))}  # 用于识别间隔
+        self.last_trigger_times = {i: 0 for i in range(len(self.ocr_groups))}  # 用于暂停期
         
         while self.is_running:
             try:
-                current_time = time.time()
+                # 等待下一次识别，使用最小间隔
+                min_interval = min(group["interval"].get() for group in self.ocr_groups if group["enabled"].get()) if any(group["enabled"].get() for group in self.ocr_groups) else 5
+                
+                # 等待设定的间隔时间
+                for _ in range(min_interval):
+                    if not self.is_running:
+                        break
+                    time.sleep(1)
                 
                 # 检查是否需要暂停
                 if self.is_paused:
-                    time.sleep(1)
                     continue
+                
+                current_time = time.time()
                 
                 # 遍历所有OCR组，并行处理
                 for i, group in enumerate(self.ocr_groups):
@@ -2482,24 +2495,23 @@ class AutoDoorOCR:
                     if not group["enabled"].get() or not group["region"]:
                         continue
                     
-                    # 检查是否在暂停期
+                    # 获取组配置
+                    group_interval = group["interval"].get()
                     pause_duration = group["pause"].get()
-                    if current_time - last_trigger_times[i] < pause_duration:
+                    
+                    # 检查是否在暂停期（触发动作后）
+                    if current_time - self.last_trigger_times[i] < pause_duration:
+                        continue
+                    
+                    # 检查是否达到识别间隔
+                    if current_time - self.last_recognition_times[i] < group_interval:
                         continue
                     
                     # 执行OCR识别
                     self.perform_ocr_for_group(group, i)
                     
-                    # 更新上次触发时间
-                    last_trigger_times[i] = current_time
-                
-                # 等待下一次识别，使用最小间隔
-                min_interval = min(group["interval"].get() for group in self.ocr_groups if group["enabled"].get()) if any(group["enabled"].get() for group in self.ocr_groups) else 5
-                for _ in range(min_interval):
-                    if not self.is_running:
-                        break
-                    time.sleep(1)
-                    
+                    # 更新上次识别时间
+                    self.last_recognition_times[i] = current_time
             except Exception as e:
                 self.log_message(f"错误: {str(e)}")
                 time.sleep(5)
@@ -2565,8 +2577,27 @@ class AutoDoorOCR:
             # 转换为灰度图像以提高识别率
             screenshot = screenshot.convert('L')
             
-            # 进行OCR识别
-            text = pytesseract.image_to_string(screenshot, lang=current_lang)
+            # 添加图像预处理，提高识别精度
+            from PIL import ImageEnhance, ImageFilter
+            
+            # 提高对比度
+            enhancer = ImageEnhance.Contrast(screenshot)
+            screenshot = enhancer.enhance(1.5)
+            
+            # 锐化图像
+            screenshot = screenshot.filter(ImageFilter.SHARPEN)
+            
+            # 添加阈值处理，增强文字与背景的对比度
+            screenshot = screenshot.point(lambda p: p > 128 and 255)
+            
+            # 使用优化的Tesseract配置进行OCR识别
+            # --psm 6: 假设一个统一的块文本
+            # --oem 3: 使用默认的OCR引擎
+            # -c tessedit_char_whitelist=...: 可选，根据需要设置字符白名单
+            custom_config = r'--psm 6 --oem 3'
+            
+            # 进行OCR识别，获取文字内容和位置信息
+            text = pytesseract.image_to_string(screenshot, lang=current_lang, config=custom_config)
             
             self.log_message(f"识别组{group_index+1}识别结果: '{text.strip()}'")
             
@@ -2575,31 +2606,85 @@ class AutoDoorOCR:
             if keywords_str:
                 keywords = [keyword.strip().lower() for keyword in keywords_str.split(",") if keyword.strip()]
                 if any(keyword in lower_text for keyword in keywords):
-                    self.trigger_action_for_group(group, group_index, click_enabled)
+                    # 如果启用点击，获取文字位置信息
+                    click_pos = None
+                    if click_enabled:
+                        try:
+                            # 使用image_to_data获取文字位置信息，使用相同的优化配置
+                            data = pytesseract.image_to_data(screenshot, lang=current_lang, config=custom_config, output_type=pytesseract.Output.DICT)
+                            
+                            # 遍历所有识别到的文字，找到关键词的位置
+                            for i in range(len(data['text'])):
+                                word = data['text'][i].lower().strip()
+                                if word in keywords or any(keyword in word for keyword in keywords):
+                                    # 获取文字的边界框
+                                    left_word = data['left'][i]
+                                    top_word = data['top'][i]
+                                    width = data['width'][i]
+                                    height = data['height'][i]
+                                    
+                                    # 计算文字中心位置（相对于截图）
+                                    center_x = left_word + width // 2
+                                    center_y = top_word + height // 2
+                                    
+                                    # 转换为屏幕坐标
+                                    click_pos = (left + center_x, top + center_y)
+                                    break
+                            
+                            # 如果没有找到关键词位置，使用区域中心
+                            if click_pos is None:
+                                click_pos = ((left + right) // 2, (top + bottom) // 2)
+                        except Exception as e:
+                            self.log_message(f"识别组{group_index+1}获取文字位置失败: {str(e)}")
+                            # 失败时使用区域中心
+                            click_pos = ((left + right) // 2, (top + bottom) // 2)
+                    
+                    # 触发动作，传递文字位置
+                    self.trigger_action_for_group(group, group_index, click_enabled, click_pos)
                     
         except Exception as e:
             self.log_message(f"识别组{group_index+1}OCR错误: {str(e)}")
     
-    def trigger_action_for_group(self, group, group_index, click_enabled):
+    def trigger_action_for_group(self, group, group_index, click_enabled, click_pos=None):
         """为单个OCR组触发动作"""
         key = group["key"].get()
         delay_min = group["delay_min"].get()
         delay_max = group["delay_max"].get()
         alarm_enabled = group["alarm"].get()
+        region = group["region"]
         
         self.log_message(f"识别组{group_index+1}触发动作，按键: {key}")
         
         # 生成随机延迟
         delay = random.randint(delay_min, delay_max) / 1000.0
         
-        # 执行按键操作（如果启用点击）
-        if click_enabled:
-            try:
-                # 模拟按键
-                pyautogui.press(key, interval=delay)
-                self.log_message(f"识别组{group_index+1}已模拟按键: {key}，延迟: {delay*1000}ms")
-            except Exception as e:
-                self.log_message(f"识别组{group_index+1}按键模拟失败: {str(e)}")
+        try:
+            # 如果启用点击识别文字，先执行鼠标点击
+            if click_enabled:
+                # 如果没有传递点击位置，使用区域中心作为备选
+                if click_pos is None:
+                    # 计算点击位置（区域中心）
+                    x1, y1, x2, y2 = region
+                    click_x = (x1 + x2) // 2
+                    click_y = (y1 + y2) // 2
+                else:
+                    click_x, click_y = click_pos
+                
+                # 执行鼠标点击
+                pyautogui.click(click_x, click_y)
+                self.log_message(f"识别组{group_index+1}点击位置: ({click_x}, {click_y})")
+                
+                # 等待固定时间
+                time.sleep(self.click_delay)
+            
+            # 执行按键操作
+            pyautogui.press(key, interval=delay)
+            self.log_message(f"识别组{group_index+1}已模拟按键: {key}，延迟: {delay*1000}ms")
+            
+            # 更新该组的上次触发时间，进入暂停期
+            self.last_trigger_times[group_index] = time.time()
+        except Exception as e:
+            self.log_message(f"识别组{group_index+1}动作执行失败: {str(e)}")
         
         # 播放报警声音（如果启用）
         if alarm_enabled and PYGAME_AVAILABLE:
@@ -2974,6 +3059,13 @@ class AutoDoorOCR:
         # 检查线程是否在timed_threads列表中，以及定时组是否启用
         while current_thread in self.timed_threads and self.timed_groups[group_index]["enabled"].get():
             try:
+                # 等待指定的时间间隔
+                for _ in range(interval):
+                    time.sleep(1)
+                    # 每秒钟检查一次线程是否仍在列表中
+                    if current_thread not in self.timed_threads:
+                        return
+                
                 # 获取定时组配置
                 group = self.timed_groups[group_index]
                 
@@ -3000,13 +3092,6 @@ class AutoDoorOCR:
                     self.log_message(f"定时任务{group_index+1}触发按键: {key}")
                 else:
                     self.log_message(f"定时任务{group_index+1}按键配置为空")
-                
-                # 等待指定的时间间隔
-                for _ in range(interval):
-                    time.sleep(1)
-                    # 每秒钟检查一次线程是否仍在列表中
-                    if current_thread not in self.timed_threads:
-                        return
             except Exception as e:
                 self.log_message(f"定时任务{group_index+1}错误: {str(e)}")
                 break
@@ -3163,7 +3248,7 @@ class AutoDoorOCR:
         self.global_stop_btn.configure(state="normal")
         
         # 开始勾选的功能
-        if self.module_check_vars["ocr"].get() and self.selected_region:
+        if self.module_check_vars["ocr"].get():
             self.start_monitoring()
         
         if self.module_check_vars["timed"].get():
@@ -3202,6 +3287,9 @@ class AutoDoorOCR:
         # 检查线程是否在number_threads列表中，以及数字识别区域是否启用
         while current_thread in self.number_threads and self.number_regions[region_index]["enabled"].get():
             try:
+                # 等待1秒间隔
+                time.sleep(1)  # 1秒间隔
+                
                 # 截图并识别数字
                 screenshot = self.take_screenshot(region)
                 text = self.ocr_number(screenshot)
@@ -3220,8 +3308,6 @@ class AutoDoorOCR:
                             self.log_message(f"数字识别{region_index+1}触发按键: {key}")
                         else:
                             self.log_message(f"数字识别{region_index+1}按键配置为空，仅执行报警操作")
-                
-                time.sleep(1)  # 1秒间隔
             except Exception as e:
                 self.log_message(f"数字识别{region_index+1}错误: {str(e)}")
                 time.sleep(5)
@@ -3370,14 +3456,14 @@ class AutoDoorOCR:
                 widget.configure(style="TLabel")  # 始终使用默认样式
             else:
                 widget.configure(style="Green.TLabel" if is_enabled else "TLabel")
-        elif isinstance(widget, ttk.Entry):
-            widget.configure(style="TEntry")  # 始终使用默认样式，不随组启用状态变化
         elif isinstance(widget, ttk.Button):
             widget.configure(style="Green.TButton" if is_enabled else "TButton")
         elif isinstance(widget, ttk.Checkbutton):
             widget.configure(style="Green.TCheckbutton" if is_enabled else "TCheckbutton")
         elif isinstance(widget, ttk.Combobox):
             widget.configure(style="Green.TCombobox" if is_enabled else "TCombobox")
+        elif isinstance(widget, ttk.Entry):
+            widget.configure(style="TEntry")  # 始终使用默认样式，不随组启用状态变化
         elif isinstance(widget, ttk.LabelFrame):
             widget.configure(style="Green.TLabelframe" if is_enabled else "TLabelframe")
         
