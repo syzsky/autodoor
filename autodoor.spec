@@ -61,6 +61,7 @@ a = Analysis(
         'screeninfo.monitors',
         'pynput',
         'pynput.keyboard',
+        'pydub',
     ],
     hookspath=[],
     hooksconfig={},

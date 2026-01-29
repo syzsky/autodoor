@@ -30,7 +30,7 @@ except ImportError:
     PYGAME_AVAILABLE = False
 
 # 全局版本号配置
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 
 # 尝试导入screeninfo库，如果不可用则提供安装提示
 try:
@@ -3256,6 +3256,9 @@ class AutoDoorOCR:
         
         if self.module_check_vars["number"].get():
             self.start_number_recognition()
+        
+        # 播放开始运行的音频
+        self.play_start_sound()
     
     def stop_all(self):
         """停止运行"""
@@ -3265,6 +3268,9 @@ class AutoDoorOCR:
         self.stop_monitoring()
         self.stop_timed_tasks()
         self.stop_number_recognition()
+        
+        # 播放停止运行的反向音频
+        self.play_stop_sound()
         
         # 启用首页的功能状态勾选框
         for button in self.module_check_buttons.values():
@@ -3412,6 +3418,123 @@ class AutoDoorOCR:
             self.log_message("报警声音已播放")
         except Exception as e:
             self.log_message(f"播放报警声音失败: {str(e)}")
+    
+    def play_start_sound(self):
+        """播放开始运行的音频"""
+        if not PYGAME_AVAILABLE:
+            self.log_message("pygame库未安装，无法播放开始运行音效")
+            return
+        
+        # 直接使用固定的音频文件路径，不受报警声音设置的影响
+        sound_file = self.get_default_alarm_sound_path()
+        if not sound_file or not os.path.exists(sound_file):
+            self.log_message("未找到默认音频文件，无法播放开始运行音效")
+            return
+        
+        try:
+            pygame.mixer.music.load(sound_file)
+            pygame.mixer.music.set_volume(0.7)  # 使用固定音量 70%
+            pygame.mixer.music.play()
+            self.log_message("开始运行音效已播放")
+        except pygame.error as e:
+            self.log_message(f"音频文件格式错误或损坏: {str(e)}")
+        except Exception as e:
+            self.log_message(f"播放开始运行音效失败: {str(e)}")
+    
+    def play_stop_sound(self):
+        """播放停止运行的反向音频"""
+        if not PYGAME_AVAILABLE:
+            self.log_message("pygame库未安装，无法播放停止运行音效")
+            return
+        
+        # 直接使用固定的音频文件路径，不受报警声音设置的影响
+        sound_file = self.get_default_alarm_sound_path()
+        if not sound_file or not os.path.exists(sound_file):
+            self.log_message("未找到默认音频文件，无法播放停止运行音效")
+            return
+        
+        try:
+            # 尝试创建并播放反向音频
+            reversed_file = self._create_reversed_audio(sound_file)
+            if reversed_file:
+                try:
+                    pygame.mixer.music.load(reversed_file)
+                    pygame.mixer.music.set_volume(0.7)  # 使用固定音量 70%
+                    pygame.mixer.music.play()
+                    self.log_message("停止运行音效已播放")
+                    # 移除清理临时文件的逻辑，避免文件被占用的错误
+                except pygame.error as e:
+                    self.log_message(f"反向音频文件格式错误或损坏: {str(e)}")
+                    # 播放原始音频作为备选
+                    try:
+                        pygame.mixer.music.load(sound_file)
+                        pygame.mixer.music.set_volume(0.7)  # 使用固定音量 70%
+                        pygame.mixer.music.play()
+                        self.log_message("播放原始音频作为备选")
+                    except Exception as e2:
+                        self.log_message(f"播放原始音频也失败: {str(e2)}")
+            else:
+                # 如果反向处理失败，播放原始音频
+                try:
+                    pygame.mixer.music.load(sound_file)
+                    pygame.mixer.music.set_volume(0.7)  # 使用固定音量 70%
+                    pygame.mixer.music.play()
+                    self.log_message("反向音频处理失败，播放原始音频")
+                except Exception as e:
+                    self.log_message(f"播放原始音频失败: {str(e)}")
+        except Exception as e:
+            self.log_message(f"播放停止运行音效失败: {str(e)}")
+    
+    def _create_reversed_audio(self, input_file):
+        """创建反向音频文件
+        
+        Args:
+            input_file: 输入音频文件路径
+            
+        Returns:
+            反向音频文件路径，失败返回None
+        """
+        try:
+            # 创建临时文件路径
+            # 在macOS上，确保临时文件保存在可写位置
+            if platform.system() == "Darwin":
+                temp_dir = os.path.expanduser("~")  # 使用用户主目录
+            else:
+                temp_dir = os.path.dirname(input_file)
+            
+            temp_file = os.path.join(temp_dir, "temp_reversed.mp3")
+            
+            # 检查临时文件是否已存在，如果存在则直接返回
+            if os.path.exists(temp_file):
+                self.log_message("临时反向音频文件已存在，直接使用")
+                return temp_file
+            
+            # 由于pygame的限制，我们使用一种替代方法：
+            # 1. 尝试使用外部库如pydub（如果可用）
+            try:
+                from pydub import AudioSegment
+                
+                # 加载音频文件
+                audio = AudioSegment.from_mp3(input_file)
+                
+                # 反转音频
+                reversed_audio = audio.reverse()
+                
+                # 导出为临时文件
+                reversed_audio.export(temp_file, format="mp3")
+                
+                return temp_file
+            except ImportError:
+                # 如果pydub不可用，使用pygame的有限功能
+                # 注意：这种方法可能无法实现真正的音频反转
+                # 但为了兼容性，我们仍然返回原始文件
+                return input_file
+            except Exception as e:
+                self.log_message(f"pydub处理音频失败: {str(e)}")
+                return input_file
+        except Exception as e:
+            self.log_message(f"创建反向音频失败: {str(e)}")
+            return None
     
     def select_alarm_sound(self):
         """选择全局报警声音文件
