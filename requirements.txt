@@ -5,3 +5,4 @@ Pillow>=10.0.0
 screeninfo>=0.8.1
 pygame>=2.0.0
 pynput>=1.7.6
+requests>=2.31.0

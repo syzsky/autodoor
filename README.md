@@ -21,6 +21,7 @@
 - ✅ 每个模块独立的报警开关控制
 - ✅ 全局报警声音和音量设置
 - ✅ 组启用状态可视化：点击当前组的任意区域可切换组启用状态，启用的组显示绿色边框和背景
+- ✅ 版本更新提醒：自动检查版本更新并显示通知，支持手动检查更新
 
 ## 使用教程
 B 站：[https://www.bilibili.com/video/BV1AGiGB8EYN](https://www.bilibili.com/video/BV1AGiGB8EYN)
@@ -421,6 +422,7 @@ autodoor/
 - screeninfo >= 0.8.1
 - pygame >= 2.0.0
 - pydub >= 0.25.1
+- requests >= 2.31.0
 - pyinstaller (用于打包)
 
 ## 许可证

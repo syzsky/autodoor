@@ -62,6 +62,7 @@ a = Analysis(
         'pynput',
         'pynput.keyboard',
         'pydub',
+        'requests',
     ],
     hookspath=[],
     hooksconfig={},
@@ -78,7 +79,7 @@ a = Analysis(
         
         # Web框架和网络库
         'flask', 'django', 'fastapi', 'uvicorn', 'gunicorn',
-        'requests', 'urllib3', 'beautifulsoup4', 'selenium', 'webdriver_manager',
+        'beautifulsoup4', 'selenium', 'webdriver_manager',
         
         # GUI库
         'pyqt5', 'pyside6', 'wxpython', 'tkinterdnd2',
@@ -98,8 +99,7 @@ a = Analysis(
         # 其他不必要的库
         'pkg_resources',
         'pycparser', 'cffi', 'six',
-        'platformdirs', 'pyparsing', 'colorama', 'chardet',
-        'idna', 'certifi', 'charset_normalizer'
+        'platformdirs', 'pyparsing', 'colorama', 'chardet'
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

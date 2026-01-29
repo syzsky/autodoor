@@ -13,6 +13,7 @@ import sys
 import json
 import platform
 from collections import deque
+import requests
 
 # 导入pynput用于全局键盘监听
 try:
@@ -30,7 +31,170 @@ except ImportError:
     PYGAME_AVAILABLE = False
 
 # 全局版本号配置
-VERSION = "1.4.1"
+VERSION = "1.5.0"
+
+class VersionChecker:
+    def __init__(self, app):
+        self.app = app
+        self.current_version = VERSION
+        self.last_check_time = None
+        self.check_interval = 24 * 60 * 60  # 24小时
+        self.update_available = False
+        self.latest_version_info = None
+        
+    def check_for_updates(self, manual=False):
+        """检查版本更新"""
+        try:
+            # 检查是否在间隔时间内
+            if not manual and self.last_check_time:
+                time_since_last_check = time.time() - self.last_check_time
+                if time_since_last_check < self.check_interval:
+                    return
+            
+            self.last_check_time = time.time()
+            
+            # 使用GitHub API获取最新版本
+            url = "https://api.github.com/repos/wdhq4261761/autodoor/releases/latest"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            latest_version = data.get('tag_name', '')  # tag_name直接是版本号，如"1.5.0"
+            
+            # 提取下载链接
+            windows_download_url = None
+            macos_download_url = None
+            
+            for asset in data.get('assets', []):
+                asset_name = asset.get('name', '')
+                if 'windows' in asset_name.lower():
+                    windows_download_url = asset.get('browser_download_url')
+                elif 'macos' in asset_name.lower():
+                    macos_download_url = asset.get('browser_download_url')
+            
+            # 比较版本
+            comparison = self.compare_versions(self.current_version, latest_version)
+            
+            if comparison == 1:
+                # 发现新版本
+                self.update_available = True
+                self.latest_version_info = {
+                    'version': latest_version,
+                    'release_date': data.get('published_at', ''),
+                    'changelog': data.get('body', ''),
+                    'download_url': 'https://my.feishu.cn/wiki/GqoWwddPMizkLYkogn8cdoynn3c?from=from_copylink',
+                    'github_url': data.get('html_url', ''),
+                    'windows_download_url': windows_download_url,
+                    'macos_download_url': macos_download_url
+                }
+                
+                # 显示更新通知
+                self.show_update_notification()
+            
+        except Exception as e:
+            self.app.log_message(f"版本检查失败: {str(e)}")
+    
+    def compare_versions(self, current, latest):
+        """比较两个版本号
+        返回值：
+        - 1: 当前版本旧，需要更新
+        - 0: 当前版本是最新
+        - -1: 当前版本新（开发版本）
+        """
+        try:
+            current_parts = list(map(int, current.split('.')))
+            latest_parts = list(map(int, latest.split('.')))
+            
+            for i in range(max(len(current_parts), len(latest_parts))):
+                current_val = current_parts[i] if i < len(current_parts) else 0
+                latest_val = latest_parts[i] if i < len(latest_parts) else 0
+                
+                if current_val < latest_val:
+                    return 1
+                elif current_val > latest_val:
+                    return -1
+            
+            return 0
+        except:
+            return 0
+    
+    def show_update_notification(self):
+        """显示更新通知"""
+        def show_notification():
+            if not self.latest_version_info:
+                return
+            
+            latest_version = self.latest_version_info.get('version', '')
+            release_date = self.latest_version_info.get('release_date', '')
+            changelog = self.latest_version_info.get('changelog', '')
+            download_url = self.latest_version_info.get('download_url', '')
+            
+            # 格式化发布日期
+            if release_date:
+                try:
+                    from datetime import datetime
+                    release_date_obj = datetime.fromisoformat(release_date.replace('Z', '+00:00'))
+                    release_date_str = release_date_obj.strftime('%Y-%m-%d')
+                except:
+                    release_date_str = release_date
+            else:
+                release_date_str = '未知'
+            
+            # 简化更新内容
+            changelog_summary = changelog[:200] + '...' if len(changelog) > 200 else changelog
+            
+            # 创建通知窗口
+            notification_window = tk.Toplevel(self.app.root)
+            notification_window.title("发现新版本")
+            notification_window.geometry("400x300")
+            notification_window.transient(self.app.root)
+            notification_window.grab_set()
+            
+            # 添加内容
+            frame = ttk.Frame(notification_window, padding="20")
+            frame.pack(fill=tk.BOTH, expand=True)
+            
+            ttk.Label(frame, text=f"发现新版本: v{latest_version}", font=('Arial', 12, 'bold')).pack(pady=(0, 10))
+            ttk.Label(frame, text=f"发布日期: {release_date_str}").pack(pady=(0, 10))
+            ttk.Label(frame, text="更新内容:", font=('Arial', 10, 'bold')).pack(anchor='w')
+            
+            changelog_text = tk.Text(frame, height=6, wrap=tk.WORD, state=tk.DISABLED)
+            changelog_text.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+            changelog_text.config(state=tk.NORMAL)
+            changelog_text.insert(tk.END, changelog_summary)
+            changelog_text.config(state=tk.DISABLED)
+            
+            ttk.Label(frame, text="更新说明:", font=('Arial', 10, 'bold')).pack(anchor='w')
+            ttk.Label(frame, text="请点击下方链接查看详细更新说明和下载链接", wraplength=360).pack(pady=(0, 15))
+            
+            # 添加按钮
+            button_frame = ttk.Frame(frame)
+            button_frame.pack(fill=tk.X, pady=(10, 0))
+            
+            ttk.Button(button_frame, text="立即更新", command=lambda: self.open_update_link(download_url)).pack(side=tk.LEFT, padx=(0, 10))
+            ttk.Button(button_frame, text="稍后提醒", command=notification_window.destroy).pack(side=tk.LEFT, padx=(0, 10))
+            ttk.Button(button_frame, text="忽略此版本", command=notification_window.destroy).pack(side=tk.LEFT)
+        
+        # 在主线程中显示通知
+        self.app.root.after(0, show_notification)
+    
+    def open_update_link(self, url):
+        """打开更新链接"""
+        try:
+            import webbrowser
+            webbrowser.open(url)
+        except Exception as e:
+            self.app.log_message(f"打开更新链接失败: {str(e)}")
+    
+    def start_auto_check(self):
+        """启动自动检查线程"""
+        def check_loop():
+            while True:
+                self.check_for_updates()
+                time.sleep(self.check_interval)
+        
+        thread = threading.Thread(target=check_loop, daemon=True)
+        thread.start()
 
 # 尝试导入screeninfo库，如果不可用则提供安装提示
 try:
@@ -48,6 +212,15 @@ class AutoDoorOCR:
         self.root.geometry("800x850")  # 增加默认高度
         self.root.resizable(True, True) 
         self.root.minsize(750, 800)  # 增加最小高度
+        
+        # 初始化版本检查器
+        self.version_checker = VersionChecker(self)
+        
+        # 启动自动检查
+        self.version_checker.start_auto_check()
+        
+        # 应用启动时检查一次
+        self.version_checker.check_for_updates()
         
         # 配置参数
         self.ocr_interval = 5
@@ -483,6 +656,10 @@ class AutoDoorOCR:
         exit_btn = ttk.Button(buttons_frame, text="退出程序", command=self.exit_program)
         exit_btn.pack(side=tk.RIGHT)
         
+        # 检查更新按钮
+        check_update_btn = ttk.Button(buttons_frame, text="检查更新", command=self.check_for_updates)
+        check_update_btn.pack(side=tk.RIGHT, padx=(0, 20))
+        
         # 工具介绍按钮（左侧），与退出按钮保持20px间距
         tool_intro_btn = ttk.Button(buttons_frame, text="工具介绍", command=open_tool_intro)
         tool_intro_btn.pack(side=tk.RIGHT, padx=(0, 20))
@@ -491,6 +668,10 @@ class AutoDoorOCR:
         """打开Bilibili主页"""
         import webbrowser
         webbrowser.open("https://space.bilibili.com/263150759")
+    
+    def check_for_updates(self):
+        """手动检查更新"""
+        self.version_checker.check_for_updates(manual=True)
     
     def create_ocr_tab(self, parent):
         """创建文字识别标签页"""
