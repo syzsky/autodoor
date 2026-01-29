@@ -31,7 +31,7 @@ except ImportError:
     PYGAME_AVAILABLE = False
 
 # 全局版本号配置
-VERSION = "1.5.0"
+VERSION = "1.5.1"
 
 class VersionChecker:
     def __init__(self, app):

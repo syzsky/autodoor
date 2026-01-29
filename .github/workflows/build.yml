@@ -155,15 +155,29 @@ jobs:
         # 对于macOS，确保包含.app包和可执行文件
         zip -r autodoor-macos-${{ steps.get_version.outputs.VERSION }}.zip macos-build/
     
+    - name: Read update content
+      id: read_update_content
+      run: |
+        # 读取UPDATE_CONTENT.md文件内容
+        if [ -f "UPDATE_CONTENT.md" ]; then
+          UPDATE_CONTENT=$(cat UPDATE_CONTENT.md)
+          echo "UPDATE_CONTENT<<EOF" >> $GITHUB_OUTPUT
+          echo "$UPDATE_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        else
+          # 如果文件不存在，使用默认内容
+          DEFAULT_CONTENT="AutoDoor OCR 识别系统自动构建版本\n- Windows版本：autodoor-windows-${{ steps.get_version.outputs.VERSION }}.zip\n- macOS版本：autodoor-macos-${{ steps.get_version.outputs.VERSION }}.zip"
+          echo "UPDATE_CONTENT<<EOF" >> $GITHUB_OUTPUT
+          echo "$DEFAULT_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        fi
+
     - name: Create Release and upload assets
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.get_version.outputs.VERSION }}
         name: Release ${{ steps.get_version.outputs.VERSION }}
-        body: |
-          AutoDoor OCR 识别系统自动构建版本
-          - Windows版本：autodoor-windows-${{ steps.get_version.outputs.VERSION }}.zip
-          - macOS版本：autodoor-macos-${{ steps.get_version.outputs.VERSION }}.zip
+        body: ${{ steps.read_update_content.outputs.UPDATE_CONTENT }}
         draft: false
         prerelease: false
         files: |
