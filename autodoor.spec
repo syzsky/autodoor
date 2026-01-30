@@ -38,6 +38,7 @@ if os.path.exists(tesseract_dir):
 # 配置文件 - 移除本地配置文件，使用应用程序生成的默认配置
 data_files = [
     (os.path.join(project_root, 'voice/alarm.mp3'), 'voice'),
+    (os.path.join(project_root, 'voice/temp_reversed.mp3'), 'voice'),
 ] + tesseract_files
 
 a = Analysis(
@@ -61,8 +62,13 @@ a = Analysis(
         'screeninfo.monitors',
         'pynput',
         'pynput.keyboard',
+        'pynput.mouse',
         'pydub',
         'requests',
+        'numpy',
+        'numpy.core',
+        'numpy.core.multiarray',
+        'six',
     ],
     hookspath=[],
     hooksconfig={},
@@ -90,15 +96,12 @@ a = Analysis(
         # 完全排除OpenCV
         'cv2',
         
-        # 完全排除NumPy
-        'numpy',
-        
-        # NumPy扩展
+        # NumPy扩展（保留核心numpy）
         'numpy.testing', 'numpy.f2py', 'numpy.distutils',
         
         # 其他不必要的库
         'pkg_resources',
-        'pycparser', 'cffi', 'six',
+        'pycparser', 'cffi',
         'platformdirs', 'pyparsing', 'colorama', 'chardet'
     ],
     win_no_prefer_redirects=False,
