@@ -5580,8 +5580,8 @@ class ScriptExecutor:
         if not line:
             return None  # 跳过空行
         
-        # 匹配 KeyDown 或 KeyUp 命令，支持单引号和双引号
-        key_pattern = re.compile(r'^(KeyDown|KeyUp)\s+["\'](.*?)["\']\s*\,\s*(\d+)$')
+        # 匹配 KeyDown 或 KeyUp 命令，支持单引号和双引号，大小写不敏感
+        key_pattern = re.compile(r'^(KeyDown|KeyUp)\s+["\'](.*?)["\']\s*\,\s*(\d+)$', re.IGNORECASE)
         match = key_pattern.match(line)
         if match:
             command_type = match.group(1).lower()  # 转换为小写：keydown 或 keyup
@@ -5593,8 +5593,8 @@ class ScriptExecutor:
                 "count": count
             }
         
-        # 匹配鼠标点击命令，格式：LeftDown 1、RightUp 1等
-        mouse_pattern = re.compile(r'^(Left|Right|Middle)(Down|Up)\s+(\d+)$')
+        # 匹配鼠标点击命令，格式：LeftDown 1、RightUp 1等，大小写不敏感
+        mouse_pattern = re.compile(r'^(Left|Right|Middle)(Down|Up)\s+(\d+)$', re.IGNORECASE)
         match = mouse_pattern.match(line)
         if match:
             button = match.group(1).lower()  # 转换为小写：left、right、middle
@@ -5606,8 +5606,8 @@ class ScriptExecutor:
                 "count": count
             }
         
-        # 匹配鼠标移动命令，格式：MoveTo 300,200
-        move_pattern = re.compile(r"^MoveTo\s+(\d+)\s*\,\s*(\d+)$")
+        # 匹配鼠标移动命令，格式：MoveTo 300,200，大小写不敏感
+        move_pattern = re.compile(r"^MoveTo\s+(\d+)\s*\,\s*(\d+)$", re.IGNORECASE)
         match = move_pattern.match(line)
         if match:
             x = int(match.group(1))  # x坐标
@@ -5618,8 +5618,8 @@ class ScriptExecutor:
                 "y": y
             }
         
-        # 匹配 Delay 命令
-        delay_pattern = re.compile(r"^Delay\s+(\d+)$")
+        # 匹配 Delay 命令，大小写不敏感
+        delay_pattern = re.compile(r"^Delay\s+(\d+)$", re.IGNORECASE)
         match = delay_pattern.match(line)
         if match:
             delay_time = int(match.group(1))  # 延迟时间（毫秒）
