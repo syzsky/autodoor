@@ -113,6 +113,7 @@ python autodoor.py
 
 4. **底部操作按钮**
    - **工具介绍**：打开工具的详细介绍文档（飞书链接）
+   - **检查更新**：检查应用是否有新版本可用
    - **退出程序**：退出应用
 
 ### 文字识别标签页
@@ -170,7 +171,6 @@ python autodoor.py
 
 
 ### 脚本运行标签页
-
 1. **命令输入**
    - **按键命令**：设置按键、类型（按下/抬起）并插入命令
    - **延迟命令**：设置延迟时间并插入命令
@@ -320,7 +320,6 @@ python autodoor.py
 
 - **Windows**：`%APPDATA%/AutoDoorOCR/autodoor_config.json`
 - **macOS**：`~/Library/Preferences/AutoDoorOCR/autodoor_config.json`
-- **其他系统**：`程序运行目录/config/autodoor_config.json`
 
 配置文件包含以下配置项：
 

@@ -3019,7 +3019,6 @@ class AutoDoorOCR:
 
         # 更新状态标签
         self.status_labels["ocr"].set("文字识别: 未运行")
-        self.log_message("已停止监控")
 
     def _calculate_min_interval(self):
         """计算所有启用组的最小间隔时间
@@ -3875,27 +3874,38 @@ class AutoDoorOCR:
         start_count = start_func()
 
         # 更新状态标签
+        module_display_name = {
+            "定时功能": "定时功能",
+            "数字识别": "数字识别",
+            "文字识别": "文字识别",
+            "脚本运行": "脚本运行"
+        }.get(log_prefix, log_prefix)
+        
         if start_count > 0:
-            self.status_labels[status_var_key].set(f"{log_prefix[:-1]}: 运行中")
+            self.status_labels[status_var_key].set(f"{module_display_name}: 运行中")
         else:
-            self.status_labels[status_var_key].set(f"{log_prefix[:-1]}: 未运行")
+            self.status_labels[status_var_key].set(f"{module_display_name}: 未运行")
 
         if start_count == 0:
-            self.log_message(f"没有启用任何{log_prefix[:-2]}")
+            self.log_message(f"没有启用任何{module_display_name}")
 
     def _stop_threads(self, thread_list, module_name, status_var_key):
         """停止线程的公共方法"""
         # 停止所有线程
-        self.log_message(f"停止所有{module_name}")
 
         # 清空线程列表
         if thread_list:
-            self.log_message(f"停止{len(thread_list)}个{module_name}线程")
             thread_list.clear()
 
         # 更新状态标签
-        self.status_labels[status_var_key].set(f"{module_name[:-1]}: 未运行")
-        self.log_message(f"已停止{module_name}")
+        module_display_name = {
+            "定时功能": "定时功能",
+            "数字识别": "数字识别",
+            "文字识别": "文字识别",
+            "脚本运行": "脚本运行"
+        }.get(module_name, module_name)
+        
+        self.status_labels[status_var_key].set(f"{module_display_name}: 未运行")
 
     def start_timed_tasks(self):
         """开始定时任务"""
@@ -3912,11 +3922,11 @@ class AutoDoorOCR:
                     start_count += 1
             return start_count
 
-        self._manage_threads("timed", start_func, self.stop_timed_tasks, self.timed_threads, "timed", "定时任务")
+        self._manage_threads("timed", start_func, self.stop_timed_tasks, self.timed_threads, "timed", "定时功能")
 
     def stop_timed_tasks(self):
         """停止定时任务"""
-        self._stop_threads(self.timed_threads, "定时任务", "timed")
+        self._stop_threads(self.timed_threads, "定时功能", "timed")
 
     def timed_task_loop(self, group_index, interval, key):
         """定时任务循环"""
@@ -4145,12 +4155,18 @@ class AutoDoorOCR:
         self.stop_timed_tasks()
         self.stop_number_recognition()
         
-        # 停止脚本
-        self.stop_script()
+        # 停止脚本（不在这里停止颜色识别，留到下面统一处理）
+        self.stop_script(stop_color_recognition=False)
         
-        # 停止颜色识别
-        if hasattr(self, 'color_recognition') and self.color_recognition.is_running:
-            self.color_recognition.stop_recognition()
+        # 停止颜色识别 - 无论color_recognition_enabled状态如何，都停止颜色识别线程
+        if hasattr(self, 'color_recognition'):
+            # 检查线程是否正在运行
+            if hasattr(self.color_recognition, 'is_running') and self.color_recognition.is_running:
+                self.color_recognition.stop_recognition()
+            elif hasattr(self.color_recognition, 'recognition_thread') and self.color_recognition.recognition_thread.is_alive():
+                # 如果is_running为False但是线程仍然在运行，强制停止
+                self.color_recognition.is_running = False
+                self.color_recognition.recognition_thread.join(timeout=2)
 
         # 播放停止运行的反向音频
         self.play_stop_sound()
@@ -4311,7 +4327,6 @@ class AutoDoorOCR:
             pygame.mixer.music.load(sound_file)
             pygame.mixer.music.set_volume(0.7)  # 使用固定音量 70%
             pygame.mixer.music.play()
-            self.log_message("运行音效已播放")
         except pygame.error as e:
             self.log_message(f"音频文件格式错误或损坏: {str(e)}")
         except Exception as e:
@@ -4320,7 +4335,6 @@ class AutoDoorOCR:
     def play_stop_sound(self):
         """播放停止运行的反向音频"""
         if not PYGAME_AVAILABLE:
-            self.log_message("pygame库未安装，无法播放停止运行音效")
             return
 
         try:
@@ -4341,9 +4355,7 @@ class AutoDoorOCR:
                     pygame.mixer.music.load(reversed_file)
                     pygame.mixer.music.set_volume(0.7)  # 使用固定音量 70%
                     pygame.mixer.music.play()
-                    self.log_message("停止运行音效已播放")
-                except pygame.error as e:
-                    self.log_message(f"反向音频文件播放失败: {str(e)}")
+                except pygame.error:
                     # 播放原始音频作为备选
                     sound_file = self.get_default_alarm_sound_path()
                     if sound_file and os.path.exists(sound_file):
@@ -4351,9 +4363,8 @@ class AutoDoorOCR:
                             pygame.mixer.music.load(sound_file)
                             pygame.mixer.music.set_volume(0.7)  # 使用固定音量 70%
                             pygame.mixer.music.play()
-                            self.log_message("停止运行音效已播放")
-                        except Exception as e2:
-                            self.log_message(f"播放原始音频也失败: {str(e2)}")
+                        except Exception:
+                            pass
             else:
                 # 如果反向音频文件不存在，播放原始音频
                 sound_file = self.get_default_alarm_sound_path()
@@ -4362,13 +4373,10 @@ class AutoDoorOCR:
                         pygame.mixer.music.load(sound_file)
                         pygame.mixer.music.set_volume(0.7)  # 使用固定音量 70%
                         pygame.mixer.music.play()
-                        self.log_message("停止运行音效已播放")
-                    except Exception as e:
-                        self.log_message(f"播放原始音频失败: {str(e)}")
-                else:
-                    self.log_message("未找到音频文件，无法播放停止运行音效")
-        except Exception as e:
-            self.log_message(f"播放停止运行音效失败: {str(e)}")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
     def _create_reversed_audio(self, input_file):
         """创建反向音频文件
@@ -5213,12 +5221,11 @@ class AutoDoorOCR:
             if hasattr(self, 'status_labels') and "script" in self.status_labels:
                 self.status_labels["script"].set("脚本运行: 未运行")
             self.status_var.set("脚本已停止")
-            self.log_message("脚本已停止")
         
         # 根据参数决定是否停止颜色识别
-        if stop_color_recognition and hasattr(self, 'color_recognition_enabled') and self.color_recognition_enabled.get():
+        if stop_color_recognition:
+            # 无论color_recognition_enabled状态如何，都停止颜色识别线程
             self.stop_color_recognition()
-            self.log_message("颜色识别已自动停止")
 
     def start_recording(self):
         """开始录制脚本"""
@@ -5377,13 +5384,19 @@ class AutoDoorOCR:
         # 启动颜色识别
         self.color_recognition.start_recognition(target_color, tolerance, interval, commands)
         self.status_var.set("颜色识别中...")
-        self.log_message("颜色识别已启动，开始监控区域颜色变化")
 
     def stop_color_recognition(self):
         """停止颜色识别"""
-        if hasattr(self, 'color_recognition') and hasattr(self.color_recognition, 'is_running') and self.color_recognition.is_running:
-            self.color_recognition.stop_recognition()
-            self.status_var.set("颜色识别已停止")
+        if hasattr(self, 'color_recognition'):
+            # 检查线程是否正在运行
+            if hasattr(self.color_recognition, 'is_running') and self.color_recognition.is_running:
+                self.color_recognition.stop_recognition()
+                self.status_var.set("颜色识别已停止")
+            elif hasattr(self.color_recognition, 'recognition_thread') and self.color_recognition.recognition_thread.is_alive():
+                # 如果is_running为False但是线程仍然在运行，强制停止
+                self.color_recognition.is_running = False
+                self.color_recognition.recognition_thread.join(timeout=2)
+                self.status_var.set("颜色识别已停止")
 
     def update_hotkey(self):
         """更新快捷键配置"""
@@ -5469,7 +5482,7 @@ class ScriptExecutor:
         self.recording_grace_period = False
 
     def run_script(self, script_content):
-        """执行脚本"""
+        """执行脚本（无限循环）"""
         def execute():
             self.is_running = True
             self.is_paused = False
@@ -5565,14 +5578,107 @@ class ScriptExecutor:
                         self.app.log_message(f"抬起按键 {key} 时出错: {str(e)}")
                 
                 self.is_running = False
-                self.app.log_message("脚本执行完成")
-                self.app.status_var.set("脚本执行完成")
+        
+        # 启动执行线程
+        self.execution_thread = threading.Thread(target=execute, daemon=True)
+        self.execution_thread.start()
+
+    def run_script_once(self, script_content):
+        """执行脚本（只执行一遍）"""
+        def execute():
+            self.is_running = True
+            self.is_paused = False
+            # 记录当前按下的按键，用于确保最终能抬起所有按键
+            pressed_keys = set()
+            
+            try:
+                # 解析脚本内容
+                lines = script_content.splitlines()
+                commands = []
+                for line in lines:
+                    command = self.parse_line(line)
+                    if command:
+                        commands.append(command)
                 
-                # 更新UI状态
-                self.app.root.after(0, lambda:
-                    (self.app.log_message("脚本执行完成"),
-                     self.app.status_var.set("脚本执行完成"))
-                )
+                if not commands:
+                    self.app.log_message("脚本中没有有效命令！")
+                    self.is_running = False
+                    return
+                
+                # 只执行一遍脚本
+                for i, command in enumerate(commands):
+                    if not self.is_running:
+                        break
+                    
+                    while self.is_paused:
+                        time.sleep(0.1)
+                        if not self.is_running:
+                            break
+                    
+                    if not self.is_running:
+                        break
+                    
+                    # 处理按键命令，跟踪按下的按键
+                    if command["type"] in ["keydown", "keyup"]:
+                        key = command["key"]
+                        for _ in range(command["count"]):
+                            if not self.is_running:
+                                break
+                            while self.is_paused:
+                                time.sleep(0.1)
+                                if not self.is_running:
+                                    break
+                            if not self.is_running:
+                                break
+                            
+                            if command["type"] == "keydown":
+                                if key not in pressed_keys:
+                                    pyautogui.keyDown(key)
+                                    pressed_keys.add(key)
+                                    self.app.log_message(f"执行: 按下 {key}")
+                            elif command["type"] == "keyup":
+                                if key in pressed_keys:
+                                    pyautogui.keyUp(key)
+                                    pressed_keys.remove(key)
+                                    self.app.log_message(f"执行: 抬起 {key}")
+                    else:
+                        # 优化延迟逻辑：如果当前命令是延迟，且下一条命令是按键操作，则减少100ms延迟
+                        if command["type"] == "delay":
+                            # 检查下一条命令是否为按键操作
+                            if i + 1 < len(commands):
+                                next_cmd = commands[i + 1]
+                                if next_cmd["type"] in ["keydown", "keyup"]:
+                                    # 下一条是按键操作，减少100ms延迟
+                                    original_time = command["time"]
+                                    # 创建临时命令副本，避免修改原始命令
+                                    temp_command = command.copy()
+                                    # 确保延迟时间不小于0
+                                    temp_command["time"] = max(0, original_time - 100)
+                                    self.execute_command(temp_command)
+                                else:
+                                    # 下一条不是按键操作，使用原始延迟
+                                    self.execute_command(command)
+                            else:
+                                # 已经是最后一条命令，使用原始延迟
+                                self.execute_command(command)
+                        else:
+                            # 非延迟命令，直接执行
+                            self.execute_command(command)
+            except Exception as e:
+                error_msg = f"脚本执行出错: {str(e)}"
+                self.app.log_message(error_msg)
+                self.app.status_var.set(f"执行错误: {str(e)}")
+            finally:
+                # 确保所有按下的按键都被抬起
+                for key in pressed_keys:
+                    try:
+                        pyautogui.keyUp(key)
+                        self.app.log_message(f"确保抬起: {key}")
+                    except Exception as e:
+                        self.app.log_message(f"抬起按键 {key} 时出错: {str(e)}")
+                
+                self.is_running = False
+                self.app.log_message("脚本执行完成")
         
         # 启动执行线程
         self.execution_thread = threading.Thread(target=execute, daemon=True)
@@ -5977,9 +6083,6 @@ class ColorRecognition:
         self.interval = interval
         self.commands = commands
         
-        # 添加启动日志
-        self.app.log_message(f"颜色识别启动: 目标颜色={target_color}, 容差={tolerance}, 间隔={interval}秒")
-        
         def recognize():
             self.is_running = True
             
@@ -6066,15 +6169,15 @@ class ColorRecognition:
 
 
     def execute_commands(self):
-        """执行识别后命令"""
+        """执行识别后命令（只执行一遍）"""
         if not self.commands:
             return
         
         # 创建临时脚本执行器
         temp_executor = ScriptExecutor(self.app)
         
-        # 执行命令
-        temp_executor.run_script(self.commands)
+        # 执行命令（只执行一遍）
+        temp_executor.run_script_once(self.commands)
 
     def stop_recognition(self):
         """停止颜色识别"""
