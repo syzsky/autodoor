@@ -41,7 +41,7 @@ if %ERRORLEVEL% neq 0 (
 
 REM Install six library first to ensure it's correctly installed
 echo Installing six library...
-pip install six>=1.16.0
+pip install "six>=1.16.0"
 if %ERRORLEVEL% neq 0 (
     echo Error: Failed to install six library
     pause
