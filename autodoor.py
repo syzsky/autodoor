@@ -5161,7 +5161,7 @@ class AutoDoorOCR:
             return
         
         # 格式化组合命令序列
-        combo_command = f"KeyDown \"{key}\", 1\nDelay {key_delay}\nKeyUp \"{key}\", 1\nDelay {after_delay}\n"
+        combo_command = f"Delay {key_delay}\nKeyDown \"{key}\", 1\nDelay {after_delay}\nKeyUp \"{key}\", 1\n"
         
         # 获取当前选中的标签页
         if hasattr(self, 'script_notebook'):
