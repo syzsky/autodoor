@@ -33,7 +33,7 @@ except ImportError:
     PYGAME_AVAILABLE = False
 
 # 全局版本号配置
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 
 class VersionChecker:
     def __init__(self, app):
@@ -43,6 +43,22 @@ class VersionChecker:
         self.check_interval = 24 * 60 * 60  # 24小时
         self.update_available = False
         self.latest_version_info = None
+        self.ignored_version = None
+        # 从配置中加载已忽略的版本
+        self._load_ignored_version()
+
+    def _load_ignored_version(self):
+        """从配置中加载已忽略的版本"""
+        try:
+            # 直接从配置文件中读取
+            config_file_path = getattr(self.app, 'config_file_path', None)
+            if config_file_path and os.path.exists(config_file_path):
+                with open(config_file_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    if 'update' in config:
+                        self.ignored_version = config.get('update', {}).get('ignored_version')
+        except Exception as e:
+            self.app.log_message(f"加载已忽略版本失败: {str(e)}")
 
     def check_for_updates(self, manual=False):
         """检查版本更新"""
@@ -79,6 +95,16 @@ class VersionChecker:
 
             if comparison == 1:
                 # 发现新版本
+                # 检查版本是否已被忽略
+                # 注意：手动检查更新时不受历史忽略状态的影响，始终显示最新版本信息
+                if not manual and self.ignored_version:
+                    ignored_comparison = self.compare_versions(self.ignored_version, latest_version)
+                    if ignored_comparison <= 0:
+                        # 版本已被忽略或相同，不显示更新通知
+                        # 说明：compare_versions(a, b) 返回 1 表示 a < b，返回 0 表示 a == b，返回 -1 表示 a > b
+                        # 所以当 ignored_comparison <= 0 时，表示已忽略版本 >= 最新版本
+                        return
+                
                 self.update_available = True
                 self.latest_version_info = {
                     'version': latest_version,
@@ -203,7 +229,7 @@ class VersionChecker:
 
             ttk.Button(button_frame, text="查看更新", command=lambda: self.open_update_link(download_url)).pack(side=tk.LEFT, padx=(0, 10))
             ttk.Button(button_frame, text="稍后提醒", command=notification_window.destroy).pack(side=tk.LEFT, padx=(0, 10))
-            ttk.Button(button_frame, text="忽略此版本", command=notification_window.destroy).pack(side=tk.LEFT)
+            ttk.Button(button_frame, text="忽略此版本", command=lambda: self.ignore_version(latest_version, notification_window)).pack(side=tk.LEFT)
 
         # 在主线程中显示通知
         self.app.root.after(0, show_notification)
@@ -215,6 +241,45 @@ class VersionChecker:
             webbrowser.open(url)
         except Exception as e:
             self.app.log_message(f"打开更新链接失败: {str(e)}")
+
+    def ignore_version(self, version, notification_window):
+        """忽略指定版本"""
+        try:
+            # 直接更新配置文件
+            config_file_path = getattr(self.app, 'config_file_path', None)
+            if config_file_path:
+                # 确保配置文件目录存在
+                os.makedirs(os.path.dirname(config_file_path), exist_ok=True)
+                
+                # 无论配置文件操作是否成功，都先设置 ignored_version 属性
+                self.ignored_version = version
+                
+                # 读取现有配置
+                if os.path.exists(config_file_path):
+                    try:
+                        with open(config_file_path, 'r', encoding='utf-8') as f:
+                            config = json.load(f)
+                    except json.JSONDecodeError:
+                        # 配置文件格式错误，使用空配置
+                        config = {}
+                else:
+                    config = {}
+                
+                # 更新被忽略的版本
+                if 'update' not in config:
+                    config['update'] = {}
+                config['update']['ignored_version'] = version
+                
+                # 保存配置
+                with open(config_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(config, f, indent=2, ensure_ascii=False, default=str)
+                
+                self.app.log_message(f"已忽略版本: {version}")
+        except Exception as e:
+            self.app.log_message(f"忽略版本失败: {str(e)}")
+        finally:
+            # 无论是否发生异常，都关闭通知窗口
+            notification_window.destroy()
 
     def show_no_update_notification(self):
         """显示无更新通知"""
@@ -311,15 +376,6 @@ class AutoDoorOCR:
         self.root.resizable(True, True) 
         self.root.minsize(900, 850)  # 增加最小高度
 
-        # 初始化版本检查器
-        self.version_checker = VersionChecker(self)
-
-        # 启动自动检查
-        self.version_checker.start_auto_check()
-
-        # 应用启动时检查一次
-        self.version_checker.check_for_updates()
-
         # ========== 配置参数 ==========
         # OCR相关配置
         self.ocr_interval = 5  # OCR识别间隔（秒）
@@ -362,6 +418,15 @@ class AutoDoorOCR:
 
         # 配置文件路径
         self.config_file_path = os.path.join(config_dir, "autodoor_config.json")
+
+        # 初始化版本检查器
+        self.version_checker = VersionChecker(self)
+
+        # 启动自动检查
+        self.version_checker.start_auto_check()
+
+        # 应用启动时检查一次
+        self.version_checker.check_for_updates()
 
         # 日志文件路径
         self.log_file_path = os.path.join(config_dir, "autodoor.log")
@@ -4490,6 +4555,7 @@ class AutoDoorOCR:
 
     def exit_program(self):
         """退出程序"""
+        # 停止所有运行中的任务
         if self.is_running:
             self.stop_monitoring()
         self.stop_timed_tasks()
@@ -4509,6 +4575,11 @@ class AutoDoorOCR:
 
         # 停止事件线程
         self.is_event_running = False
+        
+        # 退出程序
+        self.log_message("程序正在退出...")
+        self.root.quit()
+        self.root.destroy()
 
     def run(self):
         """运行程序"""
