@@ -5234,6 +5234,8 @@ class AutoDoorOCR:
             self.status_labels["script"].set("脚本运行: 录制中")
         self.status_var.set("录制中...")
         self.log_message("开始录制脚本")
+        # 播放开始运行音效
+        self.play_start_sound()
 
     def stop_recording(self):
         """停止录制脚本"""
@@ -5247,6 +5249,8 @@ class AutoDoorOCR:
                 self.status_labels["script"].set("脚本运行: 未运行")
             self.status_var.set("录制已停止")
             self.log_message("停止录制脚本")
+            # 播放停止运行音效
+            self.play_stop_sound()
 
     def select_color_region(self):
         """选择颜色识别区域"""
