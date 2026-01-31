@@ -1788,8 +1788,8 @@ class AutoDoorOCR:
             check_btn.pack(side=tk.LEFT, padx=(0, 10))
             self.module_check_buttons[module] = check_btn
 
-            # 状态标签
-            ttk.Label(row_frame, textvariable=var).pack(side=tk.LEFT)
+            # 状态标签 - 左对齐并填充可用空间，确保文本完整显示
+            ttk.Label(row_frame, textvariable=var, anchor=tk.W).pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # 全局控制按钮 - 重新定位至功能状态区域下方
         control_frame = ttk.Frame(status_frame)
