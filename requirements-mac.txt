@@ -1,0 +1,8 @@
+pyautogui>=0.9.54
+pytesseract>=0.3.10
+Pillow>=10.0.0
+screeninfo>=0.8.1
+pygame>=2.0.0
+requests>=2.31.0
+six>=1.16.0
+numpy>=1.21.0
