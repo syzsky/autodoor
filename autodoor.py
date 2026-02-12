@@ -10,9 +10,7 @@ import random
 import datetime
 import subprocess
 import os
-import sys
 import json
-import queue
 import numpy as np
 
 # 导入新模块
@@ -43,8 +41,6 @@ from modules.alarm import AlarmModule
 from modules.script import ScriptExecutor
 from modules.color import ColorRecognition
 from modules.input import KeyEventExecutor
-
-
 
 # 导入pynput用于全局键盘监听
 try:
@@ -294,8 +290,6 @@ class AutoDoorOCR:
 
         # 启动事件处理线程
         self.event_manager.start_event_thread()
-
-
 
     def create_widgets(self):
         """
@@ -603,8 +597,6 @@ class AutoDoorOCR:
         """创建单个定时组，所有UI元素布局在一行中"""
         create_timed_group(self, index)
 
-
-
     def delete_timed_group_by_button(self, button):
         """通过按钮删除对应的定时组"""
         delete_timed_group_by_button(self, button)
@@ -653,10 +645,6 @@ class AutoDoorOCR:
         """新增数字识别区域"""
         add_number_region(self)
 
-
-
-
-    
     def create_home_tab(self, parent):
         """创建首页标签页"""
         create_home_tab(parent, self)
@@ -671,8 +659,6 @@ class AutoDoorOCR:
             "comma", "period", "semicolon", "apostrophe", "quote", "left", "right", "up", "down", "home", "end", "pageup", "pagedown",
             "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"
         ]
-
-
 
     def _load_tesseract_config(self, config):
         """加载Tesseract配置"""
@@ -1289,8 +1275,6 @@ class AutoDoorOCR:
                 self.logging_manager.log_message(f"pynput全局快捷键设置失败: {str(e)}")
         return False
 
-
-
     def setup_shortcuts(self):
         """设置快捷键绑定"""
         # 停止旧的全局键盘监听器（如果存在）
@@ -1358,10 +1342,6 @@ class AutoDoorOCR:
         except (subprocess.CalledProcessError, FileNotFoundError):
             messagebox.showwarning("警告", "无法使用指定的Tesseract路径！")
             return
-
-
-
-
 
     def start_monitoring(self):
         """开始监控"""
@@ -2645,7 +2625,6 @@ class AutoDoorOCR:
 
     def stop_script(self, stop_color_recognition=True):
         """停止脚本执行
-        
         Args:
             stop_color_recognition: 是否同时停止颜色识别线程，默认值为True
         """
