@@ -58,6 +58,7 @@ def _start_selection(app, selection_type, region_index):
 
     app.select_window.protocol("WM_DELETE_WINDOW", lambda: cancel_selection(app))
 
+    app.select_window.bind("<Escape>", lambda e: cancel_selection(app))
 
 def on_mouse_down(app, event):
     """鼠标按下事件"""
@@ -130,11 +131,13 @@ def on_mouse_up(app, event):
                 app.ocr_groups[app.current_ocr_region_index]['region_var'].set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
                 app.logging_manager.log_message(f"已为识别组{app.current_ocr_region_index+1}选择区域: {region}")
         elif app.selection_type == 'color':
-            # 颜色识别区域选择
-            if not hasattr(app, 'color_recognition'):
+            if not hasattr(app, 'color_recognition_manager'):
+                from modules.color import ColorRecognitionManager
+                app.color_recognition_manager = ColorRecognitionManager(app)
+            if not app.color_recognition_manager.color_recognition:
                 from modules.color import ColorRecognition
-                app.color_recognition = ColorRecognition(app)
-            app.color_recognition.set_region(region)
+                app.color_recognition_manager.color_recognition = ColorRecognition(app)
+            app.color_recognition_manager.color_recognition.set_region(region)
             app.color_recognition_region = region
             if hasattr(app, 'region_var'):
                 app.region_var.set(f"({region[0]}, {region[1]}) - ({region[2]}, {region[3]})")
@@ -155,11 +158,13 @@ def on_mouse_up(app, event):
     cancel_selection(app)
 
     # 保存配置
-    app._defer_save_config()
+    app.config_manager.defer_save_config()
 
 
 def cancel_selection(app):
     """取消区域选择"""
+    if app.is_selecting:
+        app.logging_manager.log_message("已取消区域选择")
     app.is_selecting = False
     if hasattr(app, 'select_window') and app.select_window.winfo_exists():
         app.select_window.destroy()

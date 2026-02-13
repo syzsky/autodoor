@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+from modules.alarm import select_alarm_sound
 
 
 def create_basic_tab(parent, app):
@@ -40,7 +41,7 @@ def create_basic_tab(parent, app):
     alarm_sound_entry.pack(side=tk.LEFT, padx=(0, 10))
 
     alarm_sound_btn = ttk.Button(sound_file_frame, text="选择", width=8,
-                               command=app.select_alarm_sound)
+                               command=lambda: select_alarm_sound(app))
     alarm_sound_btn.pack(side=tk.LEFT)
 
     # 报警音量调节
@@ -108,5 +109,5 @@ def create_basic_tab(parent, app):
     save_btn = ttk.Button(config_frame, text="保存配置", command=app.save_config)
     save_btn.pack(side=tk.LEFT, padx=(0, 10))
 
-    reset_btn = ttk.Button(config_frame, text="重置配置", command=app.load_config)
+    reset_btn = ttk.Button(config_frame, text="重置配置", command=app.config_manager.load_config)
     reset_btn.pack(side=tk.LEFT)

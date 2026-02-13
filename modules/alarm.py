@@ -1,5 +1,30 @@
 import os
 import sys
+import tkinter as tk
+from tkinter import filedialog
+
+
+def select_alarm_sound(app):
+    """选择全局报警声音文件
+    
+    Args:
+        app: 主应用实例
+    """
+    filetypes = [
+        ("音频文件", "*.mp3 *.wav *.ogg *.flac"),
+        ("所有文件", "*.*")
+    ]
+    
+    filename = filedialog.askopenfilename(
+        title="选择全局报警声音",
+        filetypes=filetypes
+    )
+
+    if filename:
+        app.alarm_sound_path.set(filename)
+        app.logging_manager.log_message(f"已选择全局报警声音: {os.path.basename(filename)}")
+        app.save_config()
+
 
 class AlarmModule:
     """报警模块"""

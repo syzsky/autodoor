@@ -4,6 +4,18 @@ import os
 import threading
 import time
 import tkinter as tk
+import webbrowser
+
+
+def open_bilibili():
+    """打开Bilibili主页"""
+    webbrowser.open("https://space.bilibili.com/263150759")
+
+
+def open_tool_intro():
+    """打开工具介绍页面"""
+    webbrowser.open("https://my.feishu.cn/wiki/GqoWwddPMizkLYkogn8cdoynn3c?from=from_copylink")
+
 
 class VersionChecker:
     def __init__(self, app):

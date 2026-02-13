@@ -41,3 +41,12 @@ class LoggingManager:
         # 更新状态标签（仅当status_var已创建）
         if hasattr(self.app, 'status_var'):
             self.app.status_var.set(message.split(":")[0] if ":" in message else message)
+
+    def clear_log(self):
+        """清除日志"""
+        if hasattr(self.app, 'home_log_text'):
+            self.app.home_log_text.config(state=tk.NORMAL)
+            self.app.home_log_text.delete("1.0", tk.END)
+            self.app.home_log_text.config(state=tk.DISABLED)
+
+        self.log_message("已清除日志")

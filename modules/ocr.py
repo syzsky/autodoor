@@ -2,6 +2,7 @@ import threading
 import time
 import random
 import tkinter as tk
+from tkinter import messagebox
 from PIL import Image, ImageGrab
 import imagehash
 
@@ -13,8 +14,41 @@ class OCRModule:
     """
     def __init__(self, app):
         self.app = app
-        self.last_recognition_times = {}  # 识别间隔时间记录
-        self.last_trigger_times = {}  # 暂停期时间记录
+        self.last_recognition_times = {}
+        self.last_trigger_times = {}
+    
+    def start_monitoring(self):
+        """开始监控"""
+        if not self.app.tesseract_available:
+            messagebox.showinfo("提示", "Tesseract OCR引擎未配置，请在设置中配置Tesseract路径后使用文字识别功能！")
+            return
+
+        has_enabled_group = False
+        for group in self.app.ocr_groups:
+            if group["enabled"].get() and group["region"]:
+                has_enabled_group = True
+                break
+
+        if not has_enabled_group:
+            messagebox.showwarning("警告", "请至少启用一个识别组并选择区域")
+            return
+
+        with self.app.state_lock:
+            self.app.is_running = True
+            self.app.is_paused = False
+
+        self.app.status_labels["ocr"].set("文字识别: 运行中")
+        self.app.logging_manager.log_message("开始监控...")
+
+        self.app.ocr_thread = threading.Thread(target=self.ocr_loop, daemon=True)
+        self.app.ocr_thread.start()
+
+    def stop_monitoring(self):
+        """停止监控"""
+        with self.app.state_lock:
+            self.app.is_running = False
+
+        self.app.status_labels["ocr"].set("文字识别: 未运行")
     
     def ocr_loop(self):
         """

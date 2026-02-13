@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import ttk
 
 from utils.region import _start_selection
+from ui.utils import update_group_style, setup_group_click_handler, bind_mousewheel_to_widgets, on_mousewheel, configure_scroll_region
+from core.utils import delete_group_by_button, delete_group, add_group
 
 # 从ui.builder导入UIBuilder
 from ui.builder import UIBuilder
@@ -16,8 +18,7 @@ def create_number_tab(parent, app):
     top_frame = ttk.Frame(number_frame)
     top_frame.pack(fill=tk.X, pady=(0, 10))
 
-    # 新增区域按钮
-    app.add_number_region_btn = ttk.Button(top_frame, text="新增识别组", command=lambda: add_number_region(app))
+    app.add_number_region_btn = ttk.Button(top_frame, text="新增识别组", command=app.number.add_region)
     app.add_number_region_btn.pack(side=tk.LEFT)
 
     # 区域容器，带滚动条
@@ -38,20 +39,20 @@ def create_number_tab(parent, app):
     regions_canvas.create_window((0, 0), window=app.number_regions_frame, anchor="nw", tags="inner_frame")
 
     # 配置画布尺寸和滚动区域
-    def configure_scroll_region(event):
-        app._configure_scroll_region(event, regions_canvas, "inner_frame")
+    def configure_scroll_region_handler(event):
+        configure_scroll_region(event, regions_canvas, "inner_frame")
 
-    regions_canvas.bind("<Configure>", configure_scroll_region)
-    app.number_regions_frame.bind("<Configure>", configure_scroll_region)
+    regions_canvas.bind("<Configure>", configure_scroll_region_handler)
+    app.number_regions_frame.bind("<Configure>", configure_scroll_region_handler)
 
     # 为画布绑定鼠标滚轮事件
-    regions_canvas.bind("<MouseWheel>", lambda event: app._on_mousewheel(event, regions_canvas))
+    regions_canvas.bind("<MouseWheel>", lambda event: on_mousewheel(event, regions_canvas))
 
     # 为内部框架绑定鼠标滚轮事件
-    app.number_regions_frame.bind("<MouseWheel>", lambda event: app._on_mousewheel(event, regions_canvas))
+    app.number_regions_frame.bind("<MouseWheel>", lambda event: on_mousewheel(event, regions_canvas))
 
     # 为整个标签页绑定鼠标滚轮事件
-    number_frame.bind("<MouseWheel>", lambda event: app._on_mousewheel(event, regions_canvas))
+    number_frame.bind("<MouseWheel>", lambda event: on_mousewheel(event, regions_canvas))
 
     # 保存数字识别的画布和框架引用
     app.number_canvas = regions_canvas
@@ -64,7 +65,7 @@ def create_number_tab(parent, app):
         create_number_region(app, i)
 
     # 绑定所有数字识别区域的鼠标滚轮事件
-    app._bind_mousewheel_to_widgets(regions_canvas, [region["frame"] for region in app.number_regions])
+    bind_mousewheel_to_widgets(regions_canvas, [region["frame"] for region in app.number_regions])
 
     # 操作按钮已移除，统一由首页全局控制
 
@@ -93,10 +94,10 @@ def create_number_region(app, index):
     region_frame = UIBuilder.build_module(app.number_regions_frame, "number", index, app, command_map, group_vars)
 
     # 设置组点击事件和样式更新
-    app._setup_group_click_handler(region_frame, enabled_var)
+    setup_group_click_handler(app, region_frame, enabled_var)
 
     # 初始应用样式
-    app.update_group_style(region_frame, enabled_var.get())
+    update_group_style(region_frame, enabled_var.get())
 
     # 添加删除按钮
     row1_frame = region_frame.winfo_children()[0]
@@ -125,12 +126,12 @@ def create_number_region(app, index):
     # 获取当前标签页的画布
     canvas = app.number_regions_frame.master
     if isinstance(canvas, tk.Canvas):
-        app._bind_mousewheel_to_widgets(canvas, [region_frame])
+        bind_mousewheel_to_widgets(canvas, [region_frame])
 
 
 def delete_number_region_by_button(app, button):
     """通过按钮删除对应的数字识别区域"""
-    app._delete_group_by_button(button, app.number_regions, "数字识别区域", lambda i: delete_number_region(app, i))
+    delete_group_by_button(app, button, app.number_regions, "数字识别区域", lambda i: delete_number_region(app, i))
 
 
 def delete_number_region(app, index, confirm=True):
@@ -139,7 +140,7 @@ def delete_number_region(app, index, confirm=True):
         index: 要删除的区域索引
         confirm: 是否显示确认对话框，默认为True
     """
-    app._delete_group(index, app.number_regions, "数字识别区域", 1, lambda: renumber_number_regions(app), "识别组", confirm)
+    delete_group(app, index, app.number_regions, "数字识别区域", 1, lambda: renumber_number_regions(app), "识别组", confirm)
 
 
 def renumber_number_regions(app):
@@ -151,7 +152,7 @@ def renumber_number_regions(app):
 
 def add_number_region(app):
     """新增数字识别区域"""
-    app._add_group(app.number_regions, 15, lambda i: create_number_region(app, i), "识别区域", "识别区域")
+    add_group(app, app.number_regions, 15, lambda i: create_number_region(app, i), "识别区域", "识别区域")
 
 
 def start_number_region_selection(app, region_index):

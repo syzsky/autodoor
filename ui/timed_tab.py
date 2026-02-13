@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
+from ui.utils import update_group_style, setup_group_click_handler, bind_mousewheel_to_widgets, on_mousewheel, configure_scroll_region
+from core.utils import delete_group_by_button, delete_group, add_group
 
 
 # 从ui.builder导入UIBuilder
@@ -15,8 +17,7 @@ def create_timed_tab(parent, app):
     top_frame = ttk.Frame(timed_frame)
     top_frame.pack(fill=tk.X, pady=(0, 10))
 
-    # 新增组按钮
-    app.add_timed_group_btn = ttk.Button(top_frame, text="新增定时组", command=lambda: add_timed_group(app))
+    app.add_timed_group_btn = ttk.Button(top_frame, text="新增定时组", command=app.timed.add_group)
     app.add_timed_group_btn.pack(side=tk.LEFT)
 
     # 定时组容器，带滚动条
@@ -37,20 +38,20 @@ def create_timed_tab(parent, app):
     groups_canvas.create_window((0, 0), window=app.timed_groups_frame, anchor="nw", tags="inner_frame")
 
     # 配置画布尺寸和滚动区域
-    def configure_scroll_region(event):
-        app._configure_scroll_region(event, groups_canvas, "inner_frame")
+    def configure_scroll_region_handler(event):
+        configure_scroll_region(event, groups_canvas, "inner_frame")
 
-    groups_canvas.bind("<Configure>", configure_scroll_region)
-    app.timed_groups_frame.bind("<Configure>", configure_scroll_region)
+    groups_canvas.bind("<Configure>", configure_scroll_region_handler)
+    app.timed_groups_frame.bind("<Configure>", configure_scroll_region_handler)
 
     # 为画布绑定鼠标滚轮事件
-    groups_canvas.bind("<MouseWheel>", lambda event: app._on_mousewheel(event, groups_canvas))
+    groups_canvas.bind("<MouseWheel>", lambda event: on_mousewheel(event, groups_canvas))
 
     # 为内部框架绑定鼠标滚轮事件
-    app.timed_groups_frame.bind("<MouseWheel>", lambda event: app._on_mousewheel(event, groups_canvas))
+    app.timed_groups_frame.bind("<MouseWheel>", lambda event: on_mousewheel(event, groups_canvas))
 
     # 为整个标签页绑定鼠标滚轮事件
-    timed_frame.bind("<MouseWheel>", lambda event: app._on_mousewheel(event, groups_canvas))
+    timed_frame.bind("<MouseWheel>", lambda event: on_mousewheel(event, groups_canvas))
 
     # 保存定时功能的画布和框架引用
     app.timed_canvas = groups_canvas
@@ -63,7 +64,7 @@ def create_timed_tab(parent, app):
         create_timed_group(app, i)
 
     # 绑定所有定时组的鼠标滚轮事件
-    app._bind_mousewheel_to_widgets(groups_canvas, [group["frame"] for group in app.timed_groups])
+    bind_mousewheel_to_widgets(groups_canvas, [group["frame"] for group in app.timed_groups])
 
 
 def create_timed_group(app, index):
@@ -91,10 +92,10 @@ def create_timed_group(app, index):
     group_frame = UIBuilder.build_module(app.timed_groups_frame, "timed", index, app, command_map, group_vars)
 
     # 设置组点击事件和样式更新
-    app._setup_group_click_handler(group_frame, enabled_var)
+    setup_group_click_handler(app, group_frame, enabled_var)
 
     # 初始应用样式
-    app.update_group_style(group_frame, enabled_var.get())
+    update_group_style(group_frame, enabled_var.get())
 
     # 添加删除按钮
     row1_frame = group_frame.winfo_children()[0]
@@ -124,7 +125,7 @@ def create_timed_group(app, index):
 
 def delete_timed_group_by_button(app, button):
     """通过按钮删除对应的定时组"""
-    app._delete_group_by_button(button, app.timed_groups, "定时组", lambda i: delete_timed_group(app, i))
+    delete_group_by_button(app, button, app.timed_groups, "定时组", lambda i: delete_timed_group(app, i))
 
 
 def delete_timed_group(app, index, confirm=True):
@@ -133,7 +134,7 @@ def delete_timed_group(app, index, confirm=True):
         index: 要删除的定时组索引
         confirm: 是否显示确认对话框，默认为True
     """
-    app._delete_group(index, app.timed_groups, "定时组", 1, lambda: renumber_timed_groups(app), "定时组", confirm)
+    delete_group(app, index, app.timed_groups, "定时组", 1, lambda: renumber_timed_groups(app), "定时组", confirm)
 
 
 def renumber_timed_groups(app):
@@ -145,4 +146,4 @@ def renumber_timed_groups(app):
 
 def add_timed_group(app):
     """新增定时组"""
-    app._add_group(app.timed_groups, 15, lambda i: create_timed_group(app, i), "定时组", "定时组")
+    add_group(app, app.timed_groups, 15, lambda i: create_timed_group(app, i), "定时组", "定时组")

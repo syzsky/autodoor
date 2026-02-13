@@ -165,6 +165,7 @@ class TimedModule:
         # 绑定鼠标事件
         self.app.canvas.bind("<Button-1>", self.on_timed_position_click)
         self.app.select_window.protocol("WM_DELETE_WINDOW", self.app.cancel_selection)
+        self.app.select_window.bind("<Escape>", lambda e: self.app.cancel_selection())
 
     def on_timed_position_click(self, event):
         """定时任务位置选择鼠标点击事件"""

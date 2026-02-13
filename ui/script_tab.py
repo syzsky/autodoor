@@ -114,13 +114,10 @@ def create_script_tab(parent, app):
     control_buttons_row = ttk.Frame(control_cmd_frame)
     control_buttons_row.pack(fill=tk.X, pady=(0, 8))
 
-    # 录制按钮
-    app.record_btn = ttk.Button(control_buttons_row, text="开始录制", command=app.start_recording)
+    app.record_btn = ttk.Button(control_buttons_row, text="开始录制", command=app.script.start_recording)
     app.record_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
 
-    # 停止录制按钮
-    app.stop_record_btn = ttk.Button(control_buttons_row, text="停止录制", command=app.stop_recording)
-    # 初始状态下停止录制按钮为禁用状态
+    app.stop_record_btn = ttk.Button(control_buttons_row, text="停止录制", command=app.script.stop_recording)
     app.stop_record_btn.config(state="disabled")
     app.stop_record_btn.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
@@ -231,18 +228,17 @@ def create_color_recognition_tab(app, parent):
     region_frame = ttk.LabelFrame(main_frame, text="区域选择", padding="8")
     region_frame.pack(fill=tk.X, pady=(0, 8))
     
-    region_btn = ttk.Button(region_frame, text="选择区域", command=app.select_color_region)
+    region_btn = ttk.Button(region_frame, text="选择区域", command=app.color.select_region)
     region_btn.pack(side=tk.LEFT, padx=(0, 8))
     
     app.region_var = tk.StringVar(value="未选择区域")
     region_label = ttk.Label(region_frame, textvariable=app.region_var, width=30)
     region_label.pack(side=tk.LEFT)
     
-    # 颜色选择
     color_frame = ttk.LabelFrame(main_frame, text="颜色选择", padding="8")
     color_frame.pack(fill=tk.X, pady=(0, 8))
     
-    color_btn = ttk.Button(color_frame, text="选择颜色", command=app.select_color)
+    color_btn = ttk.Button(color_frame, text="选择颜色", command=app.color.select_color)
     color_btn.pack(side=tk.LEFT, padx=(0, 8))
     
     app.color_var = tk.StringVar(value="未选择颜色")

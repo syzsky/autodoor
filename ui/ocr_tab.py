@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import ttk
 
 from utils.region import _start_selection
+from ui.utils import update_group_style, setup_group_click_handler, bind_mousewheel_to_widgets, on_mousewheel, configure_scroll_region
+from core.utils import delete_group_by_button, delete_group, add_group
 
 # 从ui.builder导入UIBuilder
 from ui.builder import UIBuilder
@@ -16,8 +18,7 @@ def create_ocr_tab(parent, app):
     top_frame = ttk.Frame(ocr_frame)
     top_frame.pack(fill=tk.X, pady=(0, 10))
 
-    # 新增组按钮
-    app.add_ocr_group_btn = ttk.Button(top_frame, text="新增识别组", command=app.add_ocr_group)
+    app.add_ocr_group_btn = ttk.Button(top_frame, text="新增识别组", command=app.ocr.add_group)
     app.add_ocr_group_btn.pack(side=tk.LEFT)
 
     # 识别组容器，带滚动条
@@ -38,14 +39,14 @@ def create_ocr_tab(parent, app):
     groups_canvas.create_window((0, 0), window=app.ocr_groups_frame, anchor="nw", tags="inner_frame")
 
     # 配置画布尺寸和滚动区域
-    def configure_scroll_region(event):
-        app._configure_scroll_region(event, groups_canvas, "inner_frame")
+    def configure_scroll_region_handler(event):
+        configure_scroll_region(event, groups_canvas, "inner_frame")
 
-    groups_canvas.bind("<Configure>", configure_scroll_region)
-    app.ocr_groups_frame.bind("<Configure>", configure_scroll_region)
+    groups_canvas.bind("<Configure>", configure_scroll_region_handler)
+    app.ocr_groups_frame.bind("<Configure>", configure_scroll_region_handler)
 
     # 为画布绑定鼠标滚轮事件
-    groups_canvas.bind("<MouseWheel>", lambda event: app._on_mousewheel(event, groups_canvas))
+    groups_canvas.bind("<MouseWheel>", lambda event: on_mousewheel(event, groups_canvas))
 
     # 为内部框架绑定鼠标滚轮事件
     app.ocr_groups_frame.bind("<MouseWheel>", lambda event: app._on_mousewheel(event, groups_canvas))
@@ -64,7 +65,7 @@ def create_ocr_tab(parent, app):
         create_ocr_group(app, i)
 
     # 绑定所有文字识别区域的鼠标滚轮事件
-    app._bind_mousewheel_to_widgets(groups_canvas, [group["frame"] for group in app.ocr_groups])
+    bind_mousewheel_to_widgets(groups_canvas, [group["frame"] for group in app.ocr_groups])
 
 
 def create_ocr_group(app, index):
@@ -95,10 +96,10 @@ def create_ocr_group(app, index):
     group_frame = UIBuilder.build_module(app.ocr_groups_frame, "ocr", index, app, command_map, group_vars)
 
     # 设置组点击事件和样式更新
-    app._setup_group_click_handler(group_frame, enabled_var)
+    setup_group_click_handler(app, group_frame, enabled_var)
 
     # 初始应用样式
-    app.update_group_style(group_frame, enabled_var.get())
+    update_group_style(group_frame, enabled_var.get())
 
     # 添加删除按钮
     row1_frame = group_frame.winfo_children()[0]
@@ -130,22 +131,22 @@ def create_ocr_group(app, index):
     # 为新创建的识别组绑定鼠标滚轮事件
     canvas = app.ocr_groups_frame.master
     if isinstance(canvas, tk.Canvas):
-        app._bind_mousewheel_to_widgets(canvas, [group_frame])
+        bind_mousewheel_to_widgets(canvas, [group_frame])
 
 
 def add_ocr_group(app):
     """新增文字识别组"""
-    app._add_group(app.ocr_groups, 15, lambda i: create_ocr_group(app, i), "识别组", "文字识别组")
+    add_group(app, app.ocr_groups, 15, lambda i: create_ocr_group(app, i), "识别组", "文字识别组")
 
 
 def delete_ocr_group_by_button(app, button):
     """通过按钮删除对应的文字识别组"""
-    app._delete_group_by_button(button, app.ocr_groups, "识别组", lambda i: delete_ocr_group(app, i))
+    delete_group_by_button(app, button, app.ocr_groups, "识别组", lambda i: delete_ocr_group(app, i))
 
 
 def delete_ocr_group(app, index, confirm=True):
     """删除文字识别组"""
-    app._delete_group(index, app.ocr_groups, "识别组", 1, lambda: renumber_ocr_groups(app), "文字识别组", confirm)
+    delete_group(app, index, app.ocr_groups, "识别组", 1, lambda: renumber_ocr_groups(app), "文字识别组", confirm)
 
 
 def renumber_ocr_groups(app):

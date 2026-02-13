@@ -5,6 +5,89 @@ import tkinter as tk
 
 from modules.recorder import RecorderBase
 
+class ScriptModule:
+    """脚本模块"""
+    def __init__(self, app):
+        """
+        初始化脚本模块
+        Args:
+            app: 主应用实例
+        """
+        self.app = app
+    
+    def start_script(self, start_color_recognition=True):
+        """从首页启动脚本
+        
+        Args:
+            start_color_recognition: 是否同时启动颜色识别线程，默认值为True
+        """
+        if self.app.system_stopped:
+            self.app.logging_manager.log_message("系统已完全停止，拒绝执行StartScript命令")
+            return
+        
+        if not hasattr(self.app, 'script_executor'):
+            self.app.script_executor = ScriptExecutor(self.app)
+        
+        if hasattr(self.app, 'script_text'):
+            script_content = self.app.script_text.get(1.0, tk.END)
+            if not script_content.strip():
+                tk.messagebox.showwarning("警告", "脚本内容为空，请先编写脚本！")
+                return
+            
+            self.app.script_executor.run_script(script_content)
+            if hasattr(self.app, 'status_labels') and "script" in self.app.status_labels:
+                self.app.status_labels["script"].set("脚本运行: 运行中")
+            self.app.status_var.set("脚本执行中...")
+            self.app.logging_manager.log_message("脚本已启动")
+            
+            if start_color_recognition and hasattr(self.app, 'color_recognition_enabled') and self.app.color_recognition_enabled.get():
+                self.app.color.start_recognition()
+                self.app.logging_manager.log_message("颜色识别已自动启动")
+
+    def stop_script(self, stop_color_recognition=True):
+        """停止脚本执行
+        Args:
+            stop_color_recognition: 是否同时停止颜色识别线程，默认值为True
+        """
+        if hasattr(self.app, 'script_executor') and hasattr(self.app.script_executor, 'is_running') and self.app.script_executor.is_running:
+            self.app.script_executor.stop_script()
+            if hasattr(self.app, 'status_labels') and "script" in self.app.status_labels:
+                self.app.status_labels["script"].set("脚本运行: 未运行")
+            self.app.status_var.set("脚本已停止")
+        
+        if stop_color_recognition:
+            self.app.color.stop_recognition()
+
+    def start_recording(self):
+        """开始录制脚本"""
+        if not hasattr(self.app, 'script_executor'):
+            self.app.script_executor = ScriptExecutor(self.app)
+        
+        self.app.script_executor.start_recording()
+        if hasattr(self.app, 'record_btn'):
+            self.app.record_btn.config(text="录制中...", state="disabled")
+        if hasattr(self.app, 'stop_record_btn'):
+            self.app.stop_record_btn.config(state="normal")
+        if hasattr(self.app, 'status_labels') and "script" in self.app.status_labels:
+            self.app.status_labels["script"].set("脚本运行: 录制中")
+        self.app.status_var.set("录制中...")
+        # 播放开始运行音效
+        self.app.alarm_module.play_start_sound()
+
+    def stop_recording(self):
+        """停止录制脚本"""
+        if hasattr(self.app, 'script_executor'):
+            self.app.script_executor.stop_recording()
+            if hasattr(self.app, 'record_btn'):
+                self.app.record_btn.config(text="开始录制", state="normal")
+            if hasattr(self.app, 'stop_record_btn'):
+                self.app.stop_record_btn.config(state="disabled")
+            if hasattr(self.app, 'status_labels') and "script" in self.app.status_labels:
+                self.app.status_labels["script"].set("脚本运行: 未运行")
+            self.app.status_var.set("录制已停止")
+            # 播放停止运行音效
+            self.app.alarm_module.play_stop_sound()
+
 class ScriptExecutor(RecorderBase):
     """脚本执行器类"""
     def __init__(self, app):
@@ -344,11 +427,8 @@ class ScriptExecutor(RecorderBase):
                 if not self.is_running:
                     return
                 self.app.logging_manager.log_message("执行: 停止脚本")
-                # 调用应用程序的停止脚本方法，使用after确保在主线程中执行，传递stop_color_recognition=False参数
-                self.app.root.after(0, lambda: self.app.stop_script(stop_color_recognition=False))
-                # 不立即设置is_running为False，让线程继续执行到下一个命令
+                self.app.root.after(0, lambda: self.app.script.stop(stop_color_recognition=False))
             elif command["type"] == "startscript":
-                # 启动脚本执行，确保在主线程中执行
                 if not self.is_running:
                     return
                 while self.is_paused:
@@ -358,8 +438,7 @@ class ScriptExecutor(RecorderBase):
                 if not self.is_running:
                     return
                 self.app.logging_manager.log_message("执行: 启动脚本")
-                # 调用应用程序的启动脚本方法，使用after确保在主线程中执行，传递start_color_recognition=False参数
-                self.app.root.after(0, lambda: self.app.start_script(start_color_recognition=False))
+                self.app.root.after(0, lambda: self.app.script.start(start_color_recognition=False))
         except Exception as e:
             # 添加错误处理，确保即使执行命令失败也不会导致应用程序崩溃
             error_msg = f"执行命令出错: {str(e)}"
@@ -395,15 +474,12 @@ class ScriptExecutor(RecorderBase):
                 # 检查是否有辅助功能权限
                 result = subprocess.run(["osascript", "-e", "tell application \"System Events\" to key code 1"], capture_output=True, timeout=2)
                 if result.returncode != 0:
-                    # 显示权限提示
-                    self.app.root.after(0, lambda: self.app.show_message("权限提示", "在macOS上录制功能需要辅助功能权限，请在系统偏好设置 > 安全性与隐私 > 隐私 > 辅助功能中允许AutoDoor控制您的电脑。"))
+                    self.app.root.after(0, lambda: self.app.ui.show_message("权限提示", "在macOS上录制功能需要辅助功能权限，请在系统偏好设置 > 安全性与隐私 > 隐私 > 辅助功能中允许AutoDoor控制您的电脑。"))
             except Exception as e:
                 pass
         
-        # macOS平台，提示用户需要的权限
         if current_platform == "Darwin":
-            # 使用after将提示延迟到主循环开始后显示
-            self.app.root.after(100, lambda: self.app.show_message("提示", "在macOS上录制功能需要辅助功能权限，请在系统偏好设置中允许AutoDoor控制您的电脑。"))
+            self.app.root.after(100, lambda: self.app.ui.show_message("提示", "在macOS上录制功能需要辅助功能权限，请在系统偏好设置中允许AutoDoor控制您的电脑。"))
         
         # 设置录制缓冲期，避免记录开始录制时的操作
         self.recording_grace_period = True
@@ -447,7 +523,7 @@ class ScriptExecutor(RecorderBase):
                     from pynput import keyboard, mouse
                 except Exception as e:
                     # 给用户提供明确的提醒
-                    self.app.root.after(0, lambda: self.app.show_message("提示", "无法启动录制功能，请确保pynput模块已正确安装。"))
+                    self.app.root.after(0, lambda: self.app.ui.show_message("提示", "无法启动录制功能，请确保pynput模块已正确安装。"))
                     self.is_recording = False
                     # 生成空脚本，避免后续处理出错
                     self.recording_events = []

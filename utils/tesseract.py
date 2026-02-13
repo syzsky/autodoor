@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 import pytesseract
+from tkinter import messagebox
 from PIL import Image
 
 
@@ -252,3 +253,50 @@ class TesseractManager:
         except Exception as e:
             self.app.logging_manager.log_message(f"Tesseract检测发生未知错误: {str(e)}")
             return False
+
+    def set_tesseract_path(self):
+        """设置Tesseract OCR路径"""
+        new_path = self.app.tesseract_path_var.get().strip()
+
+        if not new_path:
+            messagebox.showwarning("警告", "请输入有效的Tesseract路径！")
+            return
+
+        if not os.path.exists(new_path):
+            messagebox.showwarning("警告", "指定的路径不存在！")
+            return
+
+        # 根据操作系统检查可执行文件格式
+        if self.app.platform_adapter.platform == "Windows":
+            if not new_path.endswith("tesseract.exe"):
+                messagebox.showwarning("警告", "请指定tesseract.exe可执行文件！")
+                return
+        elif self.app.platform_adapter.platform == "Darwin":  # macOS
+            if not os.path.basename(new_path) == "tesseract":
+                messagebox.showwarning("警告", "请指定tesseract可执行文件！")
+                return
+
+        try:
+            # 测试新路径是否可用
+            subprocess.run(
+                [new_path, "--version"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+
+            # 更新路径和配置
+            self.app.tesseract_path = new_path
+            pytesseract.pytesseract.tesseract_cmd = new_path
+            self.app.tesseract_available = True
+
+            self.app.logging_manager.log_message(f"已设置Tesseract路径: {new_path}")
+            self.app.status_var.set("就绪")
+            messagebox.showinfo("成功", "Tesseract路径设置成功！")
+
+            # 保存配置
+            self.app.config_manager.defer_save_config()
+
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            messagebox.showwarning("警告", "无法使用指定的Tesseract路径！")
+            return
