@@ -21,6 +21,18 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
+REM Verify module structure
+echo Verifying module structure...
+for %%m in (core ui modules input utils) do (
+    if exist "%%m" (
+        echo [OK] Module '%%m' found
+    ) else (
+        echo [ERROR] Module '%%m' not found
+        pause
+        exit /b 1
+    )
+)
+
 REM Delete old virtual environment if it exists
 if exist venv (
     echo Deleting old virtual environment...
@@ -72,6 +84,16 @@ echo Building with PyInstaller...
 pyinstaller autodoor.spec --noconfirm --clean
 if %ERRORLEVEL% neq 0 (
     echo Error: Build failed
+    pause
+    exit /b 1
+)
+
+REM Verify build output
+if exist "dist\autodoor\autodoor.exe" (
+    echo [OK] Build successful: autodoor.exe found
+    dir "dist\autodoor\autodoor.exe"
+) else (
+    echo [ERROR] Build failed: autodoor.exe not found
     pause
     exit /b 1
 )

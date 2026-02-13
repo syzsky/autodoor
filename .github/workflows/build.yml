@@ -1,20 +1,24 @@
 # GitHub Actions 配置文件
 # 实现 Windows 和 macOS 版本的自动构建
+# 适配模块化架构 v2.0
 
 name: AutoDoor Build and Release
 
 on:
   push:
-    branches: [ master, debug-macos-fixes ]
-    tags: [ 'autodoor_V*' ]  # 当推送autodoor_V*格式的标签时触发
+    branches: [ master ]
+    tags: [ 'autodoor_V*' ]
   pull_request:
-    branches: [ master, debug-macos-fixes ]
-  workflow_dispatch:  # 允许手动触发构建
+    branches: [ master ]
+  workflow_dispatch:
     inputs:
       release_type:
         description: 'Release type (major/minor/patch)'
         required: false
         default: 'patch'
+
+env:
+  PYTHON_VERSION: '3.12'
 
 jobs:
   build-windows:
@@ -26,38 +30,54 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12'
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
     
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt pyinstaller
     
+    - name: Verify module structure
+      run: |
+        Write-Host "Verifying module structure..."
+        $modules = @("core", "ui", "modules", "input", "utils")
+        foreach ($module in $modules) {
+            if (Test-Path "${{ github.workspace }}\$module") {
+                Write-Host "✓ Module '$module' found"
+                Get-ChildItem "${{ github.workspace }}\$module\*.py" | Select-Object Name
+            } else {
+                Write-Host "✗ Module '$module' not found"
+                exit 1
+            }
+        }
+    
     - name: Verify tesseract directory
       run: |
-        # 验证项目自带的tesseract文件夹是否存在
         if (Test-Path "${{ github.workspace }}\tesseract") {
             Write-Host "Tesseract directory found"
-            # 验证tesseract.exe是否存在
             if (Test-Path "${{ github.workspace }}\tesseract\tesseract.exe") {
                 Write-Host "Tesseract executable found"
                 & "${{ github.workspace }}\tesseract\tesseract.exe" --version
-            } else {
-                Write-Host "Tesseract executable not found in tesseract directory"
             }
-            # 验证语言包是否存在
             if (Test-Path "${{ github.workspace }}\tesseract\tessdata") {
                 Write-Host "Tessdata directory found"
                 Get-ChildItem "${{ github.workspace }}\tesseract\tessdata" | Where-Object { $_.Name -match '\.traineddata$' } | Select-Object Name
-            } else {
-                Write-Host "Tessdata directory not found"
             }
-        } else {
-            Write-Host "Tesseract directory not found"
         }
     
     - name: Build with PyInstaller
       run: pyinstaller autodoor.spec --noconfirm
+    
+    - name: Verify build output
+      run: |
+        if (Test-Path "${{ github.workspace }}\dist\autodoor\autodoor.exe") {
+            Write-Host "✓ Build successful: autodoor.exe found"
+            Get-Item "${{ github.workspace }}\dist\autodoor\autodoor.exe" | Select-Object Name, Length, LastWriteTime
+        } else {
+            Write-Host "✗ Build failed: autodoor.exe not found"
+            exit 1
+        }
     
     - name: Archive Windows build
       uses: actions/upload-artifact@v4
@@ -75,7 +95,8 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12'
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
     
     - name: Install dependencies
       run: |
@@ -85,34 +106,52 @@ jobs:
     
     - name: Install dependencies for macOS
       run: |
-        # 使用Homebrew安装tesseract
         brew install tesseract
-        # 验证安装
         which tesseract
-        # 获取tessdata目录路径
-        # 直接使用Homebrew安装的tessdata路径
         tessdata_path="/opt/homebrew/share/tessdata"
         if [ ! -d "$tessdata_path" ]; then
             tessdata_path="/usr/local/share/tessdata"
         fi
-        # 确保tessdata目录存在
         mkdir -p "$tessdata_path"
-        # 下载语言包（简体中文、繁体中文、英文）
         languages=("chi_sim" "chi_tra" "eng")
         for lang in "${languages[@]}"; do
             curl -L -o "$tessdata_path/$lang.traineddata" "https://github.com/tesseract-ocr/tessdata_fast/raw/main/$lang.traineddata"
         done
-        # 验证语言包下载（即使失败也不影响构建）
         ls -la "$tessdata_path" | grep '\.traineddata$' || true
+    
+    - name: Verify module structure
+      run: |
+        echo "Verifying module structure..."
+        for module in core ui modules input utils; do
+            if [ -d "${{ github.workspace }}/$module" ]; then
+                echo "✓ Module '$module' found"
+                ls -la "${{ github.workspace }}/$module/"*.py 2>/dev/null || true
+            else
+                echo "✗ Module '$module' not found"
+                exit 1
+            fi
+        done
     
     - name: Build with PyInstaller
       run: pyinstaller autodoor.spec --noconfirm
+    
+    - name: Verify build output
+      run: |
+        if [ -d "${{ github.workspace }}/dist/AutoDoor.app" ]; then
+            echo "✓ Build successful: AutoDoor.app found"
+            ls -la "${{ github.workspace }}/dist/AutoDoor.app/Contents/MacOS/"
+        elif [ -d "${{ github.workspace }}/dist/autodoor" ]; then
+            echo "✓ Build successful: autodoor directory found"
+            ls -la "${{ github.workspace }}/dist/autodoor/"
+        else
+            echo "✗ Build failed: no output found"
+            exit 1
+        fi
     
     - name: Archive macOS build
       uses: actions/upload-artifact@v4
       with:
         name: autodoor-macos
-        # 修正路径：macOS下使用BUNDLE会生成.app包
         path: |
           dist/AutoDoor.app/
           dist/autodoor/
@@ -138,11 +177,9 @@ jobs:
     - name: Get current version from autodoor.py
       id: get_version
       run: |
-        # 从autodoor.py中提取版本号
         VERSION=$(grep -oP 'VERSION\s*=\s*"\K[0-9]+\.[0-9]+\.[0-9]+' autodoor.py | tail -n 1 || echo "")
         
         if [[ -z "$VERSION" ]]; then
-          # 如果无法提取，使用标签中的版本号
           VERSION=$(git tag -l "v*" | sort -V | tail -n 1 | sed 's/^v//' || echo "0.0.0")
         fi
         
@@ -159,13 +196,11 @@ jobs:
         echo "当前版本：$CURRENT_TAG"
         echo "Autodoor标签：$AUTODOOR_TAG"
         
-        # 检查autodoor_V格式的标签是否存在
         TAG_EXISTS=$(git tag -l "$AUTODOOR_TAG" | wc -l)
         
         if [[ "$TAG_EXISTS" == "0" ]]; then
           echo "标签不存在，需要创建"
           echo "CREATE_TAG=true" >> $GITHUB_OUTPUT
-          echo "创建的标签：$AUTODOOR_TAG"
         else
           echo "标签已存在，跳过创建"
           echo "CREATE_TAG=false" >> $GITHUB_OUTPUT
@@ -174,7 +209,6 @@ jobs:
     - name: Create tag if needed
       if: steps.check_tag.outputs.CREATE_TAG == 'true'
       run: |
-        # 配置Git用户信息（必须否则无法创建标签）
         git config --global user.email "61274520+wdhq4261761@users.noreply.github.com"
         git config --global user.name "wdhq4261761"
         
@@ -197,22 +231,18 @@ jobs:
     
     - name: Create zip archives
       run: |
-        # 创建Windows和macOS的zip包
         zip -r autodoor-windows-${{ steps.get_version.outputs.VERSION }}.zip windows-build/
-        # 对于macOS，确保包含.app包和可执行文件
         zip -r autodoor-macos-${{ steps.get_version.outputs.VERSION }}.zip macos-build/
     
     - name: Read update content
       id: read_update_content
       run: |
-        # 读取UPDATE_CONTENT.md文件内容
         if [ -f "UPDATE_CONTENT.md" ]; then
           UPDATE_CONTENT=$(cat UPDATE_CONTENT.md)
           echo "UPDATE_CONTENT<<EOF" >> $GITHUB_OUTPUT
           echo "$UPDATE_CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
         else
-          # 如果文件不存在，使用默认内容
           DEFAULT_CONTENT="AutoDoor OCR 识别系统自动构建版本\n- Windows版本：autodoor-windows-${{ steps.get_version.outputs.VERSION }}.zip\n- macOS版本：autodoor-macos-${{ steps.get_version.outputs.VERSION }}.zip"
           echo "UPDATE_CONTENT<<EOF" >> $GITHUB_OUTPUT
           echo "$DEFAULT_CONTENT" >> $GITHUB_OUTPUT

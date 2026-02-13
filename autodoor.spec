@@ -104,6 +104,56 @@ a = Analysis(
     binaries=binaries,
     datas=data_files,
     hiddenimports=[
+        # 核心模块
+        'core',
+        'core.config',
+        'core.controller',
+        'core.events',
+        'core.logging',
+        'core.platform',
+        'core.proxy',
+        'core.threading',
+        'core.utils',
+        
+        # UI模块
+        'ui',
+        'ui.basic_tab',
+        'ui.builder',
+        'ui.home',
+        'ui.number_tab',
+        'ui.ocr_tab',
+        'ui.script_tab',
+        'ui.styles',
+        'ui.timed_tab',
+        'ui.utils',
+        'ui.validators',
+        
+        # 功能模块
+        'modules',
+        'modules.alarm',
+        'modules.color',
+        'modules.input',
+        'modules.number',
+        'modules.ocr',
+        'modules.recorder',
+        'modules.script',
+        'modules.timed',
+        
+        # 输入控制模块
+        'input',
+        'input.controller',
+        'input.keyboard',
+        'input.permissions',
+        
+        # 工具模块
+        'utils',
+        'utils.image',
+        'utils.keyboard',
+        'utils.region',
+        'utils.tesseract',
+        'utils.version',
+        
+        # 第三方库
         'pygame',
         'pygame.mixer',
         'pygame.mixer.music',
@@ -126,6 +176,7 @@ a = Analysis(
         'numpy.core',
         'numpy.core.multiarray',
         'six',
+        'imagehash',
     ],
     hookspath=[],
     hooksconfig={},

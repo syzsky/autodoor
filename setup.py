@@ -1,36 +1,54 @@
 from setuptools import setup, find_packages
 import os
+import re
 
-# 读取requirements.txt文件
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
-# 获取项目根目录
 project_root = os.path.abspath(os.path.dirname(__file__))
 
-# 获取tesseract目录的路径
+def get_version():
+    """从autodoor.py中读取版本号"""
+    version_file = os.path.join(project_root, 'autodoor.py')
+    with open(version_file, encoding='utf-8') as f:
+        content = f.read()
+    match = re.search(r'VERSION\s*=\s*["\']([^"\']+)["\']', content)
+    if match:
+        return match.group(1)
+    return '0.0.0'
+
+version = get_version()
+
 tesseract_dir = os.path.join(project_root, 'tesseract')
 
-# 收集tesseract目录下的所有文件
 tesseract_files = []
 if os.path.exists(tesseract_dir):
     for root, _, files in os.walk(tesseract_dir):
         for file in files:
             file_path = os.path.join(root, file)
-            # 计算相对路径
             relative_path = os.path.relpath(file_path, project_root)
             tesseract_files.append(relative_path)
 
+voice_files = []
+voice_dir = os.path.join(project_root, 'voice')
+if os.path.exists(voice_dir):
+    for file in os.listdir(voice_dir):
+        if file.endswith('.mp3'):
+            voice_files.append(os.path.join('voice', file))
+
 setup(
     name='autodoor-ocr',
-    version='1.0.0',
-    description='AutoDoor OCR 识别系统',
+    version=version,
+    description='AutoDoor OCR 识别系统 - 模块化架构版本',
     author='AutoDoor Team',
-    packages=find_packages(),
+    packages=find_packages(exclude=['tests', 'tests.*']),
     install_requires=requirements,
+    package_data={
+        '': ['*.mp3'],
+    },
     data_files=[
-        ('tesseract', tesseract_files),
-        ('voice', ['voice/alarm.mp3'])
+        ('tesseract', tesseract_files) if tesseract_files else (),
+        ('voice', [os.path.join('voice', f) for f in os.listdir('voice') if f.endswith('.mp3')]) if os.path.exists('voice') else (),
     ],
     entry_points={
         'console_scripts': [
@@ -41,6 +59,8 @@ setup(
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
+        'Operating System :: Microsoft :: Windows',
+        'Operating System :: MacOS',
     ],
-    python_requires='>=3.7',
+    python_requires='>=3.10',
 )
