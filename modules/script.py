@@ -65,13 +65,12 @@ class ScriptModule:
         
         self.app.script_executor.start_recording()
         if hasattr(self.app, 'record_btn'):
-            self.app.record_btn.config(text="录制中...", state="disabled")
+            self.app.record_btn.configure(text="录制中...", state="disabled")
         if hasattr(self.app, 'stop_record_btn'):
-            self.app.stop_record_btn.config(state="normal")
+            self.app.stop_record_btn.configure(state="normal")
         if hasattr(self.app, 'status_labels') and "script" in self.app.status_labels:
             self.app.status_labels["script"].set("脚本运行: 录制中")
         self.app.status_var.set("录制中...")
-        # 播放开始运行音效
         self.app.alarm_module.play_start_sound()
 
     def stop_recording(self):
@@ -79,13 +78,12 @@ class ScriptModule:
         if hasattr(self.app, 'script_executor'):
             self.app.script_executor.stop_recording()
             if hasattr(self.app, 'record_btn'):
-                self.app.record_btn.config(text="开始录制", state="normal")
+                self.app.record_btn.configure(text="开始录制", state="normal")
             if hasattr(self.app, 'stop_record_btn'):
-                self.app.stop_record_btn.config(state="disabled")
+                self.app.stop_record_btn.configure(state="disabled")
             if hasattr(self.app, 'status_labels') and "script" in self.app.status_labels:
                 self.app.status_labels["script"].set("脚本运行: 未运行")
             self.app.status_var.set("录制已停止")
-            # 播放停止运行音效
             self.app.alarm_module.play_stop_sound()
 
 class ScriptExecutor(RecorderBase):

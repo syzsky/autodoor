@@ -24,29 +24,32 @@ class LoggingManager:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_entry = f"[{timestamp}] {message}\n"
 
-        # 写入日志文件
         try:
             with open(self.app.log_file_path, 'a', encoding='utf-8') as f:
                 f.write(log_entry)
         except Exception as e:
             print(f"写入日志文件失败: {str(e)}")
 
-        # 写入首页的日志文本框
         if hasattr(self.app, 'home_log_text'):
-            self.app.home_log_text.config(state=tk.NORMAL)
-            self.app.home_log_text.insert(tk.END, log_entry)
-            self.app.home_log_text.see(tk.END)
-            self.app.home_log_text.config(state=tk.DISABLED)
+            try:
+                self.app.home_log_text.configure(state='normal')
+                self.app.home_log_text.insert(tk.END, log_entry)
+                self.app.home_log_text.see(tk.END)
+                self.app.home_log_text.configure(state='disabled')
+            except Exception as e:
+                print(f"写入日志文本框失败: {str(e)}")
 
-        # 更新状态标签（仅当status_var已创建）
         if hasattr(self.app, 'status_var'):
             self.app.status_var.set(message.split(":")[0] if ":" in message else message)
 
     def clear_log(self):
         """清除日志"""
         if hasattr(self.app, 'home_log_text'):
-            self.app.home_log_text.config(state=tk.NORMAL)
-            self.app.home_log_text.delete("1.0", tk.END)
-            self.app.home_log_text.config(state=tk.DISABLED)
+            try:
+                self.app.home_log_text.configure(state='normal')
+                self.app.home_log_text.delete("1.0", tk.END)
+                self.app.home_log_text.configure(state='disabled')
+            except Exception as e:
+                print(f"清除日志失败: {str(e)}")
 
         self.log_message("已清除日志")

@@ -1,86 +1,86 @@
+import customtkinter as ctk
 import tkinter as tk
-from tkinter import ttk
+from ui.theme import Theme
+from ui.widgets import CardFrame, AnimatedButton, create_section_title, create_divider
 
 
-def create_home_tab(parent, app):
-    """创建首页标签页"""
-    home_frame = ttk.Frame(parent, padding="20")
-    home_frame.pack(fill=tk.BOTH, expand=True)
-
-    # 功能状态显示
-    status_frame = ttk.LabelFrame(home_frame, text="功能状态", padding="15")
-    status_frame.pack(fill=tk.X, pady=(0, 10))
-
-    # 状态标签和勾选框
+def create_home_tab(app):
+    page = ctk.CTkFrame(app.content_area, fg_color='transparent')
+    app.pages['home'] = page
+    
+    status_card = CardFrame(page)
+    status_card.pack(fill='x', pady=(0, 12))
+    
+    status_header = ctk.CTkFrame(status_card, fg_color='transparent')
+    status_header.pack(fill='x', padx=12, pady=(10, 6))
+    create_section_title(status_header, '功能状态', level=1).pack(side='left')
+    
+    btn_row_header = ctk.CTkFrame(status_header, fg_color='transparent')
+    btn_row_header.pack(side='right')
+    
+    app.global_start_btn = AnimatedButton(btn_row_header, text='▶ 开始运行', font=Theme.get_font('xs'), 
+                                          width=80, height=28, corner_radius=6,
+                                          fg_color=Theme.COLORS['success'], hover_color='#16A34A',
+                                          command=app.start_all)
+    app.global_start_btn.pack(side='left', padx=(0, 6))
+    
+    app.global_stop_btn = AnimatedButton(btn_row_header, text='⏹ 停止运行', font=Theme.get_font('xs'), 
+                                         width=80, height=28, corner_radius=6,
+                                         fg_color=Theme.COLORS['error'], hover_color='#DC2626',
+                                         command=app.stop_all)
+    app.global_stop_btn.pack(side='left')
+    
+    create_divider(status_card)
+    
     app.status_labels = {
         "ocr": tk.StringVar(value="文字识别: 未运行"),
         "timed": tk.StringVar(value="定时功能: 未运行"),
         "number": tk.StringVar(value="数字识别: 未运行"),
         "script": tk.StringVar(value="脚本运行: 未运行")
     }
-
-    # 勾选框变量
+    
     app.module_check_vars = {
         "ocr": tk.BooleanVar(value=True),
         "timed": tk.BooleanVar(value=True),
         "number": tk.BooleanVar(value=True),
         "script": tk.BooleanVar(value=True)
     }
-
-    # 保存Checkbutton组件引用
-    app.module_check_buttons = {}
-
-    # 模块名称映射
+    
     module_names = {
         "ocr": "文字识别",
         "timed": "定时功能",
         "number": "数字识别",
         "script": "脚本运行"
     }
-
-    # 创建带勾选框的状态行
-    for module, var in app.status_labels.items():
-        row_frame = ttk.Frame(status_frame)
-        row_frame.pack(fill=tk.X, pady=2)  # 减少行间隔
-
-        # 勾选框
-        check_btn = ttk.Checkbutton(row_frame, variable=app.module_check_vars[module])
-        check_btn.pack(side=tk.LEFT, padx=(0, 10))
-        app.module_check_buttons[module] = check_btn
-
-        # 状态标签 - 左对齐并填充可用空间，确保文本完整显示
-        ttk.Label(row_frame, textvariable=var, anchor=tk.W).pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-    # 全局控制按钮 - 重新定位至功能状态区域下方
-    control_frame = ttk.Frame(status_frame)
-    control_frame.pack(fill=tk.X, pady=(10, 0))
-
-    # 开始/结束按钮
-    app.global_start_btn = ttk.Button(control_frame, text="开始运行", command=app.start_all, style="TButton")
-    app.global_start_btn.pack(side=tk.LEFT, padx=(0, 15), fill=tk.X, expand=True)
-
-    app.global_stop_btn = ttk.Button(control_frame, text="停止运行", command=app.stop_all, style="TButton", state="disabled")
-    app.global_stop_btn.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-
-
-    # 日志展示模块 - 添加到首页功能状态模块下方
-    log_frame = ttk.LabelFrame(home_frame, text="运行日志", padding="15")
-    log_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-
-    # 日志显示区域
-    log_display_frame = ttk.Frame(log_frame)
-    log_display_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-
-    # 日志文本框 - 限制最大高度
-    app.home_log_text = tk.Text(log_display_frame, height=10, width=80, font=("Arial", 9), state=tk.DISABLED)
-    app.home_log_text.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
-
-    # 日志滚动条
-    home_log_scrollbar = ttk.Scrollbar(log_display_frame, orient=tk.VERTICAL, command=app.home_log_text.yview)
-    home_log_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-    app.home_log_text.configure(yscrollcommand=home_log_scrollbar.set)
-
-    # 清除日志按钮 - 放置在日志展示窗口下方，固定宽度
-    home_clear_btn = ttk.Button(log_frame, text="清除日志", command=app.clear_log, width=12)
-    home_clear_btn.pack(side=tk.RIGHT, pady=0)
+    
+    for module, name in module_names.items():
+        row = ctk.CTkFrame(status_card, fg_color='transparent')
+        row.pack(fill='x', padx=12, pady=4)
+        
+        ctk.CTkLabel(row, text=name, font=Theme.get_font('sm')).pack(side='left')
+        
+        indicator = ctk.CTkLabel(row, text='●', font=('Arial', 12), text_color='#9CA3AF')
+        indicator.pack(side='left', padx=(8, 0))
+        app.module_indicators[module] = indicator
+        
+        switch = ctk.CTkSwitch(row, text='', width=36, variable=app.module_check_vars[module])
+        switch.pack(side='right')
+        app.module_switches[module] = switch
+    
+    ctk.CTkFrame(status_card, height=8, fg_color='transparent').pack()
+    
+    log_card = CardFrame(page)
+    log_card.pack(fill='both', expand=True)
+    
+    log_header = ctk.CTkFrame(log_card, fg_color='transparent')
+    log_header.pack(fill='x', padx=12, pady=(10, 6))
+    create_section_title(log_header, '运行日志', level=1).pack(side='left')
+    
+    app.home_log_text = ctk.CTkTextbox(log_card, font=('Consolas', 10), height=150)
+    app.home_log_text.pack(fill='both', expand=True, padx=12, pady=(0, 8))
+    
+    clear_btn = AnimatedButton(log_card, text='清除日志', font=Theme.get_font('xs'), width=70,
+                               fg_color='transparent', text_color=Theme.COLORS['primary'],
+                               hover_color=Theme.COLORS['info_light'], border_width=1, corner_radius=4,
+                               command=app.clear_log)
+    clear_btn.pack(side='right', padx=12, pady=(0, 10))

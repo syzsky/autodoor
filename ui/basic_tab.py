@@ -1,113 +1,109 @@
+import customtkinter as ctk
 import tkinter as tk
-from tkinter import ttk
 from modules.alarm import select_alarm_sound
+from ui.theme import Theme
+from ui.widgets import CardFrame, AnimatedButton, create_section_title, create_divider
 
 
-def create_basic_tab(parent, app):
-    """创建基本设置标签页"""
-    # 基本设置区域
-    basic_frame = ttk.Frame(parent, padding="10")
-    basic_frame.pack(fill=tk.BOTH, expand=True)
-
-    # Tesseract配置
-    tesseract_frame = ttk.LabelFrame(basic_frame, text="Tesseract配置", padding="10")
-    tesseract_frame.pack(fill=tk.X, pady=(0, 10))
-
-    # Tesseract路径
-    path_label = ttk.Label(tesseract_frame, text="Tesseract路径:")
-    path_label.pack(anchor=tk.W, pady=(0, 5))
-
-    path_frame = ttk.Frame(tesseract_frame)
-    path_frame.pack(fill=tk.X, pady=(0, 10))
-
+def create_basic_tab(app):
+    page = ctk.CTkFrame(app.content_area, fg_color='transparent')
+    app.pages['settings'] = page
+    
+    scroll_frame = ctk.CTkScrollableFrame(page)
+    scroll_frame.pack(fill='both', expand=True)
+    
+    tess_frame = CardFrame(scroll_frame, fg_color='#ffffff', border_width=1, border_color=Theme.COLORS['border'])
+    tess_frame.pack(fill='x', pady=(0, 10))
+    
+    tess_header = ctk.CTkFrame(tess_frame, fg_color='transparent')
+    tess_header.pack(fill='x', padx=12, pady=(10, 6))
+    create_section_title(tess_header, 'Tesseract OCR 设置', level=1).pack(side='left')
+    
+    create_divider(tess_frame)
+    
+    tess_row = ctk.CTkFrame(tess_frame, fg_color='transparent')
+    tess_row.pack(fill='x', padx=12, pady=(4, 10))
+    
+    ctk.CTkLabel(tess_row, text='路径:', font=Theme.get_font('sm')).pack(side='left')
+    
     app.tesseract_path_var = tk.StringVar(value=app.tesseract_path)
-    app.tesseract_path_entry = ttk.Entry(path_frame, textvariable=app.tesseract_path_var)
-    app.tesseract_path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-    app.set_path_btn = ttk.Button(path_frame, text="设置", command=app.set_tesseract_path)
-    app.set_path_btn.pack(side=tk.RIGHT)
-
-    # 报警声音设置
-    alarm_sound_frame = ttk.LabelFrame(basic_frame, text="报警声音设置", padding="10")
-    alarm_sound_frame.pack(fill=tk.X, pady=(10, 10))
-
-    # 报警声音文件选择
-    sound_file_frame = ttk.Frame(alarm_sound_frame)
-    sound_file_frame.pack(fill=tk.X, pady=(0, 10))
-
-    alarm_sound_label = ttk.Label(sound_file_frame, text="报警声音:", width=12, anchor=tk.W)
-    alarm_sound_label.pack(side=tk.LEFT, padx=(0, 10))
-
-    alarm_sound_entry = ttk.Entry(sound_file_frame, textvariable=app.alarm_sound_path, state="readonly", width=30)
-    alarm_sound_entry.pack(side=tk.LEFT, padx=(0, 10))
-
-    alarm_sound_btn = ttk.Button(sound_file_frame, text="选择", width=8,
-                               command=lambda: select_alarm_sound(app))
-    alarm_sound_btn.pack(side=tk.LEFT)
-
-    # 报警音量调节
-    volume_frame = ttk.Frame(alarm_sound_frame)
-    volume_frame.pack(fill=tk.X)
-    volume_label = ttk.Label(volume_frame, text="音量调节:", width=12, anchor=tk.W)
-    volume_label.pack(side=tk.LEFT, padx=(0, 10))
-
-    # 音量变化跟踪函数，确保显示为整数
+    app.tesseract_path_entry = ctk.CTkEntry(tess_row, textvariable=app.tesseract_path_var, height=28, state='disabled')
+    app.tesseract_path_entry.pack(side='left', fill='x', expand=True, padx=(6, 6))
+    
+    app.set_path_btn = AnimatedButton(tess_row, text='浏览', font=Theme.get_font('xs'), width=50, height=28,
+                                      corner_radius=4, fg_color=Theme.COLORS['primary'],
+                                      hover_color=Theme.COLORS['primary_hover'],
+                                      command=app.set_tesseract_path)
+    app.set_path_btn.pack(side='left')
+    
+    alarm_frame = CardFrame(scroll_frame, fg_color='#ffffff', border_width=1, border_color=Theme.COLORS['border'])
+    alarm_frame.pack(fill='x', pady=(0, 10))
+    
+    alarm_header = ctk.CTkFrame(alarm_frame, fg_color='transparent')
+    alarm_header.pack(fill='x', padx=12, pady=(10, 6))
+    create_section_title(alarm_header, '报警设置', level=1).pack(side='left')
+    
+    create_divider(alarm_frame)
+    
+    alarm_row1 = ctk.CTkFrame(alarm_frame, fg_color='transparent')
+    alarm_row1.pack(fill='x', padx=12, pady=4)
+    
+    ctk.CTkLabel(alarm_row1, text='声音:', font=Theme.get_font('sm')).pack(side='left')
+    
+    alarm_sound_entry = ctk.CTkEntry(alarm_row1, textvariable=app.alarm_sound_path, height=28, state='disabled')
+    alarm_sound_entry.pack(side='left', fill='x', expand=True, padx=(6, 6))
+    
+    alarm_sound_btn = AnimatedButton(alarm_row1, text='浏览', font=Theme.get_font('xs'), width=50, height=28,
+                                     corner_radius=4, fg_color=Theme.COLORS['primary'],
+                                     hover_color=Theme.COLORS['primary_hover'],
+                                     command=lambda: select_alarm_sound(app))
+    alarm_sound_btn.pack(side='left')
+    
+    alarm_row2 = ctk.CTkFrame(alarm_frame, fg_color='transparent')
+    alarm_row2.pack(fill='x', padx=12, pady=(4, 10))
+    
+    ctk.CTkLabel(alarm_row2, text='音量:', font=Theme.get_font('sm')).pack(side='left')
+    
     def update_volume_display(*args):
         app.alarm_volume_str.set(str(app.alarm_volume.get()))
-
-    # 绑定音量变化事件
+    
     app.alarm_volume.trace_add("write", update_volume_display)
-
-    volume_scale = ttk.Scale(volume_frame, from_=0, to=100, orient=tk.HORIZONTAL, variable=app.alarm_volume, length=200)
-    volume_scale.pack(side=tk.LEFT, padx=(0, 10))
-
-    volume_value_label = ttk.Label(volume_frame, textvariable=app.alarm_volume_str, width=3)
-    volume_value_label.pack(side=tk.LEFT)
-
-    volume_percent_label = ttk.Label(volume_frame, text="%")
-    volume_percent_label.pack(side=tk.LEFT)
-
-    # 快捷键设置 - 从首页迁移
-    shortcut_frame = ttk.LabelFrame(basic_frame, text="快捷键设置", padding="10")
-    shortcut_frame.pack(fill=tk.X, pady=(10, 10))
-
-    # 单行布局
-    shortcut_row = ttk.Frame(shortcut_frame)
-    shortcut_row.pack(fill=tk.X, pady=5)
-
-    # 开始快捷键
-    ttk.Label(shortcut_row, text="开始运行:", width=10, anchor=tk.W).pack(side=tk.LEFT, padx=(0, 10))
-    app.start_shortcut_var = tk.StringVar(value="F10")
-    start_shortcut_label = ttk.Label(shortcut_row, textvariable=app.start_shortcut_var, relief="sunken", padding=5, width=6)
-    start_shortcut_label.pack(side=tk.LEFT, padx=(0, 5))
-    app.set_start_shortcut_btn = ttk.Button(shortcut_row, text="修改", width=8)
-    app.set_start_shortcut_btn.pack(side=tk.LEFT, padx=(0, 20))
+    
+    volume_slider = ctk.CTkSlider(alarm_row2, from_=0, to=100, variable=app.alarm_volume, width=200)
+    volume_slider.pack(side='left', padx=(6, 6))
+    
+    volume_label = ctk.CTkLabel(alarm_row2, textvariable=app.alarm_volume_str, font=Theme.get_font('sm'), width=40)
+    volume_label.pack(side='left')
+    
+    shortcut_frame = CardFrame(scroll_frame, fg_color='#ffffff', border_width=1, border_color=Theme.COLORS['border'])
+    shortcut_frame.pack(fill='x', pady=(0, 10))
+    
+    shortcut_header = ctk.CTkFrame(shortcut_frame, fg_color='transparent')
+    shortcut_header.pack(fill='x', padx=12, pady=(10, 6))
+    create_section_title(shortcut_header, '快捷键设置', level=1).pack(side='left')
+    
+    create_divider(shortcut_frame)
+    
+    shortcuts = [('开始运行:', 'F10', 'start_shortcut_var'), ('停止运行:', 'F12', 'stop_shortcut_var'), ('录制按钮:', 'F11', 'record_hotkey_var')]
+    
     from utils.keyboard import start_key_listening
-    app.set_start_shortcut_btn.config(command=lambda: start_key_listening(app, app.start_shortcut_var, app.set_start_shortcut_btn))
-
-    # 结束快捷键
-    ttk.Label(shortcut_row, text="结束运行:", width=10, anchor=tk.W).pack(side=tk.LEFT, padx=(0, 10))
-    app.stop_shortcut_var = tk.StringVar(value="F12")
-    stop_shortcut_label = ttk.Label(shortcut_row, textvariable=app.stop_shortcut_var, relief="sunken", padding=5, width=6)
-    stop_shortcut_label.pack(side=tk.LEFT, padx=(0, 5))
-    app.set_stop_shortcut_btn = ttk.Button(shortcut_row, text="修改", width=8)
-    app.set_stop_shortcut_btn.pack(side=tk.LEFT, padx=(0, 20))
-    app.set_stop_shortcut_btn.config(command=lambda: start_key_listening(app, app.stop_shortcut_var, app.set_stop_shortcut_btn))
-
-    # 录制快捷键
-    ttk.Label(shortcut_row, text="录制按钮:", width=10, anchor=tk.W).pack(side=tk.LEFT, padx=(0, 10))
-    app.record_hotkey_var = tk.StringVar(value="F11")
-    record_shortcut_label = ttk.Label(shortcut_row, textvariable=app.record_hotkey_var, relief="sunken", padding=5, width=6)
-    record_shortcut_label.pack(side=tk.LEFT, padx=(0, 5))
-    app.set_record_shortcut_btn = ttk.Button(shortcut_row, text="修改", width=8)
-    app.set_record_shortcut_btn.pack(side=tk.LEFT)
-    app.set_record_shortcut_btn.config(command=lambda: start_key_listening(app, app.record_hotkey_var, app.set_record_shortcut_btn))
-
-    # 配置管理
-    config_frame = ttk.Frame(basic_frame)
-    config_frame.pack(fill=tk.X, pady=(0, 10))
-
-    save_btn = ttk.Button(config_frame, text="保存配置", command=app.save_config)
-    save_btn.pack(side=tk.LEFT, padx=(0, 10))
-
-    reset_btn = ttk.Button(config_frame, text="重置配置", command=app.config_manager.load_config)
-    reset_btn.pack(side=tk.LEFT)
+    
+    for label, default, var_name in shortcuts:
+        row = ctk.CTkFrame(shortcut_frame, fg_color='transparent')
+        row.pack(fill='x', padx=12, pady=4)
+        
+        ctk.CTkLabel(row, text=label, font=Theme.get_font('sm')).pack(side='left')
+        
+        var = tk.StringVar(value=default)
+        setattr(app, var_name, var)
+        
+        entry = ctk.CTkEntry(row, width=80, height=24, state='disabled')
+        entry.insert(0, default)
+        entry.pack(side='left', padx=(6, 2))
+        
+        btn = AnimatedButton(row, text='修改', font=Theme.get_font('xs'), width=24, height=24, corner_radius=4,
+                            fg_color=Theme.COLORS['text_muted'], hover_color=Theme.COLORS['text_secondary'])
+        btn.configure(command=lambda e=entry, b=btn: start_key_listening(app, e, b))
+        btn.pack(side='left')
+    
+    ctk.CTkFrame(shortcut_frame, height=6, fg_color='transparent').pack()

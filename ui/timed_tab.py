@@ -1,81 +1,41 @@
+import customtkinter as ctk
 import tkinter as tk
-from tkinter import ttk
-from ui.utils import update_group_style, setup_group_click_handler, bind_mousewheel_to_widgets, on_mousewheel, configure_scroll_region
-from core.utils import delete_group_by_button, delete_group, add_group
+from ui.theme import Theme
+from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_divider
 
 
-# 从ui.builder导入UIBuilder
-from ui.builder import UIBuilder
-
-
-def create_timed_tab(parent, app):
-    """创建定时功能标签页"""
-    timed_frame = ttk.Frame(parent, padding="10")
-    timed_frame.pack(fill=tk.BOTH, expand=True)
-
-    # 顶部按钮栏
-    top_frame = ttk.Frame(timed_frame)
-    top_frame.pack(fill=tk.X, pady=(0, 10))
-
-    app.add_timed_group_btn = ttk.Button(top_frame, text="新增定时组", command=app.timed.add_group)
-    app.add_timed_group_btn.pack(side=tk.LEFT)
-
-    # 定时组容器，带滚动条
-    groups_container = ttk.Frame(timed_frame)
-    groups_container.pack(fill=tk.BOTH, expand=True)
-
-    # 垂直滚动条
-    groups_scrollbar = ttk.Scrollbar(groups_container, orient=tk.VERTICAL)
-    groups_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-    # 画布，用于实现滚动
-    groups_canvas = tk.Canvas(groups_container, yscrollcommand=groups_scrollbar.set, highlightthickness=0)
-    groups_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-    groups_scrollbar.config(command=groups_canvas.yview)
-
-    # 内部容器，用于放置所有定时组
-    app.timed_groups_frame = ttk.Frame(groups_canvas)
-    groups_canvas.create_window((0, 0), window=app.timed_groups_frame, anchor="nw", tags="inner_frame")
-
-    # 配置画布尺寸和滚动区域
-    def configure_scroll_region_handler(event):
-        configure_scroll_region(event, groups_canvas, "inner_frame")
-
-    groups_canvas.bind("<Configure>", configure_scroll_region_handler)
-    app.timed_groups_frame.bind("<Configure>", configure_scroll_region_handler)
-
-    # 为画布绑定鼠标滚轮事件
-    groups_canvas.bind("<MouseWheel>", lambda event: on_mousewheel(event, groups_canvas))
-
-    # 为内部框架绑定鼠标滚轮事件
-    app.timed_groups_frame.bind("<MouseWheel>", lambda event: on_mousewheel(event, groups_canvas))
-
-    # 为整个标签页绑定鼠标滚轮事件
-    timed_frame.bind("<MouseWheel>", lambda event: on_mousewheel(event, groups_canvas))
-
-    # 保存定时功能的画布和框架引用
-    app.timed_canvas = groups_canvas
-    app.timed_frame = timed_frame
-    app.timed_groups_container = groups_container
-
-    # 定时组配置
+def create_timed_tab(app):
+    page = ctk.CTkFrame(app.content_area, fg_color='transparent')
+    app.pages['timed'] = page
+    
+    top_frame = ctk.CTkFrame(page, fg_color='transparent')
+    top_frame.pack(fill='x', pady=(0, 10))
+    
+    app.add_timed_group_btn = AnimatedButton(top_frame, text='+ 新增定时组', font=Theme.get_font('sm'),
+                                             height=28, corner_radius=6,
+                                             fg_color=Theme.COLORS['primary'],
+                                             hover_color=Theme.COLORS['primary_hover'],
+                                             command=lambda: add_timed_group(app))
+    app.add_timed_group_btn.pack(side='left')
+    
+    scroll_frame = ctk.CTkScrollableFrame(page)
+    scroll_frame.pack(fill='both', expand=True)
+    
+    app.timed_groups_frame = scroll_frame
     app.timed_groups = []
+    
     for i in range(3):
         create_timed_group(app, i)
 
-    # 绑定所有定时组的鼠标滚轮事件
-    bind_mousewheel_to_widgets(groups_canvas, [group["frame"] for group in app.timed_groups])
-
 
 def create_timed_group(app, index):
-    """创建单个定时组，所有UI元素布局在一行中"""
-    # 启用状态变量
     enabled_var = tk.BooleanVar(value=False)
     
-    # 创建变量字典
+    default_keys = ["space", "enter", "tab", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"]
+    
     group_vars = {
-        "interval_var": tk.IntVar(value=10*(index+1)),
-        "key_var": tk.StringVar(value=["space", "enter", "tab", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"][index % 15]),
+        "interval_var": tk.IntVar(value=10 * (index + 1)),
+        "key_var": tk.StringVar(value=default_keys[index % len(default_keys)]),
         "delay_min_var": tk.IntVar(value=300),
         "delay_max_var": tk.IntVar(value=500),
         "alarm_var": tk.BooleanVar(value=False),
@@ -83,67 +43,118 @@ def create_timed_group(app, index):
         "position_var": tk.StringVar(value="未选择位置")
     }
     
-    # 命令映射
-    command_map = {
-        "select_position": lambda: app.timed_module.start_timed_position_selection(index)
-    }
+    group_frame = CardFrame(app.timed_groups_frame, fg_color='#ffffff', border_width=1, border_color=Theme.COLORS['border'])
+    group_frame.pack(fill='x', pady=(0, 10))
     
-    # 使用声明式UI构建
-    group_frame = UIBuilder.build_module(app.timed_groups_frame, "timed", index, app, command_map, group_vars)
-
-    # 设置组点击事件和样式更新
-    setup_group_click_handler(app, group_frame, enabled_var)
-
-    # 初始应用样式
-    update_group_style(group_frame, enabled_var.get())
-
-    # 添加删除按钮
-    row1_frame = group_frame.winfo_children()[0]
-    delete_btn = UIBuilder.add_button(row1_frame, "删除", None, side=tk.RIGHT, width=6)
-    delete_btn.config(command=lambda btn=delete_btn: delete_timed_group_by_button(app, btn))
-
-    # 保存组配置
+    header = ctk.CTkFrame(group_frame, fg_color='transparent')
+    header.pack(fill='x', padx=10, pady=(8, 4))
+    
+    title_label = ctk.CTkLabel(header, text=f'定时组 {index + 1}', font=Theme.get_font('base'))
+    title_label.pack(side='left')
+    
+    switch = ctk.CTkSwitch(header, text='', width=36, variable=enabled_var,
+                          command=lambda: toggle_group_bg(group_frame, enabled_var.get()))
+    switch.pack(side='left', padx=(8, 0))
+    
+    delete_btn = AnimatedButton(header, text='删除', font=Theme.get_font('xs'), width=50, height=22,
+                               fg_color=Theme.COLORS['error'], hover_color='#DC2626', corner_radius=4,
+                               command=lambda: delete_timed_group(app, group_frame))
+    delete_btn.pack(side='right')
+    
+    create_divider(group_frame)
+    
+    row1 = ctk.CTkFrame(group_frame, fg_color='transparent')
+    row1.pack(fill='x', padx=10, pady=(4, 8))
+    
+    ctk.CTkLabel(row1, text='间隔:', font=Theme.get_font('xs')).pack(side='left')
+    interval_entry = NumericEntry(row1, textvariable=group_vars["interval_var"], width=35, height=24)
+    interval_entry.pack(side='left', padx=(2, 2))
+    ctk.CTkLabel(row1, text='秒', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
+    
+    ctk.CTkLabel(row1, text='按键:', font=Theme.get_font('xs')).pack(side='left')
+    key_entry = ctk.CTkEntry(row1, textvariable=group_vars["key_var"], width=50, height=24, state='disabled')
+    key_entry.pack(side='left', padx=(2, 2))
+    
+    from utils.keyboard import start_key_listening
+    key_btn = AnimatedButton(row1, text='修改', font=Theme.get_font('xs'), width=24, height=24, corner_radius=4,
+                            fg_color=Theme.COLORS['text_muted'], hover_color=Theme.COLORS['text_secondary'])
+    key_btn.configure(command=lambda: start_key_listening(app, key_entry, key_btn))
+    key_btn.pack(side='left', padx=(0, 8))
+    
+    ctk.CTkLabel(row1, text='时长:', font=Theme.get_font('xs')).pack(side='left')
+    delay_min_entry = NumericEntry(row1, textvariable=group_vars["delay_min_var"], width=35, height=24)
+    delay_min_entry.pack(side='left', padx=(2, 2))
+    ctk.CTkLabel(row1, text='-', font=Theme.get_font('xs')).pack(side='left')
+    delay_max_entry = NumericEntry(row1, textvariable=group_vars["delay_max_var"], width=35, height=24)
+    delay_max_entry.pack(side='left', padx=(2, 2))
+    ctk.CTkLabel(row1, text='ms', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
+    
+    click_frame = ctk.CTkFrame(row1, fg_color='transparent')
+    click_frame.pack(side='left')
+    ctk.CTkLabel(click_frame, text='点击', font=Theme.get_font('xs')).pack(side='left', padx=(0, 2))
+    ctk.CTkSwitch(click_frame, text='', width=36, variable=group_vars["click_enabled_var"]).pack(side='left', padx=(0, 6))
+    
+    pos_btn = AnimatedButton(row1, text='位置', font=Theme.get_font('xs'), width=40, height=24, corner_radius=4,
+                            fg_color=Theme.COLORS['primary'], hover_color=Theme.COLORS['primary_hover'],
+                            command=lambda: start_timed_position_selection(app, index))
+    pos_btn.pack(side='left', padx=(0, 4))
+    pos_entry = ctk.CTkEntry(row1, textvariable=group_vars["position_var"], width=80, height=24, state='disabled')
+    pos_entry.pack(side='left', padx=(0, 8))
+    
+    alarm_frame = ctk.CTkFrame(row1, fg_color='transparent')
+    alarm_frame.pack(side='left')
+    ctk.CTkLabel(alarm_frame, text='报警', font=Theme.get_font('xs')).pack(side='left', padx=(0, 2))
+    ctk.CTkSwitch(alarm_frame, text='', width=36, variable=group_vars["alarm_var"]).pack(side='left')
+    
     group_config = {
         "frame": group_frame,
         "enabled": enabled_var,
         "interval": group_vars["interval_var"],
-        "key": group_vars["key_var"],
+        "key": key_entry,
         "delay_min": group_vars["delay_min_var"],
         "delay_max": group_vars["delay_max_var"],
         "alarm": group_vars["alarm_var"],
         "click_enabled": group_vars["click_enabled_var"],
         "position_x": tk.IntVar(value=0),
         "position_y": tk.IntVar(value=0),
-        "position_var": group_vars["position_var"]
+        "position_var": group_vars["position_var"],
+        "title_label": title_label
     }
     app.timed_groups.append(group_config)
 
-    # 为新创建的定时组添加配置监听器
-    if hasattr(app, '_setup_timed_group_listeners'):
-        app._setup_timed_group_listeners(group_config)
 
-
-def delete_timed_group_by_button(app, button):
-    """通过按钮删除对应的定时组"""
-    delete_group_by_button(app, button, app.timed_groups, "定时组", lambda i: delete_timed_group(app, i))
-
-
-def delete_timed_group(app, index, confirm=True):
-    """删除定时组
-    Args:
-        index: 要删除的定时组索引
-        confirm: 是否显示确认对话框，默认为True
-    """
-    delete_group(app, index, app.timed_groups, "定时组", 1, lambda: renumber_timed_groups(app), "定时组", confirm)
-
-
-def renumber_timed_groups(app):
-    """重新编号所有定时组"""
-    for i, group in enumerate(app.timed_groups):
-        # 保持组名称前的空格，确保布局一致
-        group["frame"].configure(text=f"  定时组{i+1}")
+def toggle_group_bg(frame, enabled):
+    if enabled:
+        frame.configure(fg_color=Theme.COLORS['info_light'], border_color=Theme.COLORS['primary'])
+    else:
+        frame.configure(fg_color='#ffffff', border_color=Theme.COLORS['border'])
 
 
 def add_timed_group(app):
-    """新增定时组"""
-    add_group(app, app.timed_groups, 15, lambda i: create_timed_group(app, i), "定时组", "定时组")
+    if len(app.timed_groups) >= 15:
+        return
+    create_timed_group(app, len(app.timed_groups))
+
+
+def delete_timed_group(app, group_frame, confirm=True):
+    if confirm:
+        from tkinter import messagebox
+        if not messagebox.askyesno("确认删除", "确定要删除该定时组吗？"):
+            return
+    
+    for i, group in enumerate(app.timed_groups):
+        if group["frame"] == group_frame:
+            group["frame"].destroy()
+            app.timed_groups.pop(i)
+            renumber_timed_groups(app)
+            break
+
+
+def renumber_timed_groups(app):
+    for i, group in enumerate(app.timed_groups):
+        group["title_label"].configure(text=f'定时组 {i + 1}')
+
+
+def start_timed_position_selection(app, index):
+    if hasattr(app, 'timed_module') and hasattr(app.timed_module, 'start_timed_position_selection'):
+        app.timed_module.start_timed_position_selection(index)

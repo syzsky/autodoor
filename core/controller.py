@@ -1,7 +1,7 @@
 """
 模块控制器，负责统一管理各功能模块的启动和停止
 """
-from ui.utils import toggle_ui_state as ui_toggle_ui_state
+from ui.theme import Theme
 
 
 class ModuleController:
@@ -34,33 +34,41 @@ class ModuleController:
         else:
             self.app.logging_manager.log_message(f"未知模块: {module_name}")
 
+    def _update_indicator(self, module_key, is_running):
+        """更新模块指示灯状态"""
+        if hasattr(self.app, 'module_indicators') and module_key in self.app.module_indicators:
+            color = Theme.COLORS['success'] if is_running else '#9CA3AF'
+            self.app.module_indicators[module_key].configure(text_color=color)
+
     def start_all(self):
         """开始运行"""
         self.app.logging_manager.log_message("开始运行")
 
         self.app.system_stopped = False
 
-        for button in self.app.module_check_buttons.values():
-            button.configure(state="disabled")
+        if hasattr(self.app, 'module_switches'):
+            for switch in self.app.module_switches.values():
+                switch.configure(state="disabled")
 
         self.app.global_start_btn.configure(state="disabled")
-
-        for child in self.app.root.winfo_children():
-            ui_toggle_ui_state(child, "disabled", self.app.global_stop_btn)
 
         self.app.global_stop_btn.configure(state="normal")
 
         if self.app.module_check_vars["ocr"].get():
             self.app.ocr.start_monitoring()
+            self._update_indicator("ocr", True)
 
         if self.app.module_check_vars["timed"].get():
             self.app.timed_module.start_timed_tasks()
+            self._update_indicator("timed", True)
 
         if self.app.module_check_vars["number"].get():
             self.app.number_module.start_number_recognition()
+            self._update_indicator("number", True)
 
         if self.app.module_check_vars["script"].get():
             self.app.script.start()
+            self._update_indicator("script", True)
 
         self.app.alarm_module.play_start_sound()
         
@@ -74,10 +82,16 @@ class ModuleController:
         self.app.system_stopped = True
 
         self.app.ocr.stop_monitoring()
+        self._update_indicator("ocr", False)
+
         self.app.timed_module.stop_timed_tasks()
+        self._update_indicator("timed", False)
+
         self.app.number_module.stop_number_recognition()
+        self._update_indicator("number", False)
         
         self.app.script.stop(stop_color_recognition=False)
+        self._update_indicator("script", False)
         
         if hasattr(self.app, 'color_recognition_manager') and hasattr(self.app.color_recognition_manager, 'color_recognition'):
             cr = self.app.color_recognition_manager.color_recognition
@@ -91,16 +105,12 @@ class ModuleController:
 
         self.app.alarm_module.play_stop_sound()
 
-        for button in self.app.module_check_buttons.values():
-            button.configure(state="normal")
+        if hasattr(self.app, 'module_switches'):
+            for switch in self.app.module_switches.values():
+                switch.configure(state="normal")
 
         self.app.global_start_btn.configure(state="normal")
 
-        for child in self.app.root.winfo_children():
-            ui_toggle_ui_state(child, "normal", self.app.global_stop_btn)
-
-        self.app.global_start_btn.configure(state="normal")
-        
         self.app.global_stop_btn.configure(state="disabled")
         
         with self.app.state_lock:

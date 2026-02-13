@@ -5,28 +5,21 @@ import tkinter as tk
 
 from ui.ocr_tab import (
     create_ocr_tab, create_ocr_group, add_ocr_group,
-    delete_ocr_group_by_button, delete_ocr_group, renumber_ocr_groups,
+    delete_ocr_group, renumber_ocr_groups,
     start_ocr_region_selection
 )
 from ui.timed_tab import (
     create_timed_tab, create_timed_group, add_timed_group,
-    delete_timed_group_by_button, delete_timed_group, renumber_timed_groups
+    delete_timed_group, renumber_timed_groups
 )
 from ui.number_tab import (
     create_number_tab, create_number_region, add_number_region,
-    delete_number_region_by_button, delete_number_region, renumber_number_regions,
+    delete_number_region, renumber_number_regions,
     start_number_region_selection
 )
 from ui.script_tab import create_script_tab
 from ui.home import create_home_tab
-from ui.utils import (
-    show_message as ui_show_message,
-    show_progress as ui_show_progress,
-    hide_progress as ui_hide_progress,
-    update_group_style,
-    create_group_frame,
-    setup_group_click_handler
-)
+from ui.basic_tab import create_basic_tab
 
 
 class OCRProxy:
@@ -37,7 +30,7 @@ class OCRProxy:
     
     def create_tab(self, parent):
         """创建文字识别标签页"""
-        create_ocr_tab(parent, self.app)
+        create_ocr_tab(self.app)
     
     def create_group(self, index):
         """创建单个文字识别组"""
@@ -49,7 +42,7 @@ class OCRProxy:
     
     def delete_group_by_button(self, button):
         """通过按钮删除对应的文字识别组"""
-        delete_ocr_group_by_button(self.app, button)
+        pass
     
     def delete_group(self, index, confirm=True):
         """删除文字识别组"""
@@ -80,7 +73,7 @@ class TimedProxy:
     
     def create_tab(self, parent):
         """创建定时功能标签页"""
-        create_timed_tab(parent, self.app)
+        create_timed_tab(self.app)
     
     def create_group(self, index):
         """创建单个定时组"""
@@ -92,7 +85,7 @@ class TimedProxy:
     
     def delete_group_by_button(self, button):
         """通过按钮删除对应的定时组"""
-        delete_timed_group_by_button(self.app, button)
+        pass
     
     def delete_group(self, index, confirm=True):
         """删除定时组"""
@@ -119,7 +112,7 @@ class NumberProxy:
     
     def create_tab(self, parent):
         """创建数字识别标签页"""
-        create_number_tab(parent, self.app)
+        create_number_tab(self.app)
     
     def create_region(self, index):
         """创建单个数字识别区域"""
@@ -131,7 +124,7 @@ class NumberProxy:
     
     def delete_region_by_button(self, button):
         """通过按钮删除对应的数字识别区域"""
-        delete_number_region_by_button(self.app, button)
+        pass
     
     def delete_region(self, index, confirm=True):
         """删除数字识别区域"""
@@ -162,7 +155,7 @@ class ScriptProxy:
     
     def create_tab(self, parent):
         """创建脚本运行标签页"""
-        create_script_tab(parent, self.app)
+        create_script_tab(self.app)
     
     def start(self, start_color_recognition=True):
         """启动脚本"""
@@ -212,29 +205,25 @@ class UIProxy:
     
     def create_home_tab(self, parent):
         """创建首页标签页"""
-        create_home_tab(parent, self.app)
+        create_home_tab(self.app)
+    
+    def create_basic_tab(self, parent):
+        """创建基本设置标签页"""
+        create_basic_tab(self.app)
     
     def show_message(self, title, message):
         """显示消息对话框"""
-        ui_show_message(self.app.root, title, message)
+        from tkinter import messagebox
+        messagebox.showinfo(title, message)
     
     def show_progress(self, message):
         """显示进度提示"""
-        ui_show_progress(self.app.status_var, message)
+        if hasattr(self.app, 'status_var'):
+            self.app.status_var.set(message)
         self.app.root.update_idletasks()
     
     def hide_progress(self):
         """隐藏进度提示"""
-        ui_hide_progress(self.app.status_var)
+        if hasattr(self.app, 'status_var'):
+            self.app.status_var.set("")
         self.app.root.update_idletasks()
-    
-    def create_group_ui(self, parent, index, group_type, create_specific_ui):
-        """创建组 UI 的通用方法"""
-        group_frame = create_group_frame(parent, index, group_type)
-        enabled_var = tk.BooleanVar(value=False)
-        setup_group_click_handler(self.app, group_frame, enabled_var)
-        update_group_style(group_frame, enabled_var.get())
-        group_config = create_specific_ui(group_frame, enabled_var)
-        groups = getattr(self.app, f"{group_type.lower()}_groups", [])
-        groups.append(group_config)
-        return group_config

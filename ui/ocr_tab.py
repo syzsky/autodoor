@@ -1,79 +1,36 @@
+import customtkinter as ctk
 import tkinter as tk
-from tkinter import ttk
-
-from utils.region import _start_selection
-from ui.utils import update_group_style, setup_group_click_handler, bind_mousewheel_to_widgets, on_mousewheel, configure_scroll_region
-from core.utils import delete_group_by_button, delete_group, add_group
-
-# 从ui.builder导入UIBuilder
-from ui.builder import UIBuilder
+from ui.theme import Theme
+from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_section_title, create_divider
 
 
-def create_ocr_tab(parent, app):
-    """创建文字识别标签页"""
-    ocr_frame = ttk.Frame(parent, padding="10")
-    ocr_frame.pack(fill=tk.BOTH, expand=True)
-
-    # 顶部按钮栏
-    top_frame = ttk.Frame(ocr_frame)
-    top_frame.pack(fill=tk.X, pady=(0, 10))
-
-    app.add_ocr_group_btn = ttk.Button(top_frame, text="新增识别组", command=app.ocr.add_group)
-    app.add_ocr_group_btn.pack(side=tk.LEFT)
-
-    # 识别组容器，带滚动条
-    groups_container = ttk.Frame(ocr_frame)
-    groups_container.pack(fill=tk.BOTH, expand=True)
-
-    # 垂直滚动条
-    groups_scrollbar = ttk.Scrollbar(groups_container, orient=tk.VERTICAL)
-    groups_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-    # 画布，用于实现滚动
-    groups_canvas = tk.Canvas(groups_container, yscrollcommand=groups_scrollbar.set, highlightthickness=0)
-    groups_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-    groups_scrollbar.config(command=groups_canvas.yview)
-
-    # 内部容器，用于放置所有识别组
-    app.ocr_groups_frame = ttk.Frame(groups_canvas)
-    groups_canvas.create_window((0, 0), window=app.ocr_groups_frame, anchor="nw", tags="inner_frame")
-
-    # 配置画布尺寸和滚动区域
-    def configure_scroll_region_handler(event):
-        configure_scroll_region(event, groups_canvas, "inner_frame")
-
-    groups_canvas.bind("<Configure>", configure_scroll_region_handler)
-    app.ocr_groups_frame.bind("<Configure>", configure_scroll_region_handler)
-
-    # 为画布绑定鼠标滚轮事件
-    groups_canvas.bind("<MouseWheel>", lambda event: on_mousewheel(event, groups_canvas))
-
-    # 为内部框架绑定鼠标滚轮事件
-    app.ocr_groups_frame.bind("<MouseWheel>", lambda event: app._on_mousewheel(event, groups_canvas))
-
-    # 为整个标签页绑定鼠标滚轮事件
-    ocr_frame.bind("<MouseWheel>", lambda event: app._on_mousewheel(event, groups_canvas))
-
-    # 保存文字识别的画布和框架引用
-    app.ocr_canvas = groups_canvas
-    app.ocr_frame = ocr_frame
-    app.ocr_groups_container = groups_container
-
-    # 区域配置
+def create_ocr_tab(app):
+    page = ctk.CTkFrame(app.content_area, fg_color='transparent')
+    app.pages['ocr'] = page
+    
+    top_frame = ctk.CTkFrame(page, fg_color='transparent')
+    top_frame.pack(fill='x', pady=(0, 10))
+    
+    app.add_ocr_group_btn = AnimatedButton(top_frame, text='+ 新增识别组', font=Theme.get_font('sm'),
+                                           height=28, corner_radius=6,
+                                           fg_color=Theme.COLORS['primary'],
+                                           hover_color=Theme.COLORS['primary_hover'],
+                                           command=lambda: add_ocr_group(app))
+    app.add_ocr_group_btn.pack(side='left')
+    
+    scroll_frame = ctk.CTkScrollableFrame(page)
+    scroll_frame.pack(fill='both', expand=True)
+    
+    app.ocr_groups_frame = scroll_frame
     app.ocr_groups = []
+    
     for i in range(2):
         create_ocr_group(app, i)
 
-    # 绑定所有文字识别区域的鼠标滚轮事件
-    bind_mousewheel_to_widgets(groups_canvas, [group["frame"] for group in app.ocr_groups])
-
 
 def create_ocr_group(app, index):
-    """创建单个文字识别组"""
-    # 启用状态变量
     enabled_var = tk.BooleanVar(value=False)
     
-    # 创建变量字典
     group_vars = {
         "region_var": tk.StringVar(value="未选择区域"),
         "interval_var": tk.IntVar(value=5),
@@ -87,26 +44,88 @@ def create_ocr_group(app, index):
         "click_var": tk.BooleanVar(value=True)
     }
     
-    # 命令映射
-    command_map = {
-        "select_region": lambda: start_ocr_region_selection(app, index)
-    }
+    group_frame = CardFrame(app.ocr_groups_frame, fg_color='#ffffff', border_width=1, border_color=Theme.COLORS['border'])
+    group_frame.pack(fill='x', pady=(0, 10))
     
-    # 使用声明式UI构建
-    group_frame = UIBuilder.build_module(app.ocr_groups_frame, "ocr", index, app, command_map, group_vars)
-
-    # 设置组点击事件和样式更新
-    setup_group_click_handler(app, group_frame, enabled_var)
-
-    # 初始应用样式
-    update_group_style(group_frame, enabled_var.get())
-
-    # 添加删除按钮
-    row1_frame = group_frame.winfo_children()[0]
-    delete_btn = UIBuilder.add_button(row1_frame, "删除", None, side=tk.RIGHT, width=6)
-    delete_btn.config(command=lambda btn=delete_btn: delete_ocr_group_by_button(app, btn))
-
-    # 保存组配置
+    header = ctk.CTkFrame(group_frame, fg_color='transparent')
+    header.pack(fill='x', padx=10, pady=(8, 4))
+    
+    title_label = ctk.CTkLabel(header, text=f'识别组 {index + 1}', font=Theme.get_font('base'))
+    title_label.pack(side='left')
+    
+    switch = ctk.CTkSwitch(header, text='', width=36, variable=enabled_var,
+                          command=lambda: toggle_group_bg(group_frame, enabled_var.get()))
+    switch.pack(side='left', padx=(8, 0))
+    
+    delete_btn = AnimatedButton(header, text='删除', font=Theme.get_font('xs'), width=50, height=22,
+                               fg_color=Theme.COLORS['error'], hover_color='#DC2626', corner_radius=4,
+                               command=lambda: delete_ocr_group(app, group_frame))
+    delete_btn.pack(side='right')
+    
+    create_divider(group_frame)
+    
+    row1 = ctk.CTkFrame(group_frame, fg_color='transparent')
+    row1.pack(fill='x', padx=10, pady=4)
+    
+    select_btn = AnimatedButton(row1, text='选择区域', font=Theme.get_font('xs'), width=60, height=24,
+                               corner_radius=4, fg_color=Theme.COLORS['primary'],
+                               hover_color=Theme.COLORS['primary_hover'],
+                               command=lambda: start_ocr_region_selection(app, index))
+    select_btn.pack(side='left', padx=(0, 4))
+    
+    region_entry = ctk.CTkEntry(row1, textvariable=group_vars["region_var"], width=130, height=24, state='disabled')
+    region_entry.pack(side='left', padx=(0, 8))
+    
+    ctk.CTkLabel(row1, text='按键:', font=Theme.get_font('xs')).pack(side='left')
+    key_entry = ctk.CTkEntry(row1, textvariable=group_vars["key_var"], width=50, height=24, state='disabled')
+    key_entry.pack(side='left', padx=(2, 2))
+    
+    from utils.keyboard import start_key_listening
+    key_btn = AnimatedButton(row1, text='修改', font=Theme.get_font('xs'), width=24, height=24, corner_radius=4,
+                            fg_color=Theme.COLORS['text_muted'], hover_color=Theme.COLORS['text_secondary'])
+    key_btn.configure(command=lambda: start_key_listening(app, key_entry, key_btn))
+    key_btn.pack(side='left', padx=(0, 8))
+    
+    ctk.CTkLabel(row1, text='时长:', font=Theme.get_font('xs')).pack(side='left')
+    delay_min_entry = NumericEntry(row1, textvariable=group_vars["delay_min_var"], width=35, height=24)
+    delay_min_entry.pack(side='left', padx=(2, 2))
+    ctk.CTkLabel(row1, text='-', font=Theme.get_font('xs')).pack(side='left')
+    delay_max_entry = NumericEntry(row1, textvariable=group_vars["delay_max_var"], width=35, height=24)
+    delay_max_entry.pack(side='left', padx=(2, 2))
+    ctk.CTkLabel(row1, text='ms', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
+    
+    alarm_frame = ctk.CTkFrame(row1, fg_color='transparent')
+    alarm_frame.pack(side='left')
+    ctk.CTkLabel(alarm_frame, text='报警', font=Theme.get_font('xs')).pack(side='left', padx=(0, 2))
+    ctk.CTkSwitch(alarm_frame, text='', width=36, variable=group_vars["alarm_var"]).pack(side='left')
+    
+    row2 = ctk.CTkFrame(group_frame, fg_color='transparent')
+    row2.pack(fill='x', padx=10, pady=(4, 8))
+    
+    ctk.CTkLabel(row2, text='间隔:', font=Theme.get_font('xs')).pack(side='left')
+    interval_entry = NumericEntry(row2, textvariable=group_vars["interval_var"], width=35, height=24)
+    interval_entry.pack(side='left', padx=(2, 2))
+    ctk.CTkLabel(row2, text='秒', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
+    
+    ctk.CTkLabel(row2, text='暂停:', font=Theme.get_font('xs')).pack(side='left')
+    pause_entry = NumericEntry(row2, textvariable=group_vars["pause_var"], width=40, height=24)
+    pause_entry.pack(side='left', padx=(2, 2))
+    ctk.CTkLabel(row2, text='秒', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
+    
+    ctk.CTkLabel(row2, text='关键词:', font=Theme.get_font('xs')).pack(side='left')
+    keywords_entry = ctk.CTkEntry(row2, textvariable=group_vars["keywords_var"], width=100, height=24)
+    keywords_entry.pack(side='left', padx=(2, 8))
+    
+    ctk.CTkLabel(row2, text='语言:', font=Theme.get_font('xs')).pack(side='left')
+    lang_menu = ctk.CTkOptionMenu(row2, values=['eng', 'chi_sim', 'chi_tra'], 
+                                  variable=group_vars["language_var"], width=70, height=24)
+    lang_menu.pack(side='left', padx=(2, 8))
+    
+    click_frame = ctk.CTkFrame(row2, fg_color='transparent')
+    click_frame.pack(side='left')
+    ctk.CTkLabel(click_frame, text='点击', font=Theme.get_font('xs')).pack(side='left', padx=(0, 2))
+    ctk.CTkSwitch(click_frame, text='', width=36, variable=group_vars["click_var"]).pack(side='left')
+    
     group_config = {
         "frame": group_frame,
         "enabled": enabled_var,
@@ -114,48 +133,50 @@ def create_ocr_group(app, index):
         "region": None,
         "interval": group_vars["interval_var"],
         "pause": group_vars["pause_var"],
-        "key": group_vars["key_var"],
+        "key": key_entry,
         "delay_min": group_vars["delay_min_var"],
         "delay_max": group_vars["delay_max_var"],
         "alarm": group_vars["alarm_var"],
         "keywords": group_vars["keywords_var"],
         "language": group_vars["language_var"],
-        "click": group_vars["click_var"]
+        "click": group_vars["click_var"],
+        "title_label": title_label
     }
     app.ocr_groups.append(group_config)
 
-    # 为新创建的识别组添加配置监听器
-    if hasattr(app, '_setup_ocr_group_listeners'):
-        app._setup_ocr_group_listeners(group_config)
 
-    # 为新创建的识别组绑定鼠标滚轮事件
-    canvas = app.ocr_groups_frame.master
-    if isinstance(canvas, tk.Canvas):
-        bind_mousewheel_to_widgets(canvas, [group_frame])
+def toggle_group_bg(frame, enabled):
+    if enabled:
+        frame.configure(fg_color=Theme.COLORS['info_light'], border_color=Theme.COLORS['primary'])
+    else:
+        frame.configure(fg_color='#ffffff', border_color=Theme.COLORS['border'])
 
 
 def add_ocr_group(app):
-    """新增文字识别组"""
-    add_group(app, app.ocr_groups, 15, lambda i: create_ocr_group(app, i), "识别组", "文字识别组")
+    if len(app.ocr_groups) >= 15:
+        return
+    create_ocr_group(app, len(app.ocr_groups))
 
 
-def delete_ocr_group_by_button(app, button):
-    """通过按钮删除对应的文字识别组"""
-    delete_group_by_button(app, button, app.ocr_groups, "识别组", lambda i: delete_ocr_group(app, i))
-
-
-def delete_ocr_group(app, index, confirm=True):
-    """删除文字识别组"""
-    delete_group(app, index, app.ocr_groups, "识别组", 1, lambda: renumber_ocr_groups(app), "文字识别组", confirm)
+def delete_ocr_group(app, group_frame, confirm=True):
+    if confirm:
+        from tkinter import messagebox
+        if not messagebox.askyesno("确认删除", "确定要删除该识别组吗？"):
+            return
+    
+    for i, group in enumerate(app.ocr_groups):
+        if group["frame"] == group_frame:
+            group["frame"].destroy()
+            app.ocr_groups.pop(i)
+            renumber_ocr_groups(app)
+            break
 
 
 def renumber_ocr_groups(app):
-    """重新编号所有文字识别组"""
     for i, group in enumerate(app.ocr_groups):
-        # 保持组名称前的空格，确保布局一致
-        group["frame"].configure(text=f"  识别组{i+1}")
+        group["title_label"].configure(text=f'识别组 {i + 1}')
 
 
 def start_ocr_region_selection(app, index):
-    """开始选择OCR识别区域"""
+    from utils.region import _start_selection
     _start_selection(app, "ocr", index)

@@ -192,7 +192,7 @@ class ConfigManager:
                                     try:
                                         region = tuple(value)
                                         self.app.ocr_groups[i][key] = region
-                                        self.app.ocr_groups[i]['region_var'].set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
+                                        self.app.ocr_groups[i]['region_var'].set(f"{region[0]},{region[1]} - {region[2]},{region[3]}")
                                     except (TypeError, ValueError):
                                         if hasattr(self.app, 'logging_manager'):
                                             self.app.logging_manager.log_message(f"配置文件中的OCR区域格式错误: {value}")
@@ -250,7 +250,7 @@ class ConfigManager:
                                     try:
                                         region = tuple(value)
                                         self.app.number_regions[i][key] = region
-                                        self.app.number_regions[i]['region_var'].set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
+                                        self.app.number_regions[i]['region_var'].set(f"{region[0]},{region[1]} - {region[2]},{region[3]}")
                                     except (TypeError, ValueError):
                                         if hasattr(self.app, 'logging_manager'):
                                             self.app.logging_manager.log_message(f"配置文件中的数字识别区域格式错误: {value}")
@@ -607,7 +607,8 @@ class ConfigManager:
         def setup_group_listeners(group):
             group["enabled"].trace_add("write", immediate_save)
             group["interval"].trace_add("write", delayed_save)
-            group["key"].trace_add("write", immediate_save)
+            if hasattr(group.get("key"), "trace_add"):
+                group["key"].trace_add("write", immediate_save)
 
         for group in self.app.timed_groups:
             setup_group_listeners(group)
@@ -617,7 +618,8 @@ class ConfigManager:
         def setup_region_listeners(region_config):
             region_config["enabled"].trace_add("write", immediate_save)
             region_config["threshold"].trace_add("write", delayed_save)
-            region_config["key"].trace_add("write", immediate_save)
+            if hasattr(region_config.get("key"), "trace_add"):
+                region_config["key"].trace_add("write", immediate_save)
 
         for region_config in self.app.number_regions:
             setup_region_listeners(region_config)
@@ -628,7 +630,8 @@ class ConfigManager:
             group["enabled"].trace_add("write", immediate_save)
             group["interval"].trace_add("write", delayed_save)
             group["pause"].trace_add("write", delayed_save)
-            group["key"].trace_add("write", immediate_save)
+            if hasattr(group.get("key"), "trace_add"):
+                group["key"].trace_add("write", immediate_save)
             group["delay_min"].trace_add("write", delayed_save)
             group["delay_max"].trace_add("write", delayed_save)
             group["alarm"].trace_add("write", immediate_save)
@@ -645,8 +648,10 @@ class ConfigManager:
             for module, var in self.app.module_check_vars.items():
                 var.trace_add("write", immediate_save)
 
-        self.app.start_shortcut_var.trace_add("write", lambda *args: (immediate_save(), self.app.setup_shortcuts()))
-        self.app.stop_shortcut_var.trace_add("write", lambda *args: (immediate_save(), self.app.setup_shortcuts()))
+        if hasattr(self.app, 'start_shortcut_var'):
+            self.app.start_shortcut_var.trace_add("write", lambda *args: (immediate_save(), self.app.setup_shortcuts()))
+        if hasattr(self.app, 'stop_shortcut_var'):
+            self.app.stop_shortcut_var.trace_add("write", lambda *args: (immediate_save(), self.app.setup_shortcuts()))
 
         if hasattr(self.app, 'script_text'):
             def on_script_change(event):
@@ -656,13 +661,13 @@ class ConfigManager:
             self.app.script_text.bind("<<Modified>>", on_script_change)
             self.app.script_text.edit_modified(False)
 
-        if hasattr(self.app, 'color_commands_text'):
+        if hasattr(self.app, 'color_commands'):
             def on_color_commands_change(event):
-                if self.app.color_commands_text.edit_modified():
+                if self.app.color_commands.edit_modified():
                     delayed_save()
-                    self.app.color_commands_text.edit_modified(False)
-            self.app.color_commands_text.bind("<<Modified>>", on_color_commands_change)
-            self.app.color_commands_text.edit_modified(False)
+                    self.app.color_commands.edit_modified(False)
+            self.app.color_commands.bind("<<Modified>>", on_color_commands_change)
+            self.app.color_commands.edit_modified(False)
 
         if hasattr(self.app, 'color_recognition_enabled'):
             self.app.color_recognition_enabled.trace_add("write", immediate_save)
@@ -687,12 +692,21 @@ class ConfigManager:
         """
         from ui.utils import update_group_style
 
+        def set_key_value(val):
+            if hasattr(group['key'], 'set'):
+                group['key'].set(val)
+            elif hasattr(group['key'], 'configure'):
+                group['key'].configure(state='normal')
+                group['key'].delete(0, 'end')
+                group['key'].insert(0, val)
+                group['key'].configure(state='disabled')
+
         config_mappings = {
             'enabled': lambda val: self.load_enabled_config(group, val),
             'region': lambda val: self.load_region_config(group, val),
             'interval': lambda val: group['interval'].set(val),
             'pause': lambda val: group['pause'].set(val),
-            'key': lambda val: group['key'].set(val),
+            'key': set_key_value,
             'delay_min': lambda val: group['delay_min'].set(val),
             'delay_max': lambda val: group['delay_max'].set(val),
             'alarm': lambda val: group['alarm'].set(val),
@@ -727,6 +741,6 @@ class ConfigManager:
             try:
                 region_tuple = tuple(region)
                 group['region'] = region_tuple
-                group['region_var'].set(f"区域: {region_tuple[0]},{region_tuple[1]} - {region_tuple[2]},{region_tuple[3]}")
+                group['region_var'].set(f"{region_tuple[0]},{region_tuple[1]} - {region_tuple[2]},{region_tuple[3]}")
             except (TypeError, ValueError):
                 self.app.logging_manager.log_message(f"配置文件中的OCR区域格式错误: {region}")

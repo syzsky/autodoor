@@ -180,7 +180,7 @@ class TimedModule:
             group = self.app.timed_groups[self.app.current_timed_group]
             group["position_x"].set(pos_x)
             group["position_y"].set(pos_y)
-            group["position_var"].set(f"位置：{pos_x},{pos_y}")
+            group["position_var"].set(f"{pos_x},{pos_y}")
 
             # 保存配置
             self.app.save_config()

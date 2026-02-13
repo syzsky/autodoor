@@ -1,160 +1,153 @@
+import customtkinter as ctk
 import tkinter as tk
-from tkinter import ttk
-
-from utils.region import _start_selection
-from ui.utils import update_group_style, setup_group_click_handler, bind_mousewheel_to_widgets, on_mousewheel, configure_scroll_region
-from core.utils import delete_group_by_button, delete_group, add_group
-
-# 从ui.builder导入UIBuilder
-from ui.builder import UIBuilder
+from ui.theme import Theme
+from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_divider
 
 
-def create_number_tab(parent, app):
-    """创建数字识别标签页"""
-    number_frame = ttk.Frame(parent, padding="10")
-    number_frame.pack(fill=tk.BOTH, expand=True)
-
-    # 顶部按钮栏
-    top_frame = ttk.Frame(number_frame)
-    top_frame.pack(fill=tk.X, pady=(0, 10))
-
-    app.add_number_region_btn = ttk.Button(top_frame, text="新增识别组", command=app.number.add_region)
-    app.add_number_region_btn.pack(side=tk.LEFT)
-
-    # 区域容器，带滚动条
-    regions_container = ttk.Frame(number_frame)
-    regions_container.pack(fill=tk.BOTH, expand=True)
-
-    # 垂直滚动条
-    regions_scrollbar = ttk.Scrollbar(regions_container, orient=tk.VERTICAL)
-    regions_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-    # 画布，用于实现滚动
-    regions_canvas = tk.Canvas(regions_container, yscrollcommand=regions_scrollbar.set, highlightthickness=0)
-    regions_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-    regions_scrollbar.config(command=regions_canvas.yview)
-
-    # 内部容器，用于放置所有识别区域
-    app.number_regions_frame = ttk.Frame(regions_canvas)
-    regions_canvas.create_window((0, 0), window=app.number_regions_frame, anchor="nw", tags="inner_frame")
-
-    # 配置画布尺寸和滚动区域
-    def configure_scroll_region_handler(event):
-        configure_scroll_region(event, regions_canvas, "inner_frame")
-
-    regions_canvas.bind("<Configure>", configure_scroll_region_handler)
-    app.number_regions_frame.bind("<Configure>", configure_scroll_region_handler)
-
-    # 为画布绑定鼠标滚轮事件
-    regions_canvas.bind("<MouseWheel>", lambda event: on_mousewheel(event, regions_canvas))
-
-    # 为内部框架绑定鼠标滚轮事件
-    app.number_regions_frame.bind("<MouseWheel>", lambda event: on_mousewheel(event, regions_canvas))
-
-    # 为整个标签页绑定鼠标滚轮事件
-    number_frame.bind("<MouseWheel>", lambda event: on_mousewheel(event, regions_canvas))
-
-    # 保存数字识别的画布和框架引用
-    app.number_canvas = regions_canvas
-    app.number_frame = number_frame
-    app.number_regions_container = regions_container
-
-    # 区域配置
+def create_number_tab(app):
+    page = ctk.CTkFrame(app.content_area, fg_color='transparent')
+    app.pages['number'] = page
+    
+    top_frame = ctk.CTkFrame(page, fg_color='transparent')
+    top_frame.pack(fill='x', pady=(0, 10))
+    
+    app.add_number_region_btn = AnimatedButton(top_frame, text='+ 新增识别组', font=Theme.get_font('sm'),
+                                               height=28, corner_radius=6,
+                                               fg_color=Theme.COLORS['primary'],
+                                               hover_color=Theme.COLORS['primary_hover'],
+                                               command=lambda: add_number_region(app))
+    app.add_number_region_btn.pack(side='left')
+    
+    scroll_frame = ctk.CTkScrollableFrame(page)
+    scroll_frame.pack(fill='both', expand=True)
+    
+    app.number_regions_frame = scroll_frame
     app.number_regions = []
+    
     for i in range(2):
         create_number_region(app, i)
 
-    # 绑定所有数字识别区域的鼠标滚轮事件
-    bind_mousewheel_to_widgets(regions_canvas, [region["frame"] for region in app.number_regions])
-
-    # 操作按钮已移除，统一由首页全局控制
-
 
 def create_number_region(app, index):
-    """创建单个数字识别区域"""
-    # 启用状态变量
     enabled_var = tk.BooleanVar(value=False)
     
-    # 创建变量字典
+    default_keys = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "space", "enter", "tab"]
+    
     group_vars = {
         "region_var": tk.StringVar(value="未选择区域"),
         "threshold_var": tk.IntVar(value=500 if index == 0 else 1000),
-        "key_var": tk.StringVar(value=["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "space", "enter", "tab"][index % 15]),
+        "key_var": tk.StringVar(value=default_keys[index % len(default_keys)]),
         "delay_min_var": tk.IntVar(value=100),
         "delay_max_var": tk.IntVar(value=200),
         "alarm_var": tk.BooleanVar(value=False)
     }
     
-    # 命令映射
-    command_map = {
-        "select_region": lambda: start_number_region_selection(app, index)
-    }
+    group_frame = CardFrame(app.number_regions_frame, fg_color='#ffffff', border_width=1, border_color=Theme.COLORS['border'])
+    group_frame.pack(fill='x', pady=(0, 10))
     
-    # 使用声明式UI构建
-    region_frame = UIBuilder.build_module(app.number_regions_frame, "number", index, app, command_map, group_vars)
-
-    # 设置组点击事件和样式更新
-    setup_group_click_handler(app, region_frame, enabled_var)
-
-    # 初始应用样式
-    update_group_style(region_frame, enabled_var.get())
-
-    # 添加删除按钮
-    row1_frame = region_frame.winfo_children()[0]
-    delete_btn = UIBuilder.add_button(row1_frame, "删除", None, side=tk.RIGHT, width=6)
-    delete_btn.config(command=lambda btn=delete_btn: delete_number_region_by_button(app, btn))
-
-    # 保存区域配置
-    region_config = {
-        "frame": region_frame,
+    header = ctk.CTkFrame(group_frame, fg_color='transparent')
+    header.pack(fill='x', padx=10, pady=(8, 4))
+    
+    title_label = ctk.CTkLabel(header, text=f'识别组 {index + 1}', font=Theme.get_font('base'))
+    title_label.pack(side='left')
+    
+    switch = ctk.CTkSwitch(header, text='', width=36, variable=enabled_var,
+                          command=lambda: toggle_group_bg(group_frame, enabled_var.get()))
+    switch.pack(side='left', padx=(8, 0))
+    
+    delete_btn = AnimatedButton(header, text='删除', font=Theme.get_font('xs'), width=50, height=22,
+                               fg_color=Theme.COLORS['error'], hover_color='#DC2626', corner_radius=4,
+                               command=lambda: delete_number_region(app, group_frame))
+    delete_btn.pack(side='right')
+    
+    create_divider(group_frame)
+    
+    row1 = ctk.CTkFrame(group_frame, fg_color='transparent')
+    row1.pack(fill='x', padx=10, pady=(4, 8))
+    
+    select_btn = AnimatedButton(row1, text='选择区域', font=Theme.get_font('xs'), width=60, height=24,
+                               corner_radius=4, fg_color=Theme.COLORS['primary'],
+                               hover_color=Theme.COLORS['primary_hover'],
+                               command=lambda: start_number_region_selection(app, index))
+    select_btn.pack(side='left', padx=(0, 4))
+    
+    region_entry = ctk.CTkEntry(row1, textvariable=group_vars["region_var"], width=130, height=24, state='disabled')
+    region_entry.pack(side='left', padx=(0, 8))
+    
+    ctk.CTkLabel(row1, text='阈值:', font=Theme.get_font('xs')).pack(side='left')
+    threshold_entry = NumericEntry(row1, textvariable=group_vars["threshold_var"], width=50, height=24)
+    threshold_entry.pack(side='left', padx=(2, 8))
+    
+    ctk.CTkLabel(row1, text='按键:', font=Theme.get_font('xs')).pack(side='left')
+    key_entry = ctk.CTkEntry(row1, textvariable=group_vars["key_var"], width=50, height=24, state='disabled')
+    key_entry.pack(side='left', padx=(2, 2))
+    
+    from utils.keyboard import start_key_listening
+    key_btn = AnimatedButton(row1, text='修改', font=Theme.get_font('xs'), width=24, height=24, corner_radius=4,
+                            fg_color=Theme.COLORS['text_muted'], hover_color=Theme.COLORS['text_secondary'])
+    key_btn.configure(command=lambda: start_key_listening(app, key_entry, key_btn))
+    key_btn.pack(side='left', padx=(0, 8))
+    
+    ctk.CTkLabel(row1, text='时长:', font=Theme.get_font('xs')).pack(side='left')
+    delay_min_entry = NumericEntry(row1, textvariable=group_vars["delay_min_var"], width=35, height=24)
+    delay_min_entry.pack(side='left', padx=(2, 2))
+    ctk.CTkLabel(row1, text='-', font=Theme.get_font('xs')).pack(side='left')
+    delay_max_entry = NumericEntry(row1, textvariable=group_vars["delay_max_var"], width=35, height=24)
+    delay_max_entry.pack(side='left', padx=(2, 2))
+    ctk.CTkLabel(row1, text='ms', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
+    
+    alarm_frame = ctk.CTkFrame(row1, fg_color='transparent')
+    alarm_frame.pack(side='left')
+    ctk.CTkLabel(alarm_frame, text='报警', font=Theme.get_font('xs')).pack(side='left', padx=(0, 2))
+    ctk.CTkSwitch(alarm_frame, text='', width=36, variable=group_vars["alarm_var"]).pack(side='left')
+    
+    group_config = {
+        "frame": group_frame,
         "enabled": enabled_var,
         "region_var": group_vars["region_var"],
         "region": None,
         "threshold": group_vars["threshold_var"],
-        "key": group_vars["key_var"],
+        "key": key_entry,
         "delay_min": group_vars["delay_min_var"],
         "delay_max": group_vars["delay_max_var"],
-        "alarm": group_vars["alarm_var"]
+        "alarm": group_vars["alarm_var"],
+        "title_label": title_label
     }
-    app.number_regions.append(region_config)
-
-    # 为新创建的数字识别区域添加配置监听器
-    if hasattr(app, '_setup_region_listeners'):
-        app._setup_region_listeners(region_config)
-
-    # 为新创建的数字识别区域绑定鼠标滚轮事件
-    # 获取当前标签页的画布
-    canvas = app.number_regions_frame.master
-    if isinstance(canvas, tk.Canvas):
-        bind_mousewheel_to_widgets(canvas, [region_frame])
+    app.number_regions.append(group_config)
 
 
-def delete_number_region_by_button(app, button):
-    """通过按钮删除对应的数字识别区域"""
-    delete_group_by_button(app, button, app.number_regions, "数字识别区域", lambda i: delete_number_region(app, i))
-
-
-def delete_number_region(app, index, confirm=True):
-    """删除数字识别区域
-    Args:
-        index: 要删除的区域索引
-        confirm: 是否显示确认对话框，默认为True
-    """
-    delete_group(app, index, app.number_regions, "数字识别区域", 1, lambda: renumber_number_regions(app), "识别组", confirm)
-
-
-def renumber_number_regions(app):
-    """重新编号所有数字识别区域"""
-    for i, region in enumerate(app.number_regions):
-        # 更新区域标题为"识别组"，保持名称前的空格
-        region["frame"].configure(text=f"  识别组{i+1}")
+def toggle_group_bg(frame, enabled):
+    if enabled:
+        frame.configure(fg_color=Theme.COLORS['info_light'], border_color=Theme.COLORS['primary'])
+    else:
+        frame.configure(fg_color='#ffffff', border_color=Theme.COLORS['border'])
 
 
 def add_number_region(app):
-    """新增数字识别区域"""
-    add_group(app, app.number_regions, 15, lambda i: create_number_region(app, i), "识别区域", "识别区域")
+    if len(app.number_regions) >= 15:
+        return
+    create_number_region(app, len(app.number_regions))
 
 
-def start_number_region_selection(app, region_index):
-    """开始选择数字识别区域"""
-    _start_selection(app, "number", region_index)
+def delete_number_region(app, group_frame, confirm=True):
+    if confirm:
+        from tkinter import messagebox
+        if not messagebox.askyesno("确认删除", "确定要删除该识别组吗？"):
+            return
+    
+    for i, group in enumerate(app.number_regions):
+        if group["frame"] == group_frame:
+            group["frame"].destroy()
+            app.number_regions.pop(i)
+            renumber_number_regions(app)
+            break
+
+
+def renumber_number_regions(app):
+    for i, group in enumerate(app.number_regions):
+        group["title_label"].configure(text=f'识别组 {i + 1}')
+
+
+def start_number_region_selection(app, index):
+    from utils.region import _start_selection
+    _start_selection(app, "number", index)
