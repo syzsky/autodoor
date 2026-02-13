@@ -169,9 +169,9 @@ class AutoDoorOCR:
         """初始化用户界面"""
         self.root = tk.Tk()
         self.root.title(f"AutoDoor OCR 识别系统 v{VERSION}")
-        self.root.geometry("900x850")
+        self.root.geometry("900x720")
         self.root.resizable(True, True)
-        self.root.minsize(900, 850)
+        self.root.minsize(800, 650)
         self._init_tk_variables()
         self.create_widgets()
 
@@ -255,10 +255,46 @@ class AutoDoorOCR:
         # 区域信息已移至文字识别标签页内，此处不再显示
         self.region_var = tk.StringVar(value="未选择区域")
 
+        # 底部控制按钮区域 - 固定在底部，不被挤压
+        control_frame = ttk.Frame(main_frame, padding="10 5 10 0")
+        control_frame.pack(fill=tk.X, side=tk.BOTTOM, pady=(10, 0))
+        
+        # 左侧声明区域
+        footer_frame = ttk.Frame(control_frame)
+        footer_frame.pack(side=tk.LEFT, anchor=tk.W)
+
+        # 禁止商用声明
+        footer_label = ttk.Label(footer_frame, text="本程序仅供个人学习研究使用，禁止商用 | 制作人：", 
+                                  font=("等线", 10), foreground="#888888", cursor="arrow")
+        footer_label.pack(side=tk.LEFT)
+
+        # 制作人Bilibili超链接
+        author_label = ttk.Label(footer_frame, text="Flown王砖家", 
+                                  font=("等线", 10), foreground="blue", cursor="hand2")
+        author_label.pack(side=tk.LEFT)
+        author_label.bind("<Button-1>", lambda e: open_bilibili())
+
+        # 右侧按钮区域 - 简化布局
+        buttons_frame = ttk.Frame(control_frame)
+        buttons_frame.pack(side=tk.RIGHT, anchor=tk.E)
+
+        # 工具介绍按钮
+        tool_intro_btn = ttk.Button(buttons_frame, text="工具介绍", command=open_tool_intro)
+        tool_intro_btn.pack(side=tk.LEFT, padx=(0, 15))
+
+        # 检查更新按钮
+        check_update_btn = ttk.Button(buttons_frame, text="检查更新", command=self.check_for_updates)
+        check_update_btn.pack(side=tk.LEFT, padx=(0, 15))
+
+        # 退出程序按钮
+        exit_btn = ttk.Button(buttons_frame, text="退出程序", command=lambda: exit_program(self))
+        exit_btn.pack(side=tk.LEFT)
+
         # 主内容区域 - 使用笔记本(tab)布局
         notebook = ttk.Notebook(main_frame)
         notebook.pack(fill=tk.BOTH, expand=True)
 
+        # 创建标签页
         home_frame = ttk.Frame(notebook)
         notebook.add(home_frame, text="首页")
         self.ui.create_home_tab(home_frame)
@@ -282,41 +318,6 @@ class AutoDoorOCR:
         basic_frame = ttk.Frame(notebook)
         notebook.add(basic_frame, text="基本设置")
         create_basic_tab(basic_frame, self)
-
-        # 控制按钮区域 - 简化布局，让退出按钮靠近右下角
-        control_frame = ttk.Frame(main_frame, padding="10 5 10 0")
-        control_frame.pack(fill=tk.X, pady=(10, 0))
-
-        # 左侧声明区域
-        footer_frame = ttk.Frame(control_frame)
-        footer_frame.pack(side=tk.LEFT, anchor=tk.W)
-
-        # 禁止商用声明
-        footer_label = ttk.Label(footer_frame, text="本程序仅供个人学习研究使用，禁止商用 | 制作人：", 
-                                  font=("等线", 10), foreground="#888888", cursor="arrow")
-        footer_label.pack(side=tk.LEFT)
-
-        # 制作人Bilibili超链接
-        author_label = ttk.Label(footer_frame, text="Flown王砖家", 
-                                  font=("等线", 10), foreground="blue", cursor="hand2")
-        author_label.pack(side=tk.LEFT)
-        author_label.bind("<Button-1>", lambda e: open_bilibili())
-
-        # 右侧按钮区域 - 简化布局
-        buttons_frame = ttk.Frame(control_frame)
-        buttons_frame.pack(side=tk.RIGHT, anchor=tk.E)
-
-        # 工具介绍按钮（左侧），与退出按钮保持20px间距
-        tool_intro_btn = ttk.Button(buttons_frame, text="工具介绍", command=open_tool_intro)
-        tool_intro_btn.pack(side=tk.RIGHT, padx=(0, 20))
-
-        # 检查更新按钮
-        check_update_btn = ttk.Button(buttons_frame, text="检查更新", command=self.check_for_updates)
-        check_update_btn.pack(side=tk.RIGHT, padx=(0, 20))
-
-        # 退出程序按钮（右侧）
-        exit_btn = ttk.Button(buttons_frame, text="退出程序", command=lambda: exit_program(self))
-        exit_btn.pack(side=tk.RIGHT)
 
     def check_for_updates(self):
         """手动检查更新"""

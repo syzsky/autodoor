@@ -9,7 +9,7 @@ def create_home_tab(parent, app):
 
     # 功能状态显示
     status_frame = ttk.LabelFrame(home_frame, text="功能状态", padding="15")
-    status_frame.pack(fill=tk.X, pady=(0, 20))
+    status_frame.pack(fill=tk.X, pady=(0, 10))
 
     # 状态标签和勾选框
     app.status_labels = {
@@ -53,7 +53,7 @@ def create_home_tab(parent, app):
 
     # 全局控制按钮 - 重新定位至功能状态区域下方
     control_frame = ttk.Frame(status_frame)
-    control_frame.pack(fill=tk.X, pady=(15, 0))
+    control_frame.pack(fill=tk.X, pady=(10, 0))
 
     # 开始/结束按钮
     app.global_start_btn = ttk.Button(control_frame, text="开始运行", command=app.start_all, style="TButton")
@@ -66,14 +66,14 @@ def create_home_tab(parent, app):
 
     # 日志展示模块 - 添加到首页功能状态模块下方
     log_frame = ttk.LabelFrame(home_frame, text="运行日志", padding="15")
-    log_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+    log_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
     # 日志显示区域
     log_display_frame = ttk.Frame(log_frame)
     log_display_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
-    # 日志文本框
-    app.home_log_text = tk.Text(log_display_frame, height=15, width=80, font=("Arial", 9), state=tk.DISABLED)
+    # 日志文本框 - 限制最大高度
+    app.home_log_text = tk.Text(log_display_frame, height=10, width=80, font=("Arial", 9), state=tk.DISABLED)
     app.home_log_text.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
 
     # 日志滚动条
@@ -83,4 +83,4 @@ def create_home_tab(parent, app):
 
     # 清除日志按钮 - 放置在日志展示窗口下方，固定宽度
     home_clear_btn = ttk.Button(log_frame, text="清除日志", command=app.clear_log, width=12)
-    home_clear_btn.pack(side=tk.RIGHT, pady=5)
+    home_clear_btn.pack(side=tk.RIGHT, pady=0)
