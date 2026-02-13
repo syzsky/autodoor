@@ -1,14 +1,28 @@
 import customtkinter as ctk
+import tkinter as tk
 from ui.theme import Theme
 
 
 class NumericEntry(ctk.CTkEntry):
-    def __init__(self, master, **kwargs):
-        super().__init__(master, **kwargs)
+    def __init__(self, master, textvariable=None, **kwargs):
         self._valid = True
+        self._textvariable = textvariable
+        
+        if textvariable is not None:
+            current_value = textvariable.get()
+            if current_value == '' or current_value is None:
+                textvariable.set('0')
+        
+        super().__init__(master, textvariable=textvariable, **kwargs)
         
         self.bind('<KeyRelease>', self._validate)
         self.bind('<FocusOut>', self._validate)
+        self.bind('<FocusIn>', self._on_focus_in)
+    
+    def _on_focus_in(self, event=None):
+        value = self.get()
+        if value == '0':
+            self.delete(0, 'end')
     
     def _validate(self, event=None):
         value = self.get()
@@ -30,7 +44,10 @@ class NumericEntry(ctk.CTkEntry):
     
     def get_value(self, default=0):
         try:
-            return float(self.get())
+            val = self.get()
+            if val == '' or val == '-':
+                return default
+            return float(val)
         except ValueError:
             return default
 
@@ -83,103 +100,6 @@ class AnimatedButton(ctk.CTkButton):
             self.configure(fg_color=self._original_fg)
 
 
-class LoadingOverlay:
-    def __init__(self, parent, message='加载中...'):
-        self.parent = parent
-        self.message = message
-        self.overlay = None
-        self.is_showing = False
-    
-    def show(self):
-        if self.is_showing:
-            return
-        
-        self.overlay = ctk.CTkFrame(self.parent, fg_color='rgba(0,0,0,0.5)')
-        self.overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
-        
-        content = ctk.CTkFrame(self.overlay, corner_radius=12)
-        content.place(relx=0.5, rely=0.5, anchor='center')
-        
-        spinner_frame = ctk.CTkFrame(content, fg_color='transparent')
-        spinner_frame.pack(padx=20, pady=(20, 10))
-        
-        self.spinner_label = ctk.CTkLabel(spinner_frame, text='◐', font=('Arial', 32), text_color=Theme.COLORS['primary'])
-        self.spinner_label.pack()
-        
-        self._animate_spinner()
-        
-        ctk.CTkLabel(content, text=self.message, font=Theme.get_font('sm')).pack(padx=20, pady=(0, 20))
-        
-        self.is_showing = True
-    
-    def _animate_spinner(self):
-        if not self.is_showing:
-            return
-        
-        current = self.spinner_label.cget('text')
-        chars = ['◐', '◓', '◑', '◒']
-        idx = chars.index(current) if current in chars else 0
-        next_idx = (idx + 1) % len(chars)
-        self.spinner_label.configure(text=chars[next_idx])
-        
-        if self.is_showing:
-            self.spinner_label.after(100, self._animate_spinner)
-    
-    def hide(self):
-        if self.overlay:
-            self.overlay.destroy()
-            self.overlay = None
-        self.is_showing = False
-
-
-class Notification:
-    def __init__(self, parent, title='通知', message='', notification_type='info'):
-        self.parent = parent
-        self.title = title
-        self.message = message
-        self.notification_type = notification_type
-        
-        self._create_notification()
-    
-    def _create_notification(self):
-        type_colors = {
-            'info': Theme.COLORS['info'],
-            'success': Theme.COLORS['success'],
-            'warning': Theme.COLORS['warning'],
-            'error': Theme.COLORS['error']
-        }
-        color = type_colors.get(self.notification_type, Theme.COLORS['info'])
-        
-        notif = ctk.CTkToplevel(self.parent)
-        notif.overrideredirect(True)
-        notif.attributes('-topmost', True)
-        
-        self.parent.update_idletasks()
-        master_x = self.parent.winfo_rootx()
-        master_y = self.parent.winfo_rooty()
-        master_width = self.parent.winfo_width()
-        
-        width, height = 280, 70
-        x = master_x + master_width - width - 20
-        y = master_y + 60
-        notif.geometry(f'{width}x{height}+{x}+{y}')
-        
-        container = ctk.CTkFrame(notif, corner_radius=8, border_width=1, border_color=Theme.COLORS['border'])
-        container.pack(fill='both', expand=True, padx=4, pady=4)
-        
-        indicator = ctk.CTkFrame(container, width=4, corner_radius=0, fg_color=color)
-        indicator.pack(side='left', fill='y')
-        
-        content = ctk.CTkFrame(container, fg_color='transparent')
-        content.pack(side='left', fill='both', expand=True, padx=10, pady=10)
-        
-        ctk.CTkLabel(content, text=self.title, font=Theme.get_font('sm'), anchor='w').pack(fill='x')
-        ctk.CTkLabel(content, text=self.message, font=Theme.get_font('xs'), 
-                    text_color=Theme.COLORS['text_secondary'], anchor='w').pack(fill='x', pady=(4, 0))
-        
-        notif.after(3000, notif.destroy)
-
-
 def create_section_title(parent, text, level=1):
     if level == 1:
         font = Theme.get_font('lg')
@@ -200,27 +120,22 @@ def create_divider(parent):
     return divider
 
 
-def create_key_input_with_button(parent, default_value, width=50, on_capture=None):
-    frame = ctk.CTkFrame(parent, fg_color='transparent')
-    frame.pack(side='left')
+def create_bordered_option_menu(parent, values, variable=None, width=70, height=24):
+    """创建带灰色边框的下拉框"""
+    border_frame = ctk.CTkFrame(parent, fg_color=Theme.COLORS['border'], corner_radius=6)
+    border_frame.pack(side='left')
     
-    entry = ctk.CTkEntry(frame, width=width, height=24, state='disabled')
-    entry.insert(0, default_value)
-    entry.pack(side='left', padx=(2, 2))
+    inner_frame = ctk.CTkFrame(border_frame, fg_color='#ffffff', corner_radius=5)
+    inner_frame.pack(padx=1, pady=1)
     
-    btn = AnimatedButton(frame, text='改', font=Theme.get_font('xs'), width=24, height=24, 
-                        corner_radius=4, fg_color=Theme.COLORS['text_muted'],
-                        hover_color=Theme.COLORS['text_secondary'])
-    btn.pack(side='left')
+    menu = ctk.CTkOptionMenu(inner_frame, values=values, variable=variable,
+                            width=width, height=height,
+                            fg_color='#ffffff', text_color='#000000',
+                            button_color=Theme.COLORS['primary'],
+                            button_hover_color=Theme.COLORS['primary_hover'],
+                            dropdown_fg_color='#ffffff', dropdown_text_color='#000000',
+                            dropdown_hover_color=Theme.COLORS['info_light'],
+                            corner_radius=5)
+    menu.pack(padx=0, pady=0)
     
-    btn._entry = entry
-    btn._on_capture = on_capture
-    
-    return entry, btn
-
-
-def create_numeric_entry(parent, default_value='', width=40, **kwargs):
-    entry = NumericEntry(parent, width=width, height=24, **kwargs)
-    if default_value:
-        entry.insert(0, str(default_value))
-    return entry
+    return menu, border_frame

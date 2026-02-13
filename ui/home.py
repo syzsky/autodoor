@@ -59,7 +59,7 @@ def create_home_tab(app):
         
         ctk.CTkLabel(row, text=name, font=Theme.get_font('sm')).pack(side='left')
         
-        indicator = ctk.CTkLabel(row, text='●', font=('Arial', 12), text_color='#9CA3AF')
+        indicator = ctk.CTkLabel(row, text='●', font=('Arial', 24), text_color='#9CA3AF')
         indicator.pack(side='left', padx=(8, 0))
         app.module_indicators[module] = indicator
         

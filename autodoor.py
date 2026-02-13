@@ -5,7 +5,7 @@ import threading
 import os
 
 from ui.theme import Theme, init_theme
-from ui.widgets import CardFrame, AnimatedButton, NumericEntry, Notification, create_section_title, create_divider
+from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_section_title, create_divider
 from ui.home import create_home_tab
 from ui.ocr_tab import create_ocr_tab
 from ui.timed_tab import create_timed_tab
@@ -228,13 +228,19 @@ class AutoDoorOCR:
                       corner_radius=6, border_width=0,
                       command=open_tool_intro).pack(side='left', padx=4)
         
-        theme_frame = ctk.CTkFrame(right_section, fg_color='transparent')
-        theme_frame.pack(side='left', padx=8)
-        ctk.CTkLabel(theme_frame, text='夜间模式', font=Theme.get_font('xs'),
-                    text_color=Theme.COLORS['text_secondary']).pack(side='left', padx=(0, 2))
-        self.theme_switch = ctk.CTkSwitch(theme_frame, text='', width=36, 
-                                          command=self._toggle_theme)
-        self.theme_switch.pack(side='left')
+        # TODO: 夜间模式功能待后续迭代完善，目前暂时不在前端展示
+        # 需要完善的工作：
+        # 1. 所有组件的深色主题样式适配
+        # 2. 颜色选择器的深色模式支持
+        # 3. 输入框和下拉框的深色模式样式
+        # 4. 状态指示器的深色模式颜色
+        # theme_frame = ctk.CTkFrame(right_section, fg_color='transparent')
+        # theme_frame.pack(side='left', padx=8)
+        # ctk.CTkLabel(theme_frame, text='夜间模式', font=Theme.get_font('xs'),
+        #             text_color=Theme.COLORS['text_secondary']).pack(side='left', padx=(0, 2))
+        # self.theme_switch = ctk.CTkSwitch(theme_frame, text='', width=36, 
+        #                                   command=self._toggle_theme, state='disabled')
+        # self.theme_switch.pack(side='left')
 
     def _create_main_container(self):
         self.main_container = ctk.CTkFrame(self.root, fg_color='transparent')
@@ -289,7 +295,17 @@ class AutoDoorOCR:
         frame.bind('<Enter>', on_enter)
         frame.bind('<Leave>', on_leave)
         frame.bind('<Button-1>', on_click)
+        content.bind('<Enter>', on_enter)
+        content.bind('<Leave>', on_leave)
+        content.bind('<Button-1>', on_click)
+        indicator.bind('<Enter>', on_enter)
+        indicator.bind('<Leave>', on_leave)
+        indicator.bind('<Button-1>', on_click)
+        icon_label.bind('<Enter>', on_enter)
+        icon_label.bind('<Leave>', on_leave)
         icon_label.bind('<Button-1>', on_click)
+        text_label.bind('<Enter>', on_enter)
+        text_label.bind('<Leave>', on_leave)
         text_label.bind('<Button-1>', on_click)
         
         if is_active:
@@ -358,7 +374,9 @@ class AutoDoorOCR:
     def _navigate_to(self, page_id):
         self._show_page(page_id)
 
+    # TODO: 夜间模式切换功能，待后续迭代完善后启用
     def _toggle_theme(self):
+        """切换日间/夜间模式"""
         current = ctk.get_appearance_mode()
         new_mode = 'Dark' if current == 'Light' else 'Light'
         ctk.set_appearance_mode(new_mode)

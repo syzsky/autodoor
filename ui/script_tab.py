@@ -37,15 +37,14 @@ def create_script_tab(app):
     
     from utils.keyboard import start_key_listening
     app.set_key_btn = AnimatedButton(key_row, text='修改', font=Theme.get_font('xs'), width=24, height=24, corner_radius=4,
-                                     fg_color=Theme.COLORS['text_muted'], hover_color=Theme.COLORS['text_secondary'])
+                                     fg_color=Theme.COLORS['primary'], hover_color=Theme.COLORS['primary_hover'])
     app.set_key_btn.configure(command=lambda: start_key_listening(app, app.key_var, app.set_key_btn))
     app.set_key_btn.pack(side='left', padx=(0, 8))
     
-    ctk.CTkLabel(key_row, text='类型:', font=Theme.get_font('xs')).pack(side='left')
+    ctk.CTkLabel(key_row, text='类型:', font=Theme.get_font('xs')).pack(side='left', padx=(0, 2))
     app.key_type = tk.StringVar(value="KeyDown")
-    key_type_menu = ctk.CTkOptionMenu(key_row, values=["KeyDown", "KeyUp"], variable=app.key_type,
-                                      width=80, height=24)
-    key_type_menu.pack(side='left', padx=(2, 6))
+    from ui.widgets import create_bordered_option_menu
+    create_bordered_option_menu(key_row, values=["KeyDown", "KeyUp"], variable=app.key_type, width=80, height=24)
     
     app.key_count = tk.IntVar(value=1)
     
@@ -90,17 +89,16 @@ def create_script_tab(app):
     mouse_row = ctk.CTkFrame(mouse_card, fg_color='transparent')
     mouse_row.pack(fill='x', padx=10, pady=(4, 8))
     
-    ctk.CTkLabel(mouse_row, text='按键:', font=Theme.get_font('xs')).pack(side='left')
+    ctk.CTkLabel(mouse_row, text='按键:', font=Theme.get_font('xs')).pack(side='left', padx=(0, 2))
     app.mouse_button_var = tk.StringVar(value="Left")
-    mouse_btn_menu = ctk.CTkOptionMenu(mouse_row, values=["Left", "Right", "Middle"],
-                                       variable=app.mouse_button_var, width=60, height=24)
-    mouse_btn_menu.pack(side='left', padx=(2, 6))
+    from ui.widgets import create_bordered_option_menu
+    create_bordered_option_menu(mouse_row, values=["Left", "Right", "Middle"],
+                                variable=app.mouse_button_var, width=60, height=24)
     
-    ctk.CTkLabel(mouse_row, text='操作:', font=Theme.get_font('xs')).pack(side='left')
+    ctk.CTkLabel(mouse_row, text='操作:', font=Theme.get_font('xs')).pack(side='left', padx=(8, 2))
     app.mouse_action_var = tk.StringVar(value="Down")
-    mouse_action_menu = ctk.CTkOptionMenu(mouse_row, values=["Down", "Up"],
-                                          variable=app.mouse_action_var, width=60, height=24)
-    mouse_action_menu.pack(side='left', padx=(2, 6))
+    create_bordered_option_menu(mouse_row, values=["Down", "Up"],
+                                variable=app.mouse_action_var, width=60, height=24)
     
     app.mouse_count_var = tk.IntVar(value=1)
     
@@ -138,7 +136,7 @@ def create_script_tab(app):
     app.combo_key_var.pack(side='left', padx=(2, 2))
     
     app.set_combo_key_btn = AnimatedButton(combo_row, text='修改', font=Theme.get_font('xs'), width=24, height=24, corner_radius=4,
-                                           fg_color=Theme.COLORS['text_muted'], hover_color=Theme.COLORS['text_secondary'])
+                                           fg_color=Theme.COLORS['primary'], hover_color=Theme.COLORS['primary_hover'])
     app.set_combo_key_btn.configure(command=lambda: start_key_listening(app, app.combo_key_var, app.set_combo_key_btn))
     app.set_combo_key_btn.pack(side='left', padx=(0, 8))
     
@@ -228,7 +226,7 @@ def create_color_recognition_tab(app, parent):
     app.color_enabled = tk.BooleanVar(value=False)
     color_enable_frame = ctk.CTkFrame(color_row1, fg_color='transparent')
     color_enable_frame.pack(side='left')
-    ctk.CTkLabel(color_enable_frame, text='启用颜色识别', font=Theme.get_font('sm')).pack(side='left', padx=(0, 4))
+    ctk.CTkLabel(color_enable_frame, text='启用', font=Theme.get_font('sm')).pack(side='left', padx=(0, 4))
     ctk.CTkSwitch(color_enable_frame, text='', width=36, variable=app.color_enabled).pack(side='left')
     
     color_row2 = ctk.CTkFrame(color_content, fg_color='transparent')
@@ -244,8 +242,8 @@ def create_color_recognition_tab(app, parent):
     AnimatedButton(color_row3, text='选择颜色', font=Theme.get_font('xs'), width=60, height=24, corner_radius=4,
                   fg_color=Theme.COLORS['primary'], hover_color=Theme.COLORS['primary_hover'],
                   command=lambda: app.color.select_color() if hasattr(app, 'color') else None).pack(side='left', padx=(0, 4))
-    app.color_value = ctk.CTkEntry(color_row3, textvariable=app.color_var, width=80, height=24, state='disabled')
-    app.color_value.pack(side='left', padx=(0, 8))
+    app.color_display = ctk.CTkFrame(color_row3, width=40, height=24, fg_color='gray', corner_radius=4, border_width=1, border_color='#000000')
+    app.color_display.pack(side='left', padx=(0, 8))
     ctk.CTkLabel(color_row3, text='容差:', font=Theme.get_font('xs')).pack(side='left')
     app.color_tolerance = NumericEntry(color_row3, textvariable=app.tolerance_var, width=40, height=24)
     app.color_tolerance.pack(side='left', padx=(2, 8))

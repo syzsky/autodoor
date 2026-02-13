@@ -128,7 +128,7 @@ def on_mouse_up(app, event):
             # OCR组区域选择
             if app.current_ocr_region_index is not None and 0 <= app.current_ocr_region_index < len(app.ocr_groups):
                 app.ocr_groups[app.current_ocr_region_index]['region'] = region
-                app.ocr_groups[app.current_ocr_region_index]['region_var'].set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
+                app.ocr_groups[app.current_ocr_region_index]['region_var'].set(f"{region[0]},{region[1]},{region[2]},{region[3]}")
                 app.logging_manager.log_message(f"已为识别组{app.current_ocr_region_index+1}选择区域: {region}")
         elif app.selection_type == 'color':
             if not hasattr(app, 'color_recognition_manager'):
@@ -140,19 +140,15 @@ def on_mouse_up(app, event):
             app.color_recognition_manager.color_recognition.set_region(region)
             app.color_recognition_region = region
             if hasattr(app, 'region_var'):
-                app.region_var.set(f"({region[0]}, {region[1]}) - ({region[2]}, {region[3]})")
+                app.region_var.set(f"{region[0]},{region[1]},{region[2]},{region[3]}")
             app.logging_manager.log_message(f"已选择颜色识别区域: {region}")
         else:
-            # 区域选择已经在各自的组配置中处理
-            # 不再需要设置全局的selected_region变量
             if hasattr(app, 'region_var'):
-                app.region_var.set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
+                app.region_var.set(f"{region[0]},{region[1]},{region[2]},{region[3]}")
             app.logging_manager.log_message(f"已选择区域: {region}")
     else:
-        # 区域选择已经在各自的组配置中处理
-        # 不再需要设置全局的selected_region变量
         if hasattr(app, 'region_var'):
-            app.region_var.set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
+            app.region_var.set(f"{region[0]},{region[1]},{region[2]},{region[3]}")
         app.logging_manager.log_message(f"已选择区域: {region}")
 
     cancel_selection(app)
@@ -184,7 +180,7 @@ def on_number_region_mouse_up(app, event):
     # 更新界面
     region_index = app.current_number_region_index
     app.number_regions[region_index]["region"] = region
-    app.number_regions[region_index]["region_var"].set(f"区域: {region[0]},{region[1]} - {region[2]},{region[3]}")
+    app.number_regions[region_index]["region_var"].set(f"{region[0]},{region[1]},{region[2]},{region[3]}")
     app.logging_manager.log_message(f"已选择数字识别区域{region_index+1}: {region}")
     cancel_selection(app)
 

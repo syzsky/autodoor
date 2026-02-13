@@ -229,16 +229,12 @@ class ColorRecognitionManager:
     
     def on_color_select(self, event):
         """处理颜色选择事件"""
-        # 先隐藏选择窗口，避免捕获到蒙版
         self.color_selection_window.withdraw()
         
-        # 等待窗口隐藏
         self.color_selection_window.update()
         
-        # 获取鼠标在屏幕上的实际位置，使用event.x_root和event.y_root获取绝对坐标
         abs_x, abs_y = event.x_root, event.y_root
         
-        # 截取屏幕像素，使用all_screens=True确保捕获所有屏幕
         screen = ImageGrab.grab(all_screens=True)
         
         try:
@@ -249,24 +245,20 @@ class ColorRecognitionManager:
         except:
             min_x, min_y = 0, 0
         
-        # 将绝对坐标转换为截图内的相对坐标
         rel_x = abs_x - min_x
         rel_y = abs_y - min_y
         
-        # 获取像素颜色
         pixel = screen.getpixel((rel_x, rel_y))
         
-        # 保存目标颜色
         self.app.target_color = pixel
         r, g, b = pixel
         self.app.color_var.set(f"RGB({r}, {g}, {b})")
         self.app.logging_manager.log_message(f"选择颜色: RGB({r}, {g}, {b})")
         self.app.logging_manager.log_message(f"选择位置: ({abs_x}, {abs_y})")
         
-        # 更新颜色显示槽
-        self.app.color_display.config(background=f"#{r:02x}{g:02x}{b:02x}")
+        if hasattr(self.app, 'color_display'):
+            self.app.color_display.configure(fg_color=f"#{r:02x}{g:02x}{b:02x}")
         
-        # 关闭选择窗口
         self.color_selection_window.destroy()
     
     def start_color_recognition(self):

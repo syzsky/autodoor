@@ -209,7 +209,6 @@ class ConfigManager:
         groups = self.get_config_value(timed_config, 'groups', [])
 
         if isinstance(groups, list):
-            # 清空所有定时组
             for group in self.app.timed_groups:
                 group['frame'].destroy()
             self.app.timed_groups.clear()
@@ -222,6 +221,10 @@ class ConfigManager:
                             if key == 'position':
                                 if 'position_var' in self.app.timed_groups[i]:
                                     self.app.timed_groups[i]['position_var'].set(value)
+                            elif key == 'enabled':
+                                self.app.timed_groups[i]['enabled'].set(value)
+                                from ui.utils import update_group_style
+                                update_group_style(self.app.timed_groups[i]['frame'], value)
                             elif key in self.app.timed_groups[i]:
                                 if hasattr(self.app.timed_groups[i][key], 'set'):
                                     self.app.timed_groups[i][key].set(value)
@@ -235,7 +238,6 @@ class ConfigManager:
         regions = self.get_config_value(number_config, 'regions', [])
 
         if isinstance(regions, list):
-            # 清空所有数字识别区域
             for region in self.app.number_regions:
                 region['frame'].destroy()
             self.app.number_regions.clear()
@@ -250,10 +252,14 @@ class ConfigManager:
                                     try:
                                         region = tuple(value)
                                         self.app.number_regions[i][key] = region
-                                        self.app.number_regions[i]['region_var'].set(f"{region[0]},{region[1]} - {region[2]},{region[3]}")
+                                        self.app.number_regions[i]['region_var'].set(f"{region[0]},{region[1]},{region[2]},{region[3]}")
                                     except (TypeError, ValueError):
                                         if hasattr(self.app, 'logging_manager'):
                                             self.app.logging_manager.log_message(f"配置文件中的数字识别区域格式错误: {value}")
+                                elif key == 'enabled':
+                                    self.app.number_regions[i]['enabled'].set(value)
+                                    from ui.utils import update_group_style
+                                    update_group_style(self.app.number_regions[i]['frame'], value)
                                 elif hasattr(self.app.number_regions[i][key], 'set'):
                                     self.app.number_regions[i][key].set(value)
 
@@ -741,6 +747,6 @@ class ConfigManager:
             try:
                 region_tuple = tuple(region)
                 group['region'] = region_tuple
-                group['region_var'].set(f"{region_tuple[0]},{region_tuple[1]} - {region_tuple[2]},{region_tuple[3]}")
+                group['region_var'].set(f"{region_tuple[0]},{region_tuple[1]},{region_tuple[2]},{region_tuple[3]}")
             except (TypeError, ValueError):
                 self.app.logging_manager.log_message(f"配置文件中的OCR区域格式错误: {region}")

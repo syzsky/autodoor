@@ -97,12 +97,11 @@ def create_basic_tab(app):
         var = tk.StringVar(value=default)
         setattr(app, var_name, var)
         
-        entry = ctk.CTkEntry(row, width=80, height=24, state='disabled')
-        entry.insert(0, default)
+        entry = ctk.CTkEntry(row, textvariable=var, width=80, height=24, state='disabled')
         entry.pack(side='left', padx=(6, 2))
         
         btn = AnimatedButton(row, text='修改', font=Theme.get_font('xs'), width=24, height=24, corner_radius=4,
-                            fg_color=Theme.COLORS['text_muted'], hover_color=Theme.COLORS['text_secondary'])
+                            fg_color=Theme.COLORS['primary'], hover_color=Theme.COLORS['primary_hover'])
         btn.configure(command=lambda e=entry, b=btn: start_key_listening(app, e, b))
         btn.pack(side='left')
     

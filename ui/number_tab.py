@@ -84,7 +84,7 @@ def create_number_region(app, index):
     
     from utils.keyboard import start_key_listening
     key_btn = AnimatedButton(row1, text='修改', font=Theme.get_font('xs'), width=24, height=24, corner_radius=4,
-                            fg_color=Theme.COLORS['text_muted'], hover_color=Theme.COLORS['text_secondary'])
+                            fg_color=Theme.COLORS['primary'], hover_color=Theme.COLORS['primary_hover'])
     key_btn.configure(command=lambda: start_key_listening(app, key_entry, key_btn))
     key_btn.pack(side='left', padx=(0, 8))
     

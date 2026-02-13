@@ -82,7 +82,9 @@ class Theme:
 
 
 def init_theme():
-    ctk.set_appearance_mode('System')
+    # TODO: 夜间模式暂时禁用，待后续迭代完善后启用
+    # 目前强制使用 Light 模式，确保所有组件样式一致
+    ctk.set_appearance_mode('Light')
     ctk.set_default_color_theme('blue')
     
     if Theme.SYSTEM == 'Windows':

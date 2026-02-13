@@ -1,7 +1,7 @@
 import customtkinter as ctk
 import tkinter as tk
 from ui.theme import Theme
-from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_section_title, create_divider
+from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_divider
 
 
 def create_ocr_tab(app):
@@ -82,7 +82,7 @@ def create_ocr_group(app, index):
     
     from utils.keyboard import start_key_listening
     key_btn = AnimatedButton(row1, text='修改', font=Theme.get_font('xs'), width=24, height=24, corner_radius=4,
-                            fg_color=Theme.COLORS['text_muted'], hover_color=Theme.COLORS['text_secondary'])
+                            fg_color=Theme.COLORS['primary'], hover_color=Theme.COLORS['primary_hover'])
     key_btn.configure(command=lambda: start_key_listening(app, key_entry, key_btn))
     key_btn.pack(side='left', padx=(0, 8))
     
@@ -116,10 +116,10 @@ def create_ocr_group(app, index):
     keywords_entry = ctk.CTkEntry(row2, textvariable=group_vars["keywords_var"], width=100, height=24)
     keywords_entry.pack(side='left', padx=(2, 8))
     
-    ctk.CTkLabel(row2, text='语言:', font=Theme.get_font('xs')).pack(side='left')
-    lang_menu = ctk.CTkOptionMenu(row2, values=['eng', 'chi_sim', 'chi_tra'], 
-                                  variable=group_vars["language_var"], width=70, height=24)
-    lang_menu.pack(side='left', padx=(2, 8))
+    ctk.CTkLabel(row2, text='语言:', font=Theme.get_font('xs')).pack(side='left', padx=(0, 2))
+    from ui.widgets import create_bordered_option_menu
+    create_bordered_option_menu(row2, values=['eng', 'chi_sim', 'chi_tra'],
+                                variable=group_vars["language_var"], width=70, height=24)
     
     click_frame = ctk.CTkFrame(row2, fg_color='transparent')
     click_frame.pack(side='left')
