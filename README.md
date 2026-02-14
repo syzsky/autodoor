@@ -4,6 +4,7 @@
 
 ## 功能特性
 
+### 核心功能
 - ✅ 支持多显示器区域选择
 - ✅ 可自定义OCR识别间隔（1-30秒）
 - ✅ 支持中英文识别切换（英文/简体中文/繁体中文）
@@ -11,21 +12,25 @@
 - ✅ 实时状态显示和日志记录
 - ✅ 配置自动保存/加载
 - ✅ Windows/macOS平台打包支持
-- ✅ 首页Tab：集中显示各功能状态，统一控制各模块开关
-- ✅ 文字识别功能组管理：支持最多15个独立文字识别组，可设置不同区域和参数
-- ✅ 定时功能：支持最多15个独立定时组，可设置不同按键和间隔,鼠标点击指定区域功能
-- ✅ 数字识别功能：支持最多15个独立区域，可设置阈值和触发按键
-- ✅ 报警功能：支持自定义报警声音和音量调节
-- ✅ 模块独立配置：每个功能模块都有独立的配置和开关
-- ✅ 按键延迟配置：支持设置按键按下的最小和最大延迟
-- ✅ 每个模块独立的报警开关控制
-- ✅ 全局报警声音和音量设置
-- ✅ 组启用状态可视化：点击当前组的任意区域可切换组启用状态，启用的组显示绿色边框和背景
-- ✅ 版本更新提醒：自动检查版本更新并显示通知，支持手动检查更新
-- ✅ 脚本运行功能：支持录制鼠标操作和键盘按键操作，或者直接手动编辑
-- ✅ 颜色识别功能：支持识别屏幕特定颜色并执行相应操作
+
+### 模块化功能
+- ✅ **首页Tab**：集中显示各功能状态，统一控制各模块开关
+- ✅ **文字识别功能组管理**：支持最多15个独立文字识别组，可设置不同区域和参数
+- ✅ **定时功能**：支持最多15个独立定时组，可设置不同按键和间隔，支持鼠标点击指定区域
+- ✅ **数字识别功能**：支持最多15个独立区域，可设置阈值和触发按键
+- ✅ **脚本运行功能**：支持录制鼠标操作和键盘按键操作，或直接手动编辑
+- ✅ **颜色识别功能**：支持识别屏幕特定颜色并执行相应操作
+- ✅ **报警功能**：支持自定义报警声音和音量调节
+
+### 技术特性
+- ✅ **模块化架构**：代码按功能分离，易于维护和扩展
+- ✅ **现代UI框架**：基于 CustomTkinter，支持深色/浅色主题
+- ✅ **代理模式**：模块间解耦，提高代码可维护性
+- ✅ **单例模式**：截图管理器单例优化，提高性能
+- ✅ **事件驱动**：优先级事件队列，支持事件插队处理
 
 ## 使用教程
+
 B 站：[https://www.bilibili.com/video/BV1AGiGB8EYN](https://www.bilibili.com/video/BV1AGiGB8EYN)
 
 ## 安装要求
@@ -92,6 +97,114 @@ python autodoor.py
 - Windows：双击`autodoor.exe`文件
 - macOS：双击`autodoor`可执行文件
 
+## 项目架构
+
+### 目录结构
+
+```
+autodoor/
+├── autodoor.py              # 主程序入口
+├── core/                    # 核心模块
+│   ├── config.py            # 配置管理器
+│   ├── controller.py        # 模块控制器
+│   ├── events.py            # 事件管理器
+│   ├── logging.py           # 日志管理器
+│   ├── platform.py          # 平台适配器
+│   ├── proxy.py             # 代理类（OCRProxy, TimedProxy等）
+│   ├── threading.py         # 线程管理器
+│   └── utils.py             # 核心工具函数
+├── modules/                 # 功能模块
+│   ├── ocr.py               # OCR识别模块
+│   ├── timed.py             # 定时功能模块
+│   ├── number.py            # 数字识别模块
+│   ├── script.py            # 脚本执行模块
+│   ├── color.py             # 颜色识别模块
+│   ├── alarm.py             # 报警模块
+│   ├── input.py             # 输入处理模块
+│   └── recorder.py          # 录制模块
+├── ui/                      # 用户界面
+│   ├── home.py              # 首页标签页
+│   ├── ocr_tab.py           # 文字识别标签页
+│   ├── timed_tab.py         # 定时功能标签页
+│   ├── number_tab.py        # 数字识别标签页
+│   ├── script_tab.py        # 脚本运行标签页
+│   ├── basic_tab.py         # 基本设置标签页
+│   ├── theme.py             # 主题配置
+│   ├── widgets.py           # 自定义组件
+│   └── utils.py             # UI工具函数
+├── utils/                   # 工具类
+│   ├── screenshot.py        # 截图管理器（单例）
+│   ├── image.py             # 图像处理工具
+│   ├── tesseract.py         # Tesseract管理器
+│   ├── version.py           # 版本检查器
+│   ├── keyboard.py          # 键盘工具
+│   └── region.py            # 区域选择工具
+├── input/                   # 输入控制
+│   ├── controller.py        # 输入控制器
+│   ├── keyboard.py          # 键盘控制
+│   └── permissions.py       # 权限管理
+├── tesseract/               # 内置Tesseract引擎
+│   └── tessdata/            # 语言数据
+├── voice/                   # 音频文件
+│   ├── alarm.mp3            # 报警声音
+│   └── temp_reversed.mp3    # 停止音效
+├── requirements.txt         # Python依赖
+├── build_windows.bat        # Windows打包脚本
+├── build_mac.sh             # macOS打包脚本
+└── README.md                # 说明文档
+```
+
+### 架构设计
+
+#### 模块化架构
+项目采用模块化架构，各模块职责分明：
+
+| 模块 | 职责 |
+|------|------|
+| `core/` | 核心功能：配置、事件、线程、日志管理 |
+| `modules/` | 业务功能：OCR、定时、数字识别、脚本执行 |
+| `ui/` | 用户界面：各标签页、主题、自定义组件 |
+| `utils/` | 工具类：截图、图像处理、版本检查 |
+| `input/` | 输入控制：键盘鼠标操作、权限管理 |
+
+#### 设计模式
+
+**代理模式（Proxy Pattern）**
+```python
+# core/proxy.py
+class OCRProxy:
+    """OCR模块代理，封装OCR组的操作"""
+    
+class TimedProxy:
+    """定时模块代理，封装定时组的操作"""
+    
+class NumberProxy:
+    """数字识别模块代理"""
+```
+
+**单例模式（Singleton Pattern）**
+```python
+# utils/screenshot.py
+class ScreenshotManager:
+    """截图管理器单例，避免重复截图"""
+    _instance = None
+    
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+```
+
+**事件驱动模式**
+```python
+# core/events.py
+class EventManager:
+    """事件管理器，支持优先级队列"""
+    def emit(self, event_type, data, priority=0): ...
+    def process(self): ...
+```
+
 ## 界面功能说明
 
 ### 首页标签页
@@ -125,13 +238,12 @@ python autodoor.py
    - 可删除不需要的识别组
 
 2. **单组配置**
-   - **区域选择**：点击"选择区域"按钮，拖动鼠标选择要监控的屏幕区域
-   - **区域坐标**：显示当前选择的区域坐标
+   - **区域选择**：拖动鼠标选择要监控的屏幕区域
    - **识别间隔**：设置OCR识别的时间间隔（1-30秒）
    - **暂停时长**：检测到关键词后的暂停时间（30-300秒）
-   - **触发按键**：检测到关键词后自动按下的按键，支持自定义修改
-   - **按键时长**：设置按键按下的最小和最大延迟（毫秒）
-   - **启用报警**：开关，用于控制检测到关键词时是否播放报警声音
+   - **触发按键**：检测到关键词后自动按下的按键
+   - **按键时长**：设置按键按下的最小和最大延迟
+   - **启用报警**：检测到关键词时是否播放报警声音
    - **识别关键词**：输入多个关键词，用英文逗号分隔
    - **OCR识别语言**：选择识别语言（英文、简体中文、繁体中文）
    - **点击识别文字**：开关，用于控制检测到关键词时是否自动点击
@@ -162,13 +274,11 @@ python autodoor.py
    - 可删除不需要的识别区域
 
 2. **单区域配置**
-   - **选择区域**：点击"选择区域"按钮，拖动鼠标选择要监控的数字区域
-   - **区域坐标**：显示当前选择的区域坐标
+   - **选择区域**：选择要监控的数字区域
    - **阈值**：触发按键的数字阈值
    - **按键**：达到阈值时要按下的按键，支持自定义修改
    - **按键时长**：按键按下的最小和最大延迟（毫秒）
    - **启用报警**：达到阈值时是否播放报警声音
-
 
 ### 脚本运行标签页
 1. **命令输入**
@@ -182,20 +292,16 @@ python autodoor.py
    - **开始录制**：开始录制键盘和鼠标操作
    - **停止录制**：停止录制并将操作保存为脚本
    - **清空脚本**：清除当前编辑器中的所有脚本内容
-   - **导入脚本**：打开文件选择对话框，导入脚本文件
+   - **导入脚本**：导入脚本文件
    - **导出脚本**：将当前脚本保存为文件
 
-3. **脚本编辑**
-   - 编辑和查看录制的脚本内容
-   - 支持滚动查看
-
-4. **颜色识别**
-   - **颜色识别**：勾选框，控制是否在脚本运行时启用颜色识别
+3. **颜色识别**
+   - **颜色识别**：控制是否启用颜色识别
    - **选择区域**：选择要监控的屏幕区域
    - **选择颜色**：选择要识别的目标颜色
    - **颜色容差**：设置颜色识别的容差范围
    - **检查间隔**：设置颜色检查的时间间隔
-   - **颜色识别执行命令**：识别到颜色后进行执行的脚本命令
+   - **执行命令**：识别到颜色后执行的脚本命令
 
 ### 基本设置标签页
 
@@ -204,14 +310,13 @@ python autodoor.py
    - 可手动设置Tesseract路径
 
 2. **报警声音设置**
-   - **报警声音**：选择自定义报警声音文件
-   - **音量调节**：滑动条控制报警音量（0-100%）
+   - 选择自定义报警声音文件
+   - 滑动条控制报警音量（0-100%）
 
 3. **快捷键设置**
    - 可自定义开始/停止快捷键
    - 默认开始快捷键：F10
    - 默认停止快捷键：F12
-   - **全局快捷键**：即使应用失去焦点，也能使用快捷键控制应用运行
 
 4. **配置管理**
    - **保存配置**：手动保存当前配置
@@ -321,83 +426,65 @@ python autodoor.py
 - **Windows**：`%APPDATA%/AutoDoorOCR/autodoor_config.json`
 - **macOS**：`~/Library/Preferences/AutoDoorOCR/autodoor_config.json`
 
-配置文件包含以下配置项：
+### 配置结构
 
-### 基本配置
-- `version`：配置文件版本号
-- `last_save_time`：上次保存配置的时间
-
-### 首页配置
-- `home_checkboxes`：首页功能模块启用状态
-  - `ocr`：文字识别模块是否启用
-  - `timed`：定时功能模块是否启用
-  - `number`：数字识别模块是否启用
-
-### OCR文字识别配置
-- `ocr`：文字识别相关配置
-  - `groups`：文字识别组列表（最多15个）
-    - `enabled`：是否启用该识别组
-    - `region`：选择的监控区域坐标
-    - `interval`：OCR识别间隔（秒）
-    - `pause`：暂停时长（秒）
-    - `key`：触发按键
-    - `delay_min`：按键按下的最小延迟（毫秒）
-    - `delay_max`：按键按下的最大延迟（毫秒）
-    - `alarm`：是否启用报警
-    - `keywords`：识别关键词
-    - `language`：OCR识别语言
-    - `click`：是否点击识别文字
-
-### 点击模式配置
-- `click`：点击模式相关配置
-  - `mode`：点击模式（center/custom）
-  - `x`：自定义X坐标
-  - `y`：自定义Y坐标
-
-### 定时功能配置
-- `timed_key_press`：定时功能相关配置
-  - `groups`：定时组列表（最多15个）
-    - `enabled`：是否启用该定时组
-    - `interval`：定时间隔（秒）
-    - `key`：要按下的按键
-    - `delay_min`：按键按下的最小延迟（毫秒）
-    - `delay_max`：按键按下的最大延迟（毫秒）
-    - `alarm`：该定时组是否启用报警
-    - `click_enabled`：是否启用鼠标点击功能
-    - `position_x`：屏幕点击位置的X坐标
-    - `position_y`：屏幕点击位置的Y坐标
-    - `position`：屏幕点击位置的字符串表示
-
-### 数字识别配置
-- `number_recognition`：数字识别相关配置
-  - `regions`：数字识别区域列表（最多15个）
-    - `enabled`：是否启用该区域
-    - `region`：选择的数字区域坐标
-    - `threshold`：触发阈值
-    - `key`：要按下的按键
-    - `delay_min`：按键按下的最小延迟（毫秒）
-    - `delay_max`：按键按下的最大延迟（毫秒）
-    - `alarm`：该区域是否启用报警
-
-### 快捷键配置
-- `shortcuts`：快捷键配置
-  - `start`：开始快捷键
-  - `stop`：停止快捷键
-
-### 报警配置
-- `alarm`：报警相关配置
-  - `sound`：报警声音文件路径
-  - `volume`：报警音量（0-100）
-  - `ocr`：文字识别模块报警配置
-    - `enabled`：是否启用报警
-  - `timed`：定时功能模块报警配置
-    - `enabled`：是否启用报警
-  - `number`：数字识别模块报警配置
-    - `enabled`：是否启用报警
-
-### Tesseract配置
-- `tesseract`：Tesseract OCR引擎配置
-  - `path`：Tesseract OCR引擎路径
+```json
+{
+  "version": "2.0.4",
+  "last_save_time": "ISO时间戳",
+  "ocr": {
+    "groups": [
+      {
+        "enabled": true,
+        "region": [x1, y1, x2, y2],
+        "interval": 5,
+        "pause": 180,
+        "key": "space",
+        "delay_min": 300,
+        "delay_max": 500,
+        "alarm": false,
+        "keywords": "door,men",
+        "language": "eng",
+        "click": false
+      }
+    ]
+  },
+  "timed_key_press": {
+    "groups": [...]
+  },
+  "number_recognition": {
+    "regions": [...]
+  },
+  "shortcuts": {
+    "start": "F10",
+    "stop": "F12"
+  },
+  "alarm": {
+    "sound": "路径",
+    "volume": 70,
+    "ocr": {"enabled": false},
+    "timed": {"enabled": false},
+    "number": {"enabled": false}
+  },
+  "home_checkboxes": {
+    "ocr": true,
+    "timed": true,
+    "number": true
+  },
+  "script": {
+    "script_content": "...",
+    "color_commands": "...",
+    "color_recognition_region": [x1, y1, x2, y2],
+    "target_color": [r, g, b],
+    "color_tolerance": 10,
+    "color_interval": 5,
+    "color_recognition_enabled": false
+  },
+  "tesseract": {
+    "path": "tesseract路径"
+  }
+}
+```
 
 ## 日志文件
 
@@ -405,108 +492,92 @@ python autodoor.py
 
 - **Windows**：`%APPDATA%/AutoDoorOCR/autodoor.log`
 - **macOS**：`~/Library/Preferences/AutoDoorOCR/autodoor.log`
-- **其他系统**：`程序运行目录/config/autodoor.log`
-
-日志文件包含：
-- 程序启动和退出记录
-- 配置加载和保存记录
-- Tesseract检测结果
-- OCR识别结果
-- 操作执行记录
-- 错误和异常信息
 
 ## 打包说明
 
 ### Windows平台打包
-使用批处理脚本进行打包：
 ```cmd
 ./build_windows.bat
 ```
 
 ### macOS平台打包
-使用Shell脚本进行打包：
 ```bash
 ./build_mac.sh
 ```
 
-打包后的可执行文件位于`dist/autodoor/`目录下，包含所有必要的依赖文件和内置的Tesseract引擎。
+打包后的可执行文件位于`dist/autodoor/`目录下。
+
+## 开发说明
+
+### 依赖包
+
+| 依赖包 | 版本 | 用途 |
+|--------|------|------|
+| customtkinter | >=5.2.0 | 现代GUI框架 |
+| pyautogui | >=0.9.54 | 自动化操作 |
+| pytesseract | >=0.3.10 | OCR引擎接口 |
+| Pillow | >=10.0.0 | 图像处理 |
+| screeninfo | >=0.8.1 | 屏幕信息 |
+| pygame | >=2.0.0 | 音频播放 |
+| pynput | >=1.7.6 | 全局热键 |
+| numpy | >=1.21.0 | 数值计算 |
+| imagehash | >=4.3.2 | 图像哈希 |
+| requests | >=2.31.0 | HTTP请求 |
+
+### 扩展开发
+
+#### 添加新模块
+
+1. 在 `modules/` 目录创建新模块文件
+2. 在 `core/proxy.py` 添加对应代理类
+3. 在 `core/controller.py` 注册模块
+4. 在 `ui/` 目录创建对应标签页
+
+#### 自定义主题
+
+修改 `ui/theme.py` 中的颜色和字体配置：
+
+```python
+class Theme:
+    COLORS = {
+        'primary': '#3B82F6',
+        'success': '#22C55E',
+        # ...
+    }
+    
+    FONTS = {
+        'family': 'Microsoft YaHei',
+        'sizes': {...}
+    }
+```
 
 ## 注意事项
 
 1. 选择的监控区域应包含清晰可见的文字
 2. 运行脚本时请确保目标区域保持可见
-3. Windows系统可能需要管理员权限才能正常模拟鼠标和键盘操作
-4. macOS系统可能需要在"安全性与隐私"中允许程序控制电脑
-5. 程序会自动检测和使用内置的Tesseract引擎，无需额外安装
+3. Windows系统可能需要管理员权限
+4. macOS系统需要在"安全性与隐私"中授权
 
-### 对于 macOS 用户：
-1. 下载 Tesseract ：
-   - 通过 Homebrew 安装： brew install tesseract
-   - 或从官方网站下载预编译版本
+### macOS用户注意事项
 
-2. 配置 Tesseract 路径 ：
-   - 打开 AutoDoor 应用程序
-   - 进入 "基本设置" 标签页
-   - 在 "Tesseract OCR 路径" 字段中输入 Tesseract 的安装路径
-   - 点击 "保存配置" 按钮
-
-3. 授予必要的权限 ：
-   - 首次运行时，macOS 会提示授予屏幕截图权限
-   - 请点击 "允许"，确保应用程序能正常工作
-
-4. 验证权限设置 ：
-   - 进入 "系统偏好设置" > "安全性与隐私" > "隐私"
-   - 确保 AutoDoor 已被添加到 "屏幕录制" 和 "辅助功能" 列表中
+1. 通过 Homebrew 安装 Tesseract：`brew install tesseract`
+2. 首次运行时授予屏幕截图权限
+3. 在"系统偏好设置" > "安全性与隐私" > "隐私"中添加权限
 
 ## 故障排除
 
-### 问题：Tesseract未检测到
-- 检查配置文件中的Tesseract路径是否正确
-- 程序会自动尝试使用内置的Tesseract引擎
+### Tesseract未检测到
+- 检查配置文件中的Tesseract路径
+- 程序会自动尝试使用内置引擎
 
-### 问题：OCR识别结果为空
-- 检查选择的区域是否包含清晰的文字
+### OCR识别结果为空
+- 检查选择的区域是否包含清晰文字
 - 尝试调整选择区域大小
 - 尝试切换识别语言
 
-### 问题：无法模拟鼠标/键盘操作
-- Windows：尝试以管理员身份运行程序
-- macOS：检查"安全性与隐私"设置，允许程序控制电脑
-- 检查是否有其他软件阻止了自动化操作
-
-### 问题：程序崩溃
-- 检查Python版本是否符合要求（3.8+）
-- 查看日志文件`autodoor.log`中的错误信息
-- 重新安装依赖包：`pip install -r requirements.txt`
-
-## 开发说明
-
-### 项目结构
-
-```
-autodoor/
-├── autodoor.py          # 主程序文件
-├── autodoor_config.json # 配置文件
-├── autodoor.log         # 日志文件
-├── autodoor.spec        # PyInstaller配置文件
-├── build_windows.bat    # Windows打包脚本
-├── build_mac.sh         # macOS打包脚本
-├── requirements.txt     # Python依赖
-├── README.md            # 说明文档
-└── tesseract/           # 内置Tesseract引擎目录
-    └── ...
-```
-
-### 依赖包
-
-- pyautogui >= 0.9.54
-- pytesseract >= 0.3.10
-- Pillow >= 10.0.0
-- screeninfo >= 0.8.1
-- pygame >= 2.0.0
-- pydub >= 0.25.1
-- requests >= 2.31.0
-- pyinstaller (用于打包)
+### 无法模拟操作
+- Windows：以管理员身份运行
+- macOS：检查"安全性与隐私"设置
 
 ## 许可证
 
