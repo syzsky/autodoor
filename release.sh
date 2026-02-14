@@ -34,9 +34,16 @@ read -p "版本描述：" tag_description
 
 # 创建并推送标签
 echo "5. 创建并推送标签..."
-git tag -a "$new_tag" -m "$tag_description"
-git push origin "$new_tag"
-echo "✅ 标签 $new_tag 已创建并推送成功！"
+# 检查标签是否已存在
+if git tag -l "$new_tag" >/dev/null 2>&1; then
+    echo "ℹ️  标签 $new_tag 已存在，跳过创建步骤"
+else
+    git tag -a "$new_tag" -m "$tag_description"
+    echo "✅ 标签 $new_tag 已创建成功！"
+fi
+# 推送标签（无论是否新创建，确保远程仓库有该标签）
+git push origin "$new_tag" || echo "ℹ️  标签 $new_tag 已存在于远程仓库，跳过推送步骤"
+echo "✅ 标签 $new_tag 处理完成！"
 
 # 推送代码到master分支（如果有更新）
 echo "6. 推送代码到master分支..."

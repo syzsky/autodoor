@@ -9,10 +9,14 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# 检查pip是否可用
-if ! command -v pip3 &> /dev/null; then
-    echo "错误：pip3不可用"
-    exit 1
+# 检查pip是否可用，优先使用pip3，如果不可用则尝试使用pip
+PIP_CMD="pip3"
+if ! command -v $PIP_CMD &> /dev/null; then
+    PIP_CMD="pip"
+    if ! command -v $PIP_CMD &> /dev/null; then
+        echo "错误：pip不可用"
+        exit 1
+    fi
 fi
 
 # 创建虚拟环境（可选）
@@ -24,12 +28,12 @@ else
     echo "激活虚拟环境..."
     source venv/bin/activate
     echo "更新pip..."
-    pip3 install --upgrade pip
+    $PIP_CMD install --upgrade pip
 fi
 
 # 安装依赖
 echo "安装依赖..."
-pip3 install -r requirements.txt pyinstaller
+$PIP_CMD install -r requirements.txt pyinstaller
 if [ $? -ne 0 ]; then
     echo "错误：安装依赖失败"
     exit 1
@@ -46,7 +50,9 @@ fi
 echo
 echo "打包成功！"
 echo "可执行文件位置：dist/autodoor/autodoor"
-echo "请将整个dist/autodoor目录复制到目标机器上运行"
+echo "应用程序包位置：dist/AutoDoor.app"
+echo "请将AutoDoor.app复制到目标机器上运行"
+echo "注意：首次运行时，macOS可能会显示安全警告，需要在系统偏好设置中允许运行"
 
 echo
 echo "按任意键继续..."
