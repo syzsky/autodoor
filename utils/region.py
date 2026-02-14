@@ -59,6 +59,8 @@ def _start_selection(app, selection_type, region_index):
     app.select_window.protocol("WM_DELETE_WINDOW", lambda: cancel_selection(app))
 
     app.select_window.bind("<Escape>", lambda e: cancel_selection(app))
+    
+    app.select_window.focus_set()
 
 def on_mouse_down(app, event):
     """鼠标按下事件"""

@@ -40,7 +40,7 @@ class ScriptModule:
             self.app.status_var.set("脚本执行中...")
             self.app.logging_manager.log_message("脚本已启动")
             
-            if start_color_recognition and hasattr(self.app, 'color_recognition_enabled') and self.app.color_recognition_enabled.get():
+            if start_color_recognition and hasattr(self.app, 'color_enabled') and self.app.color_enabled.get():
                 self.app.color.start_recognition()
                 self.app.logging_manager.log_message("颜色识别已自动启动")
 
@@ -121,15 +121,12 @@ class ScriptExecutor(RecorderBase):
         self.execute_command(optimized)
 
     def run_script(self, script_content):
-        """执行脚本（无限循环）"""
         def execute():
             self.is_running = True
             self.is_paused = False
-            # 记录当前按下的按键，用于确保最终能抬起所有按键
             pressed_keys = set()
             
             try:
-                # 解析脚本内容
                 lines = script_content.splitlines()
                 commands = []
                 for line in lines:
@@ -142,9 +139,7 @@ class ScriptExecutor(RecorderBase):
                     self.is_running = False
                     return
                 
-                # 无限循环执行脚本，直到用户停止
                 while self.is_running:
-                    # 遍历所有命令，执行一次
                     for i, command in enumerate(commands):
                         if not self.is_running:
                             break
@@ -157,10 +152,10 @@ class ScriptExecutor(RecorderBase):
                         if not self.is_running:
                             break
                         
-                        # 处理按键命令，跟踪按下的按键
                         if command["type"] in ["keydown", "keyup"]:
                             key = command["key"]
-                            for _ in range(command["count"]):
+                            count = int(command["count"])
+                            for _ in range(count):
                                 if not self.is_running:
                                     break
                                 while self.is_paused:
@@ -182,7 +177,6 @@ class ScriptExecutor(RecorderBase):
                                 except Exception as e:
                                     self.app.logging_manager.log_message(f"执行按键 {key} 时出错: {str(e)}")
                         else:
-                            # 使用统一的执行入口，自动应用延迟优化
                             next_cmd = commands[i + 1] if i + 1 < len(commands) else None
                             self._execute_with_optimization(command, next_cmd)
             except Exception as e:
@@ -190,7 +184,6 @@ class ScriptExecutor(RecorderBase):
                 self.app.logging_manager.log_message(error_msg)
                 self.app.status_var.set(f"执行错误: {str(e)}")
             finally:
-                # 确保所有按下的按键都被抬起
                 for key in pressed_keys:
                     try:
                         self.app.input_controller.key_up(key)
@@ -205,15 +198,12 @@ class ScriptExecutor(RecorderBase):
         self.execution_thread.start()
 
     def run_script_once(self, script_content):
-        """执行脚本（只执行一遍）"""
         def execute():
             self.is_running = True
             self.is_paused = False
-            # 记录当前按下的按键，用于确保最终能抬起所有按键
             pressed_keys = set()
             
             try:
-                # 解析脚本内容
                 lines = script_content.splitlines()
                 commands = []
                 for line in lines:
@@ -226,7 +216,6 @@ class ScriptExecutor(RecorderBase):
                     self.is_running = False
                     return
                 
-                # 只执行一遍脚本
                 for i, command in enumerate(commands):
                     if not self.is_running:
                         break
@@ -239,10 +228,10 @@ class ScriptExecutor(RecorderBase):
                     if not self.is_running:
                         break
                     
-                    # 处理按键命令，跟踪按下的按键
                     if command["type"] in ["keydown", "keyup"]:
                         key = command["key"]
-                        for _ in range(command["count"]):
+                        count = int(command["count"])
+                        for _ in range(count):
                             if not self.is_running:
                                 break
                             while self.is_paused:
@@ -261,7 +250,6 @@ class ScriptExecutor(RecorderBase):
                                     self.app.input_controller.key_up(key)
                                     pressed_keys.remove(key)
                     else:
-                            # 使用统一的执行入口，自动应用延迟优化
                             next_cmd = commands[i + 1] if i + 1 < len(commands) else None
                             self._execute_with_optimization(command, next_cmd)
             except Exception as e:
@@ -269,7 +257,6 @@ class ScriptExecutor(RecorderBase):
                 self.app.logging_manager.log_message(error_msg)
                 self.app.status_var.set(f"执行错误: {str(e)}")
             finally:
-                # 确保所有按下的按键都被抬起
                 for key in pressed_keys:
                     try:
                         self.app.input_controller.key_up(key)
@@ -280,65 +267,58 @@ class ScriptExecutor(RecorderBase):
                 self.is_running = False
                 self.app.logging_manager.log_message("脚本执行完成")
         
-        # 启动执行线程
         self.execution_thread = threading.Thread(target=execute, daemon=True)
         self.execution_thread.start()
 
     def parse_line(self, line):
-        """解析单条伪代码命令"""
         line = line.strip()
         if not line:
-            return None  # 跳过空行
+            return None
         
-        # 匹配 KeyDown 或 KeyUp 命令，支持单引号和双引号，大小写不敏感
         key_pattern = re.compile(r'^(KeyDown|KeyUp)\s+["\'](.*?)["\']\s*\,\s*(\d+)$', re.IGNORECASE)
         match = key_pattern.match(line)
         if match:
-            command_type = match.group(1).lower()  # 转换为小写：keydown 或 keyup
-            key = match.group(2).lower()  # 转换按键名为小写，适配 pyautogui
-            count = int(match.group(3))  # 执行次数
+            command_type = match.group(1).lower()
+            key = match.group(2).lower()
+            count = int(match.group(3))
             return {
                 "type": command_type,
                 "key": key,
                 "count": count
             }
         
-        # 匹配鼠标点击命令，格式：LeftDown 1、RightUp 1等，大小写不敏感
         mouse_pattern = re.compile(r'^(Left|Right|Middle)(Down|Up)\s+(\d+)$', re.IGNORECASE)
         match = mouse_pattern.match(line)
         if match:
-            button = match.group(1).lower()  # 转换为小写：left、right、middle
-            action = match.group(2).lower()  # 转换为小写：down、up
-            count = int(match.group(3))  # 执行次数
+            button = match.group(1).lower()
+            action = match.group(2).lower()
+            count = int(match.group(3))
             return {
                 "type": f"mouse_{action}",
                 "button": button,
                 "count": count
             }
         
-        # 匹配鼠标移动命令，格式：MoveTo 300,200，大小写不敏感
         move_pattern = re.compile(r"^MoveTo\s+(\d+)\s*\,\s*(\d+)$", re.IGNORECASE)
         match = move_pattern.match(line)
         if match:
-            x = int(match.group(1))  # x坐标
-            y = int(match.group(2))  # y坐标
+            x = int(match.group(1))
+            y = int(match.group(2))
             return {
                 "type": "moveto",
                 "x": x,
                 "y": y
             }
         
-        # 匹配 Delay 命令，大小写不敏感
         delay_pattern = re.compile(r"^Delay\s+(\d+)$", re.IGNORECASE)
         match = delay_pattern.match(line)
         if match:
-            delay_time = int(match.group(1))  # 延迟时间（毫秒）
+            delay_time = int(match.group(1))
             return {
                 "type": "delay",
                 "time": delay_time
             }
         
-        # 匹配特殊指令：StopScript 和 StartScript
         if line.strip().lower() == "stopscript":
             return {
                 "type": "stopscript"
@@ -348,15 +328,14 @@ class ScriptExecutor(RecorderBase):
                 "type": "startscript"
             }
         
-        # 如果都不匹配，返回 None 表示无效命令
         return None
 
     def execute_command(self, command):
-        """执行单个命令"""
         try:
             if command["type"] in ["keydown", "keyup"]:
                 key = command["key"]
-                for _ in range(command["count"]):
+                count = int(command["count"])
+                for _ in range(count):
                     if not self.is_running:
                         break
                     while self.is_paused:
@@ -366,14 +345,14 @@ class ScriptExecutor(RecorderBase):
                     if not self.is_running:
                         break
                     
-                    # 使用输入控制器执行按键操作
                     if command["type"] == "keydown":
                         self.app.input_controller.key_down(key)
                     else:
                         self.app.input_controller.key_up(key)
             elif command["type"] in ["mouse_down", "mouse_up"]:
                 button = command["button"]
-                for _ in range(command["count"]):
+                count = int(command["count"])
+                for _ in range(count):
                     if not self.is_running:
                         break
                     while self.is_paused:
@@ -383,19 +362,17 @@ class ScriptExecutor(RecorderBase):
                     if not self.is_running:
                         break
                     
-                    # 使用输入控制器执行鼠标操作
                     if command["type"] == "mouse_down":
                         self.app.input_controller.mouse_down(button=button)
                     else:
                         self.app.input_controller.mouse_up(button=button)
             elif command["type"] == "moveto":
-                x = command["x"]
-                y = command["y"]
+                x = int(command["x"])
+                y = int(command["y"])
                 if self.is_running and not self.is_paused:
-                    # 使用输入控制器执行鼠标移动
                     self.app.input_controller.move_to(x, y)
             elif command["type"] == "delay":
-                delay_time = command["time"] / 1000  # 转换为秒
+                delay_time = int(command["time"]) / 1000
                 self.app.logging_manager.log_message(f"执行: 延迟 {delay_time}秒")
                 
                 # 分段延迟，以便能够响应暂停/停止命令

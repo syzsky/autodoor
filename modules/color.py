@@ -29,10 +29,9 @@ class ColorRecognition:
         self.region = region
 
     def start_recognition(self, target_color, tolerance, interval, commands):
-        """开始颜色识别"""
         self.target_color = target_color
-        self.tolerance = tolerance
-        self.interval = interval
+        self.tolerance = int(tolerance)
+        self.interval = float(interval)
         self.commands = commands
         
         def recognize():
@@ -76,22 +75,19 @@ class ColorRecognition:
         try:
             # 检查屏幕录制权限（macOS）
             if self.app.platform_adapter.platform == "Darwin":
-                from input.permissions import PermissionManager
                 permission_manager = PermissionManager(self.app)
                 if not permission_manager.check_screen_recording():
-                    # 在主线程中显示权限引导
                     self.app.root.after(0, lambda: self.app._guide_screen_recording_setup())
                     self.app.logging_manager.log_message("颜色识别失败: 缺少屏幕录制权限")
                     return False
             
-            # 截取区域图像
             screenshot = None
-            
-            # 尝试使用ImageGrab.grab()
             try:
-                screenshot = ImageGrab.grab(bbox=self.region, all_screens=True)
+                from utils.screenshot import ScreenshotManager
+                screenshot_manager = ScreenshotManager()
+                screenshot = screenshot_manager.get_region_screenshot(self.region)
             except Exception as e:
-                self.app.logging_manager.log_message(f"ImageGrab.grab()失败: {str(e)}")
+                self.app.logging_manager.log_message(f"截图失败: {str(e)}")
             
             # 检查截图是否成功获取
             if not screenshot:
@@ -210,16 +206,17 @@ class ColorRecognitionManager:
         self.color_selection_window.geometry(f"{max_x - min_x}x{max_y - min_y}+{min_x}+{min_y}")
         self.color_selection_window.attributes("-alpha", 0.3)
         self.color_selection_window.attributes("-topmost", True)
-        self.color_selection_window.config(cursor="crosshair")
+        self.color_selection_window.configure(cursor="crosshair")
         
         # 创建画布
         self.color_canvas = tk.Canvas(self.color_selection_window, bg="white", highlightthickness=0)
         self.color_canvas.pack(fill=tk.BOTH, expand=True)
         
-        # 绑定鼠标事件
         self.color_canvas.bind("<Button-1>", self.on_color_select)
         
         self.color_selection_window.bind("<Escape>", lambda e: self.cancel_color_selection())
+        
+        self.color_selection_window.focus_set()
     
     def cancel_color_selection(self):
         """取消颜色选择"""
@@ -228,14 +225,18 @@ class ColorRecognitionManager:
             self.color_selection_window.destroy()
     
     def on_color_select(self, event):
-        """处理颜色选择事件"""
         self.color_selection_window.withdraw()
         
         self.color_selection_window.update()
         
         abs_x, abs_y = event.x_root, event.y_root
         
-        screen = ImageGrab.grab(all_screens=True)
+        try:
+            from utils.screenshot import ScreenshotManager
+            screenshot_manager = ScreenshotManager()
+            screen = screenshot_manager.get_full_screenshot()
+        except Exception:
+            screen = ImageGrab.grab(all_screens=True)
         
         try:
             import screeninfo
@@ -277,7 +278,7 @@ class ColorRecognitionManager:
             
             tolerance = int(self.app.tolerance_var.get())
             interval = float(self.app.interval_var.get())
-            commands = self.app.color_commands_text.get(1.0, tk.END)
+            commands = self.app.color_commands.get(1.0, tk.END)
         except ValueError:
             messagebox.showwarning("警告", "颜色设置参数格式错误，请检查！")
             return

@@ -90,6 +90,8 @@ class AutoDoorOCR:
         self.ocr_thread = None
         self.timed_threads = []
         self.number_threads = []
+        self.timed_stop_events = {}
+        self.number_stop_events = {}
 
         self.PRIORITIES = {
             "number": 5,
@@ -169,8 +171,8 @@ class AutoDoorOCR:
         self.status_var = tk.StringVar(value="就绪")
         self.region_var = tk.StringVar(value="未选择区域")
         self.color_var = tk.StringVar(value="未选择颜色")
-        self.tolerance_var = tk.IntVar(value=10)
-        self.interval_var = tk.DoubleVar(value=5.0)
+        self.tolerance_var = tk.StringVar(value="10")
+        self.interval_var = tk.StringVar(value="5")
 
     def _create_layout(self):
         self._create_header()

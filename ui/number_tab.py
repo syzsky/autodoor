@@ -35,10 +35,10 @@ def create_number_region(app, index):
     
     group_vars = {
         "region_var": tk.StringVar(value="未选择区域"),
-        "threshold_var": tk.IntVar(value=500 if index == 0 else 1000),
+        "threshold_var": tk.StringVar(value=str(500 if index == 0 else 1000)),
         "key_var": tk.StringVar(value=default_keys[index % len(default_keys)]),
-        "delay_min_var": tk.IntVar(value=100),
-        "delay_max_var": tk.IntVar(value=200),
+        "delay_min_var": tk.StringVar(value="100"),
+        "delay_max_var": tk.StringVar(value="200"),
         "alarm_var": tk.BooleanVar(value=False)
     }
     
@@ -107,7 +107,7 @@ def create_number_region(app, index):
         "region_var": group_vars["region_var"],
         "region": None,
         "threshold": group_vars["threshold_var"],
-        "key": key_entry,
+        "key": group_vars["key_var"],
         "delay_min": group_vars["delay_min_var"],
         "delay_max": group_vars["delay_max_var"],
         "alarm": group_vars["alarm_var"],

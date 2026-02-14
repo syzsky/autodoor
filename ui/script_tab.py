@@ -67,9 +67,9 @@ def create_script_tab(app):
     delay_row.pack(fill='x', padx=10, pady=(4, 8))
     
     ctk.CTkLabel(delay_row, text='延迟(ms):', font=Theme.get_font('xs')).pack(side='left')
-    app.delay_entry = ctk.CTkEntry(delay_row, width=60, height=24)
+    app.delay_var = tk.StringVar(value="250")
+    app.delay_entry = NumericEntry(delay_row, textvariable=app.delay_var, width=60, height=24)
     app.delay_entry.pack(side='left', padx=(2, 6))
-    app.delay_entry.insert(0, "250")
     
     app.insert_delay_btn = AnimatedButton(delay_row, text='插入', font=Theme.get_font('xs'), width=50, height=24,
                                           corner_radius=4, fg_color=Theme.COLORS['success'],
@@ -140,14 +140,14 @@ def create_script_tab(app):
     app.set_combo_key_btn.configure(command=lambda: start_key_listening(app, app.combo_key_var, app.set_combo_key_btn))
     app.set_combo_key_btn.pack(side='left', padx=(0, 8))
     
-    ctk.CTkLabel(combo_row, text='按键延迟:', font=Theme.get_font('xs')).pack(side='left')
+    ctk.CTkLabel(combo_row, text='按键延迟(ms):', font=Theme.get_font('xs')).pack(side='left')
     app.combo_key_delay = tk.StringVar(value="2500")
-    combo_delay_entry = ctk.CTkEntry(combo_row, textvariable=app.combo_key_delay, width=50, height=24)
+    combo_delay_entry = NumericEntry(combo_row, textvariable=app.combo_key_delay, width=50, height=24)
     combo_delay_entry.pack(side='left', padx=(2, 6))
     
-    ctk.CTkLabel(combo_row, text='抬起延迟:', font=Theme.get_font('xs')).pack(side='left')
+    ctk.CTkLabel(combo_row, text='抬起延迟(ms):', font=Theme.get_font('xs')).pack(side='left')
     app.combo_after_delay = tk.StringVar(value="300")
-    combo_after_entry = ctk.CTkEntry(combo_row, textvariable=app.combo_after_delay, width=50, height=24)
+    combo_after_entry = NumericEntry(combo_row, textvariable=app.combo_after_delay, width=50, height=24)
     combo_after_entry.pack(side='left', padx=(2, 6))
     
     app.insert_combo_btn = AnimatedButton(combo_row, text='插入', font=Theme.get_font('xs'), width=50, height=24,
@@ -248,14 +248,17 @@ def create_color_recognition_tab(app, parent):
     app.color_tolerance = NumericEntry(color_row3, textvariable=app.tolerance_var, width=40, height=24)
     app.color_tolerance.pack(side='left', padx=(2, 8))
     ctk.CTkLabel(color_row3, text='间隔:', font=Theme.get_font('xs')).pack(side='left')
-    app.color_interval = ctk.CTkEntry(color_row3, textvariable=app.interval_var, width=40, height=24)
+    app.color_interval = NumericEntry(color_row3, textvariable=app.interval_var, width=40, height=24)
     app.color_interval.pack(side='left', padx=(2, 0))
     ctk.CTkLabel(color_row3, text='秒', font=Theme.get_font('xs')).pack(side='left')
     
     ctk.CTkLabel(color_content, text='执行命令:', font=Theme.get_font('sm')).pack(anchor='w', pady=(8, 2))
     app.color_commands = ctk.CTkTextbox(color_content, font=('Consolas', 10), height=100)
     app.color_commands.pack(fill='both', expand=True)
-
+    
+    info_label = ctk.CTkLabel(color_content, text="额外命令: StartScript/StopScript；用于开始/停止脚本运行", 
+                              font=Theme.get_font('xs'), text_color=Theme.COLORS['text_muted'])
+    info_label.pack(anchor='w', pady=(4, 0))
 
 def insert_key_command(app):
     key = app.key_var.get().strip()
@@ -280,9 +283,8 @@ def insert_key_command(app):
         app.script_text.insert(tk.INSERT, command)
         app.script_text.see(tk.END)
 
-
 def insert_delay_command(app):
-    delay = app.delay_entry.get().strip()
+    delay = app.delay_var.get().strip()
     
     if not delay.isdigit() or int(delay) < 0:
         messagebox.showwarning("警告", "请输入有效的延迟时间！")
@@ -297,7 +299,6 @@ def insert_delay_command(app):
     elif hasattr(app, 'script_text'):
         app.script_text.insert(tk.INSERT, command)
         app.script_text.see(tk.END)
-
 
 def insert_mouse_click_command(app):
     button = app.mouse_button_var.get()
@@ -318,11 +319,9 @@ def insert_mouse_click_command(app):
         app.script_text.insert(tk.INSERT, mouse_command)
         app.script_text.see(tk.END)
 
-
 def select_coordinate(app):
     app.log_message("开始选择坐标点...")
     create_coordinate_selection_window(app)
-
 
 def create_coordinate_selection_window(app):
     try:
@@ -344,14 +343,15 @@ def create_coordinate_selection_window(app):
     app.coordinate_window.geometry(f"{max_x - min_x}x{max_y - min_y}+{min_x}+{min_y}")
     app.coordinate_window.attributes("-alpha", 0.3)
     app.coordinate_window.attributes("-topmost", True)
-    app.coordinate_window.config(cursor="crosshair")
+    app.coordinate_window.configure(cursor="crosshair")
     
     app.coordinate_canvas = tk.Canvas(app.coordinate_window, bg="white", highlightthickness=0)
     app.coordinate_canvas.pack(fill=tk.BOTH, expand=True)
     
     app.coordinate_canvas.bind("<Button-1>", lambda e: on_coordinate_select(app, e))
     app.coordinate_window.bind("<Escape>", lambda e: app.coordinate_window.destroy())
-
+    
+    app.coordinate_window.focus_set()
 
 def on_coordinate_select(app, event):
     abs_x = event.x_root
@@ -370,7 +370,6 @@ def on_coordinate_select(app, event):
         app.script_text.see(tk.END)
     
     app.log_message(f"已选择坐标点: ({abs_x}, {abs_y})")
-
 
 def insert_combo_command(app):
     key = app.combo_key_var.get().strip()
@@ -399,11 +398,9 @@ def insert_combo_command(app):
         app.script_text.insert(tk.INSERT, combo_command)
         app.script_text.see(tk.END)
 
-
 def clear_script(app):
     if messagebox.askyesno("确认", "确定要清空当前脚本吗？"):
         app.script_text.delete(1.0, tk.END)
-
 
 def save_script(app):
     file_path = filedialog.asksaveasfilename(
@@ -418,7 +415,6 @@ def save_script(app):
             messagebox.showinfo("成功", f"脚本已保存到: {file_path}")
         except Exception as e:
             messagebox.showerror("错误", f"保存脚本失败: {str(e)}")
-
 
 def load_script(app):
     file_path = filedialog.askopenfilename(

@@ -4,7 +4,6 @@ from modules.alarm import select_alarm_sound
 from ui.theme import Theme
 from ui.widgets import CardFrame, AnimatedButton, create_section_title, create_divider
 
-
 def create_basic_tab(app):
     page = ctk.CTkFrame(app.content_area, fg_color='transparent')
     app.pages['settings'] = page

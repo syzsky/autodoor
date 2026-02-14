@@ -172,12 +172,10 @@ class ConfigManager:
         groups = self.get_config_value(ocr_config, 'groups', [])
 
         if isinstance(groups, list):
-            # 直接清空所有OCR组
             for group in self.app.ocr_groups:
                 group['frame'].destroy()
             self.app.ocr_groups.clear()
 
-            # 然后根据配置重新创建所有OCR组
             for i, group_config in enumerate(groups):
                 if isinstance(group_config, dict):
                     self.app.ocr.create_group(i)
@@ -218,16 +216,14 @@ class ConfigManager:
                     self.app.timed.create_group(i)
                     if i < len(self.app.timed_groups):
                         for key, value in group_config.items():
-                            if key == 'position':
-                                if 'position_var' in self.app.timed_groups[i]:
-                                    self.app.timed_groups[i]['position_var'].set(value)
-                            elif key == 'enabled':
-                                self.app.timed_groups[i]['enabled'].set(value)
-                                from ui.utils import update_group_style
-                                update_group_style(self.app.timed_groups[i]['frame'], value)
-                            elif key in self.app.timed_groups[i]:
+                            if key in self.app.timed_groups[i]:
                                 if hasattr(self.app.timed_groups[i][key], 'set'):
                                     self.app.timed_groups[i][key].set(value)
+                        
+                        pos_x = group_config.get('position_x', 0)
+                        pos_y = group_config.get('position_y', 0)
+                        if pos_x != 0 or pos_y != 0:
+                            self.app.timed_groups[i]['position_var'].set(f"{pos_x},{pos_y}")
 
             if len(self.app.timed_groups) == 0:
                 self.app.timed.create_group(0)
@@ -256,10 +252,6 @@ class ConfigManager:
                                     except (TypeError, ValueError):
                                         if hasattr(self.app, 'logging_manager'):
                                             self.app.logging_manager.log_message(f"配置文件中的数字识别区域格式错误: {value}")
-                                elif key == 'enabled':
-                                    self.app.number_regions[i]['enabled'].set(value)
-                                    from ui.utils import update_group_style
-                                    update_group_style(self.app.number_regions[i]['frame'], value)
                                 elif hasattr(self.app.number_regions[i][key], 'set'):
                                     self.app.number_regions[i][key].set(value)
 
@@ -317,10 +309,10 @@ class ConfigManager:
             self.app.script_text.insert(1.0, script_content)
 
         # 加载颜色识别命令内容
-        if 'color_commands' in script_config and hasattr(self.app, 'color_commands_text'):
+        if 'color_commands' in script_config and hasattr(self.app, 'color_commands'):
             color_commands_content = script_config['color_commands']
-            self.app.color_commands_text.delete(1.0, 'end')
-            self.app.color_commands_text.insert(1.0, color_commands_content)
+            self.app.color_commands.delete(1.0, 'end')
+            self.app.color_commands.insert(1.0, color_commands_content)
 
         # 加载颜色识别区域
         if 'color_recognition_region' in script_config and script_config['color_recognition_region']:
@@ -343,7 +335,7 @@ class ConfigManager:
                     r, g, b = target_color
                     self.app.color_var.set(f"RGB({r}, {g}, {b})")
                     if hasattr(self.app, 'color_display'):
-                        self.app.color_display.config(background=f"#{r:02x}{g:02x}{b:02x}")
+                        self.app.color_display.configure(fg_color=f"#{r:02x}{g:02x}{b:02x}")
                     # 同时更新实际使用的属性
                     self.app.target_color = target_color
                 except (TypeError, ValueError):
@@ -353,17 +345,42 @@ class ConfigManager:
         # 加载颜色容差
         if 'color_tolerance' in script_config and hasattr(self.app, 'tolerance_var'):
             color_tolerance = script_config['color_tolerance']
-            self.app.tolerance_var.set(color_tolerance)
+            try:
+                self.app.tolerance_var.set(str(int(color_tolerance)))
+            except (ValueError, TypeError):
+                self.app.tolerance_var.set("10")
 
         # 加载检查间隔
         if 'color_interval' in script_config and hasattr(self.app, 'interval_var'):
             color_interval = script_config['color_interval']
-            self.app.interval_var.set(color_interval)
+            try:
+                self.app.interval_var.set(str(int(color_interval)))
+            except (ValueError, TypeError):
+                self.app.interval_var.set("5")
 
         # 加载颜色识别启用状态
-        if 'color_recognition_enabled' in script_config and hasattr(self.app, 'color_recognition_enabled'):
+        if 'color_recognition_enabled' in script_config and hasattr(self.app, 'color_enabled'):
             color_recognition_enabled = script_config['color_recognition_enabled']
-            self.app.color_recognition_enabled.set(color_recognition_enabled)
+            self.app.color_enabled.set(bool(color_recognition_enabled))
+        
+        # 加载脚本运行的延迟设置
+        if 'delay_var' in script_config and hasattr(self.app, 'delay_var'):
+            try:
+                self.app.delay_var.set(str(int(script_config['delay_var'])))
+            except (ValueError, TypeError):
+                self.app.delay_var.set('250')
+        
+        if 'combo_key_delay' in script_config and hasattr(self.app, 'combo_key_delay'):
+            try:
+                self.app.combo_key_delay.set(str(int(script_config['combo_key_delay'])))
+            except (ValueError, TypeError):
+                self.app.combo_key_delay.set('2500')
+        
+        if 'combo_after_delay' in script_config and hasattr(self.app, 'combo_after_delay'):
+            try:
+                self.app.combo_after_delay.set(str(int(script_config['combo_after_delay'])))
+            except (ValueError, TypeError):
+                self.app.combo_after_delay.set('300')
     
     def defer_save_config(self):
         """
@@ -483,8 +500,8 @@ class ConfigManager:
         
         # 获取颜色识别命令内容
         color_commands_content = ''
-        if hasattr(self.app, 'color_commands_text'):
-            color_commands_content = self.app.color_commands_text.get(1.0, 'end')
+        if hasattr(self.app, 'color_commands'):
+            color_commands_content = self.app.color_commands.get(1.0, 'end')
         
         # 获取颜色识别区域
         color_recognition_region = None
@@ -499,17 +516,47 @@ class ConfigManager:
         # 获取颜色容差
         color_tolerance = 10
         if hasattr(self.app, 'tolerance_var'):
-            color_tolerance = self.app.tolerance_var.get()
+            try:
+                val = self.app.tolerance_var.get()
+                color_tolerance = int(val) if val else 10
+            except (ValueError, TypeError):
+                color_tolerance = 10
         
         # 获取检查间隔
-        color_interval = 1.0
+        color_interval = 5
         if hasattr(self.app, 'interval_var'):
-            color_interval = self.app.interval_var.get()
+            try:
+                val = self.app.interval_var.get()
+                color_interval = int(val) if val else 5
+            except (ValueError, TypeError):
+                color_interval = 5
         
         # 获取颜色识别启用状态
         color_recognition_enabled = False
-        if hasattr(self.app, 'color_recognition_enabled'):
-            color_recognition_enabled = self.app.color_recognition_enabled.get()
+        if hasattr(self.app, 'color_enabled'):
+            color_recognition_enabled = self.app.color_enabled.get()
+        
+        # 获取脚本运行的延迟设置
+        delay_var = '250'
+        if hasattr(self.app, 'delay_var'):
+            try:
+                delay_var = str(int(self.app.delay_var.get()))
+            except (ValueError, TypeError):
+                delay_var = '250'
+        
+        combo_key_delay = '2500'
+        if hasattr(self.app, 'combo_key_delay'):
+            try:
+                combo_key_delay = str(int(self.app.combo_key_delay.get()))
+            except (ValueError, TypeError):
+                combo_key_delay = '2500'
+        
+        combo_after_delay = '300'
+        if hasattr(self.app, 'combo_after_delay'):
+            try:
+                combo_after_delay = str(int(self.app.combo_after_delay.get()))
+            except (ValueError, TypeError):
+                combo_after_delay = '300'
         
         return {
             'script_content': script_content,
@@ -518,7 +565,10 @@ class ConfigManager:
             'target_color': target_color,
             'color_tolerance': color_tolerance,
             'color_interval': color_interval,
-            'color_recognition_enabled': color_recognition_enabled
+            'color_recognition_enabled': color_recognition_enabled,
+            'delay_var': delay_var,
+            'combo_key_delay': combo_key_delay,
+            'combo_after_delay': combo_after_delay
         }
     
     def load_config(self):
@@ -675,14 +725,23 @@ class ConfigManager:
             self.app.color_commands.bind("<<Modified>>", on_color_commands_change)
             self.app.color_commands.edit_modified(False)
 
-        if hasattr(self.app, 'color_recognition_enabled'):
-            self.app.color_recognition_enabled.trace_add("write", immediate_save)
+        if hasattr(self.app, 'color_enabled'):
+            self.app.color_enabled.trace_add("write", immediate_save)
 
         if hasattr(self.app, 'tolerance_var'):
             self.app.tolerance_var.trace_add("write", delayed_save)
 
         if hasattr(self.app, 'interval_var'):
             self.app.interval_var.trace_add("write", delayed_save)
+        
+        if hasattr(self.app, 'delay_var'):
+            self.app.delay_var.trace_add("write", delayed_save)
+        
+        if hasattr(self.app, 'combo_key_delay'):
+            self.app.combo_key_delay.trace_add("write", delayed_save)
+        
+        if hasattr(self.app, 'combo_after_delay'):
+            self.app.combo_after_delay.trace_add("write", delayed_save)
 
     def clear_ocr_groups(self):
         """清空所有OCR组"""
@@ -707,18 +766,24 @@ class ConfigManager:
                 group['key'].insert(0, val)
                 group['key'].configure(state='disabled')
 
+        def safe_set_int(var, val, default=0):
+            try:
+                var.set(str(int(val)))
+            except (ValueError, TypeError):
+                var.set(str(default))
+
         config_mappings = {
             'enabled': lambda val: self.load_enabled_config(group, val),
             'region': lambda val: self.load_region_config(group, val),
-            'interval': lambda val: group['interval'].set(val),
-            'pause': lambda val: group['pause'].set(val),
+            'interval': lambda val: safe_set_int(group['interval'], val, 5),
+            'pause': lambda val: safe_set_int(group['pause'], val, 180),
             'key': set_key_value,
-            'delay_min': lambda val: group['delay_min'].set(val),
-            'delay_max': lambda val: group['delay_max'].set(val),
-            'alarm': lambda val: group['alarm'].set(val),
-            'keywords': lambda val: group['keywords'].set(val),
-            'language': lambda val: group['language'].set(val),
-            'click': lambda val: group['click'].set(val)
+            'delay_min': lambda val: safe_set_int(group['delay_min'], val, 300),
+            'delay_max': lambda val: safe_set_int(group['delay_max'], val, 500),
+            'alarm': lambda val: group['alarm'].set(bool(val)),
+            'keywords': lambda val: group['keywords'].set(str(val) if val else ''),
+            'language': lambda val: group['language'].set(str(val) if val else 'eng'),
+            'click': lambda val: group['click'].set(bool(val))
         }
 
         for key, setter in config_mappings.items():

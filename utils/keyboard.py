@@ -12,7 +12,7 @@ def start_key_listening(app, target_var, button, is_shortcut=False):
     if hasattr(button, 'configure'):
         button.configure(state="disabled")
     else:
-        button.config(state="disabled")
+        button.configure(state="disabled")
     
     app.status_var.set("请按任意按键进行设置，按ESC键清空当前记录")
     
@@ -92,7 +92,7 @@ def _restore_button_state(button):
     if hasattr(button, 'configure'):
         button.configure(state="normal")
     else:
-        button.config(state="normal")
+        button.configure(state="normal")
 
 
 def get_available_keys():

@@ -53,6 +53,8 @@ class ModuleController:
         self.app.global_start_btn.configure(state="disabled")
 
         self.app.global_stop_btn.configure(state="normal")
+        
+        self._toggle_all_ui_state("disabled")
 
         if self.app.module_check_vars["ocr"].get():
             self.app.ocr.start_monitoring()
@@ -113,5 +115,47 @@ class ModuleController:
 
         self.app.global_stop_btn.configure(state="disabled")
         
+        self._toggle_all_ui_state("normal")
+        
         with self.app.state_lock:
             self.app.is_running = False
+    
+    def _toggle_all_ui_state(self, state):
+        """递归地禁用或启用所有UI控件
+        
+        Args:
+            state: 控件状态，"disabled" 或 "normal"
+        """
+        for child in self.app.root.winfo_children():
+            self._toggle_widget_state(child, state)
+    
+    def _toggle_widget_state(self, widget, state):
+        """递归地禁用或启用控件及其所有子控件
+        
+        Args:
+            widget: 控件
+            state: 控件状态，"disabled" 或 "normal"
+        """
+        if widget == self.app.global_stop_btn:
+            return
+        
+        if widget == self.app.global_start_btn:
+            return
+        
+        for indicator in self.app.module_indicators.values():
+            if widget == indicator:
+                return
+        
+        if hasattr(self.app, 'script_tabview') and widget == self.app.script_tabview:
+            return
+        
+        try:
+            widget.configure(state=state)
+        except Exception:
+            pass
+        
+        try:
+            for child in widget.winfo_children():
+                self._toggle_widget_state(child, state)
+        except Exception:
+            pass

@@ -88,24 +88,20 @@ class EventManager:
 
     def execute_event(self, event_data):
         """执行具体事件"""
-        # 解析事件数据，支持新旧格式
         if len(event_data) == 3:
-            # 新格式: (priority, event, module_info)
             priority, event, module_info = event_data
         else:
-            # 旧格式: (event, module_info)
             event, module_info = event_data
         event_type, data = event
 
         if event_type == 'keypress':
             key = data
             try:
-                # 根据模块信息获取延迟范围变量
                 if module_info:
                     module_type, module_index = module_info
                     if module_type == 'ocr':
-                        delay_min_var = self.app.ocr_delay_min
-                        delay_max_var = self.app.ocr_delay_max
+                        delay_min_var = self.app.ocr_groups[module_index]['delay_min']
+                        delay_max_var = self.app.ocr_groups[module_index]['delay_max']
                     elif module_type == 'timed':
                         delay_min_var = self.app.timed_groups[module_index]['delay_min']
                         delay_max_var = self.app.timed_groups[module_index]['delay_max']
@@ -113,32 +109,26 @@ class EventManager:
                         delay_min_var = self.app.number_regions[module_index]['delay_min']
                         delay_max_var = self.app.number_regions[module_index]['delay_max']
                     else:
-                        # 默认延迟变量
                         class DefaultVar:
                             def get(self):
-                                return 300
+                                return "300"
                         delay_min_var = DefaultVar()
                         delay_max_var = DefaultVar()
                 else:
-                    # 默认延迟变量
                     class DefaultVar:
                         def get(self):
-                            return 300
+                            return "300"
                     delay_min_var = DefaultVar()
                     delay_max_var = DefaultVar()
 
-                # 使用KeyEventExecutor执行按键操作
                 from modules.input import KeyEventExecutor
                 executor = KeyEventExecutor(self.app.input_controller, delay_min_var, delay_max_var)
                 executor.execute_keypress(key)
 
-                # 记录日志
-                delay_min = max(1, delay_min_var.get())
-                delay_max = max(delay_min, delay_max_var.get())
+                delay_min = max(1, int(delay_min_var.get()))
+                delay_max = max(delay_min, int(delay_max_var.get()))
                 self.app.logging_manager.log_message(f"按下了 {key} 键，延迟范围 {delay_min}-{delay_max} 毫秒")
             except Exception as e:
                 self.app.logging_manager.log_message(f"按键执行错误: {str(e)}")
         elif event_type == 'exit':
-            # 退出事件，什么都不做
             pass
-        # 其他事件类型...

@@ -80,7 +80,7 @@ def create_home_tab(app):
     app.home_log_text.pack(fill='both', expand=True, padx=12, pady=(0, 8))
     
     clear_btn = AnimatedButton(log_card, text='清除日志', font=Theme.get_font('xs'), width=70,
-                               fg_color='transparent', text_color=Theme.COLORS['primary'],
-                               hover_color=Theme.COLORS['info_light'], border_width=1, corner_radius=4,
+                               fg_color=Theme.COLORS['primary'], text_color='#ffffff',
+                               hover_color=Theme.COLORS['primary_hover'], corner_radius=4,
                                command=app.clear_log)
     clear_btn.pack(side='right', padx=12, pady=(0, 10))

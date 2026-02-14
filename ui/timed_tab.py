@@ -34,10 +34,10 @@ def create_timed_group(app, index):
     default_keys = ["space", "enter", "tab", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"]
     
     group_vars = {
-        "interval_var": tk.IntVar(value=10 * (index + 1)),
+        "interval_var": tk.StringVar(value=str(10 * (index + 1))),
         "key_var": tk.StringVar(value=default_keys[index % len(default_keys)]),
-        "delay_min_var": tk.IntVar(value=300),
-        "delay_max_var": tk.IntVar(value=500),
+        "delay_min_var": tk.StringVar(value="300"),
+        "delay_max_var": tk.StringVar(value="500"),
         "alarm_var": tk.BooleanVar(value=False),
         "click_enabled_var": tk.BooleanVar(value=False),
         "position_var": tk.StringVar(value="未选择位置")
@@ -110,7 +110,7 @@ def create_timed_group(app, index):
         "frame": group_frame,
         "enabled": enabled_var,
         "interval": group_vars["interval_var"],
-        "key": key_entry,
+        "key": group_vars["key_var"],
         "delay_min": group_vars["delay_min_var"],
         "delay_max": group_vars["delay_max_var"],
         "alarm": group_vars["alarm_var"],

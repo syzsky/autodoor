@@ -90,14 +90,19 @@ class OCRModule:
                 time.sleep(5)
     
     def _calculate_min_interval(self):
-        """
-        计算所有启用组的最小间隔时间
-        Returns:
-            int: 最小间隔时间
-        """
         enabled_groups = [group for group in self.app.ocr_groups if group["enabled"].get()]
         if enabled_groups:
-            return min(group["interval"].get() for group in enabled_groups)
+            try:
+                intervals = []
+                for group in enabled_groups:
+                    try:
+                        interval = int(group["interval"].get())
+                        intervals.append(interval)
+                    except (ValueError, TypeError):
+                        intervals.append(5)
+                return min(intervals)
+            except (ValueError, TypeError):
+                return 5
         return 5
     
     def _wait_for_interval(self, interval):
@@ -113,30 +118,25 @@ class OCRModule:
             time.sleep(1)
     
     def _should_process_group(self, group, i, current_time):
-        """
-        检查是否应该处理指定的OCR组
-        Args:
-            group: OCR组配置
-            i: 组索引
-            current_time: 当前时间
-
-        Returns:
-            bool: 是否应该处理
-        """
-        # 检查组是否启用且已选择区域
         if not group["enabled"].get() or not group["region"]:
             return False
 
-        # 获取组配置
-        pause_duration = group["pause"].get()
-        group_interval = group["interval"].get()
+        try:
+            pause_duration = int(group["pause"].get())
+        except (ValueError, TypeError):
+            pause_duration = 180
+        try:
+            group_interval = int(group["interval"].get())
+        except (ValueError, TypeError):
+            group_interval = 5
 
-        # 检查是否在暂停期（触发动作后）
-        if current_time - self.last_trigger_times[i] < pause_duration:
+        time_since_trigger = current_time - self.last_trigger_times[i]
+        time_since_recognition = current_time - self.last_recognition_times[i]
+        
+        if time_since_trigger < pause_duration:
             return False
 
-        # 检查是否达到识别间隔
-        if current_time - self.last_recognition_times[i] < group_interval:
+        if time_since_recognition < group_interval:
             return False
 
         return True
@@ -197,30 +197,18 @@ class OCRModule:
         return True, left, top, right, bottom
     
     def _capture_screen_region(self, left, top, right, bottom, group_index):
-        """
-        截取屏幕区域
-        Args:
-            left: 左上角x坐标
-            top: 左上角y坐标
-            right: 右下角x坐标
-            bottom: 右下角y坐标
-            group_index: OCR组索引
-
-        Returns:
-            Image: 截图图像
-        """
-        # 检查屏幕录制权限（macOS）
         if self.app.platform_adapter.platform == "Darwin":
             from input.permissions import PermissionManager
             permission_manager = PermissionManager(self.app)
             if not permission_manager.check_screen_recording():
-                # 在主线程中显示权限引导
                 self.app.root.after(0, lambda: self.app._guide_screen_recording_setup())
                 self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 缺少屏幕录制权限")
                 return None
         
         try:
-            return ImageGrab.grab(bbox=(left, top, right, bottom), all_screens=True)
+            from utils.screenshot import ScreenshotManager
+            screenshot_manager = ScreenshotManager()
+            return screenshot_manager.get_region_screenshot((left, top, right, bottom))
         except Exception as e:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 屏幕截图失败 - {str(e)}")
             return None
@@ -454,19 +442,22 @@ class OCRModule:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 组配置为空")
             return False, None, None, None, None, None
 
-        # 获取组配置
         key = group.get("key", tk.StringVar(value="")).get()
-        delay_min = group.get("delay_min", tk.IntVar(value=300)).get()
-        delay_max = group.get("delay_max", tk.IntVar(value=500)).get()
+        try:
+            delay_min = int(group.get("delay_min", tk.StringVar(value="300")).get())
+        except (ValueError, TypeError):
+            delay_min = 300
+        try:
+            delay_max = int(group.get("delay_max", tk.StringVar(value="500")).get())
+        except (ValueError, TypeError):
+            delay_max = 500
         alarm_enabled = group.get("alarm", tk.BooleanVar(value=False)).get()
         region = group.get("region")
 
-        # 验证必要参数
         if not key:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 未设置触发按键")
             return False, None, None, None, None, None
 
-        # 验证延迟参数
         if delay_min < 0 or delay_max < delay_min:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 延迟参数无效")
             delay_min = 300
@@ -520,34 +511,16 @@ class OCRModule:
             # 等待固定时间
             time.sleep(self.app.click_delay)
     
-    def _execute_key_press(self, key, delay, group_index):
-        """
-        执行按键操作
-        Args:
-            key: 按键
-            delay: 延迟时间
-            group_index: OCR组索引
-        """
-        # 检查是否正在运行
+    def _execute_key_press(self, key, group_index):
         if not self.app.is_running or getattr(self.app, 'system_stopped', False):
             return
 
-        # 使用输入控制器执行按键操作
-        self.app.input_controller.press_key(key, delay)
-
-        # 更新该组的上次触发时间，进入暂停期
+        self.app.event_manager.add_event(('keypress', key), ('ocr', group_index))
         self.last_trigger_times[group_index] = time.time()
     
     def _play_alarm_if_enabled(self, alarm_enabled, group_index):
-        """
-        播放报警声音（如果启用）
-        Args:
-            alarm_enabled: 是否启用报警
-            group_index: OCR组索引
-        """
         try:
-            if alarm_enabled and self.app.PYGAME_AVAILABLE:
-                # 创建一个临时的BooleanVar对象来传递给play_alarm_sound方法
+            if alarm_enabled:
                 import tkinter as tk
                 temp_alarm_var = tk.BooleanVar(value=True)
                 self.app.alarm_module.play_alarm_sound(temp_alarm_var)
@@ -555,42 +528,26 @@ class OCRModule:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 播放报警声音失败 - {str(e)}")
     
     def trigger_action_for_group(self, group, group_index, click_enabled, click_pos=None):
-        """
-        为单个OCR组触发动作
-        Args:
-            group: OCR组配置字典
-            group_index: OCR组索引
-            click_enabled: 是否启用点击
-            click_pos: 点击位置坐标
-        """
         try:
-            # 检查是否正在运行
             with self.app.state_lock:
                 if not self.app.is_running or getattr(self.app, 'system_stopped', False):
                     return
 
-            # 验证输入参数
             valid, key, delay_min, delay_max, alarm_enabled, region = self._validate_trigger_input(group, group_index)
             if not valid:
                 return
 
             self.app.logging_manager.log_message(f"识别组{group_index+1}触发动作，按键: {key}")
 
-            # 生成随机延迟
-            delay = random.randint(delay_min, delay_max) / 1000.0
-
-            # 如果启用点击，执行鼠标点击
             if click_enabled:
                 click_x, click_y = self._calculate_click_position(click_pos, region, group_index)
                 self._execute_mouse_click(click_x, click_y, group_index)
 
-            # 执行按键操作
-            self._execute_key_press(key, delay, group_index)
+            self._execute_key_press(key, group_index)
         except Exception as e:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 触发动作失败 - {str(e)}")
             import traceback
             self.app.logging_manager.log_message(f"错误详情: {traceback.format_exc()}")
 
-        # 播放报警声音（如果启用）
         if 'alarm_enabled' in locals():
             self._play_alarm_if_enabled(alarm_enabled, group_index)

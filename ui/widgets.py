@@ -9,35 +9,104 @@ class NumericEntry(ctk.CTkEntry):
         self._textvariable = textvariable
         
         if textvariable is not None:
-            current_value = textvariable.get()
-            if current_value == '' or current_value is None:
-                textvariable.set('0')
+            try:
+                current_value = textvariable.get()
+                if current_value == '' or current_value is None:
+                    if isinstance(textvariable, tk.DoubleVar):
+                        textvariable.set(0.0)
+                    elif isinstance(textvariable, tk.IntVar):
+                        textvariable.set(0)
+                    else:
+                        textvariable.set('0')
+            except tk.TclError:
+                if isinstance(textvariable, tk.DoubleVar):
+                    textvariable.set(0.0)
+                elif isinstance(textvariable, tk.IntVar):
+                    textvariable.set(0)
+                else:
+                    textvariable.set('0')
         
         super().__init__(master, textvariable=textvariable, **kwargs)
         
+        try:
+            self._orig_value = self.get()
+        except tk.TclError:
+            self._orig_value = '0'
+        
         self.bind('<KeyRelease>', self._validate)
-        self.bind('<FocusOut>', self._validate)
+        self.bind('<FocusOut>', self._on_focus_out)
         self.bind('<FocusIn>', self._on_focus_in)
+        self.bind('<KeyPress>', self._on_key_press)
     
-    def _on_focus_in(self, event=None):
-        value = self.get()
-        if value == '0':
-            self.delete(0, 'end')
-    
-    def _validate(self, event=None):
-        value = self.get()
-        if value == '' or value == '-':
-            self._valid = True
-            self.configure(border_color=Theme.COLORS['border'])
+    def _on_key_press(self, event):
+        if event.keysym in ('BackSpace', 'Delete', 'Tab', 'Return', 'Escape', 'Left', 'Right'):
             return
         
+        if event.char == '' and event.keysym not in ('BackSpace', 'Delete'):
+            return
+        
+        if event.char.isdigit() or event.char == '-':
+            return
+        
+        if event.keysym not in ('BackSpace', 'Delete', 'Tab'):
+            return 'break'
+    
+    def _on_focus_in(self, event=None):
         try:
-            float(value)
+            value = self.get()
+            if value == '0' or value == '0.0':
+                self.delete(0, 'end')
+            self._orig_value = self.get()
+        except tk.TclError:
+            self._orig_value = '0'
+    
+    def _on_focus_out(self, event=None):
+        try:
+            value = self.get()
+            if value == '' or value == '-':
+                if self._textvariable:
+                    if isinstance(self._textvariable, tk.DoubleVar):
+                        self._textvariable.set(0.0)
+                    elif isinstance(self._textvariable, tk.IntVar):
+                        self._textvariable.set(0)
+                    else:
+                        self._textvariable.set('0')
+                else:
+                    self.delete(0, 'end')
+                    self.insert(0, '0')
+            self._validate(event)
+        except tk.TclError:
+            if self._textvariable:
+                if isinstance(self._textvariable, tk.DoubleVar):
+                    self._textvariable.set(0.0)
+                elif isinstance(self._textvariable, tk.IntVar):
+                    self._textvariable.set(0)
+                else:
+                    self._textvariable.set('0')
+    
+    def _validate(self, event=None):
+        try:
+            value = self.get()
+            if value == '' or value == '-':
+                self._valid = True
+                self.configure(border_color=Theme.COLORS['border'])
+                return
+            
+            try:
+                float(value)
+                self._valid = True
+                self.configure(border_color=Theme.COLORS['success'])
+            except ValueError:
+                self._valid = False
+                self.configure(border_color=Theme.COLORS['error'])
+                restore_value = self._orig_value if self._orig_value and self._orig_value not in ('', '-') else '0'
+                self.delete(0, 'end')
+                self.insert(0, restore_value)
+                self._valid = True
+                self.configure(border_color=Theme.COLORS['border'])
+        except tk.TclError:
             self._valid = True
-            self.configure(border_color=Theme.COLORS['success'])
-        except ValueError:
-            self._valid = False
-            self.configure(border_color=Theme.COLORS['error'])
+            self.configure(border_color=Theme.COLORS['border'])
     
     def is_valid(self):
         return self._valid
@@ -48,7 +117,7 @@ class NumericEntry(ctk.CTkEntry):
             if val == '' or val == '-':
                 return default
             return float(val)
-        except ValueError:
+        except (ValueError, tk.TclError):
             return default
 
 
