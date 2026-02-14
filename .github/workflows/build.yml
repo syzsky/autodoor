@@ -106,7 +106,7 @@ jobs:
     
     - name: Install dependencies for macOS
       run: |
-        brew install tesseract
+        brew install tesseract cliclick
         which tesseract
         tessdata_path="/opt/homebrew/share/tessdata"
         if [ ! -d "$tessdata_path" ]; then
