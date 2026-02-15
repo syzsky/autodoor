@@ -372,7 +372,7 @@ class ScriptExecutor(RecorderBase):
                 if self.is_running and not self.is_paused:
                     self.app.input_controller.move_to(x, y)
             elif command["type"] == "delay":
-                delay_time = int(command["time"]) / 1000
+                delay_time = command["time"] / 1000
                 self.app.logging_manager.log_message(f"执行: 延迟 {delay_time}秒")
                 
                 # 分段延迟，以便能够响应暂停/停止命令

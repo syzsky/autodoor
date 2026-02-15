@@ -13,14 +13,6 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
-REM Check if pip is available
-pip --version >nul 2>&1
-if %ERRORLEVEL% neq 0 (
-    echo Error: pip is not available
-    pause
-    exit /b 1
-)
-
 REM Verify module structure
 echo Verifying module structure...
 for %%m in (core ui modules input utils) do (
@@ -33,40 +25,42 @@ for %%m in (core ui modules input utils) do (
     )
 )
 
-REM Delete old virtual environment if it exists
-if exist venv (
-    echo Deleting old virtual environment...
-    rmdir /s /q venv
+REM Check for existing virtual environment
+set VENV_PATH=
+if exist ".venv\Scripts\activate.bat" (
+    set VENV_PATH=.venv
+    echo Found existing virtual environment: .venv
+) else if exist "venv\Scripts\activate.bat" (
+    set VENV_PATH=venv
+    echo Found existing virtual environment: venv
 )
 
-REM Create new virtual environment
-echo Creating virtual environment...
-python -m venv venv
-if %ERRORLEVEL% neq 0 (
-    echo Warning: Failed to create virtual environment, will use current Python environment
-) else (
-    echo Activating virtual environment...
-    call venv\Scripts\activate
-    echo Updating pip...
-    pip install --upgrade pip
+REM If no virtual environment found, create one
+if "%VENV_PATH%"=="" (
+    echo Creating new virtual environment...
+    python -m venv .venv
+    if %ERRORLEVEL% neq 0 (
+        echo Error: Failed to create virtual environment
+        pause
+        exit /b 1
+    )
+    set VENV_PATH=.venv
 )
 
-REM Install six library first to ensure it's correctly installed
-echo Installing six library...
-pip install "six>=1.16.0"
-if %ERRORLEVEL% neq 0 (
-    echo Error: Failed to install six library
-    pause
-    exit /b 1
-)
+REM Activate virtual environment
+echo Activating virtual environment: %VENV_PATH%
+call %VENV_PATH%\Scripts\activate.bat
 
-REM Install other dependencies
-echo Installing other dependencies...
-pip install -r requirements.txt pyinstaller
+REM Check if pyinstaller is installed
+%VENV_PATH%\Scripts\pip show pyinstaller >nul 2>&1
 if %ERRORLEVEL% neq 0 (
-    echo Error: Failed to install dependencies
-    pause
-    exit /b 1
+    echo Installing pyinstaller...
+    %VENV_PATH%\Scripts\pip install pyinstaller
+    if %ERRORLEVEL% neq 0 (
+        echo Error: Failed to install pyinstaller
+        pause
+        exit /b 1
+    )
 )
 
 REM Clean old build files
@@ -81,7 +75,7 @@ if exist dist (
 
 REM Build with PyInstaller, force rebuild
 echo Building with PyInstaller...
-pyinstaller autodoor.spec --noconfirm --clean
+%VENV_PATH%\Scripts\pyinstaller autodoor.spec --noconfirm --clean
 if %ERRORLEVEL% neq 0 (
     echo Error: Build failed
     pause

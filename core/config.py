@@ -1,6 +1,7 @@
 import json
 import os
 import datetime
+import tkinter as tk
 from ui.utils import update_group_style
 
 class ConfigManager:
@@ -294,7 +295,7 @@ class ConfigManager:
         if 'home_checkboxes' in config and hasattr(self.app, 'module_check_vars'):
             home_checkboxes = config['home_checkboxes']
             if home_checkboxes:
-                for module in ['ocr', 'timed', 'number']:
+                for module in ['ocr', 'timed', 'number', 'script']:
                     if module in home_checkboxes:
                         self.app.module_check_vars[module].set(home_checkboxes[module])
     
@@ -386,15 +387,22 @@ class ConfigManager:
         """
         延迟保存配置，避免频繁保存
         """
+        if not hasattr(self.app, 'root') or not self.app.root:
+            return
+        
         if not hasattr(self.app, '_save_config_timer'):
             self.app._save_config_timer = None
         
-        # 取消之前的定时器
         if self.app._save_config_timer:
-            self.app.root.after_cancel(self.app._save_config_timer)
+            try:
+                self.app.root.after_cancel(self.app._save_config_timer)
+            except Exception:
+                pass
         
-        # 设置新的定时器
-        self.app._save_config_timer = self.app.root.after(1000, self.app.save_config)
+        try:
+            self.app._save_config_timer = self.app.root.after(1000, self.app.save_config)
+        except Exception:
+            pass
     
     def _get_timed_config(self):
         """获取定时功能配置"""
@@ -488,7 +496,8 @@ class ConfigManager:
         return {
             'ocr': self.app.module_check_vars['ocr'].get(),
             'timed': self.app.module_check_vars['timed'].get(),
-            'number': self.app.module_check_vars['number'].get()
+            'number': self.app.module_check_vars['number'].get(),
+            'script': self.app.module_check_vars.get('script', tk.BooleanVar(value=False)).get()
         }
     
     def _get_script_config(self):
@@ -654,17 +663,18 @@ class ConfigManager:
     
     def setup_config_listeners(self):
         """为配置变量添加监听器，自动保存配置"""
-        def delayed_save(*args):
-            self.app.root.after(1000, self.app.save_config)
-
         def immediate_save(*args):
             self.defer_save_config()
 
         def setup_group_listeners(group):
             group["enabled"].trace_add("write", immediate_save)
-            group["interval"].trace_add("write", delayed_save)
+            group["interval"].trace_add("write", immediate_save)
             if hasattr(group.get("key"), "trace_add"):
                 group["key"].trace_add("write", immediate_save)
+            group["delay_min"].trace_add("write", immediate_save)
+            group["delay_max"].trace_add("write", immediate_save)
+            group["alarm"].trace_add("write", immediate_save)
+            group["click_enabled"].trace_add("write", immediate_save)
 
         for group in self.app.timed_groups:
             setup_group_listeners(group)
@@ -673,9 +683,12 @@ class ConfigManager:
 
         def setup_region_listeners(region_config):
             region_config["enabled"].trace_add("write", immediate_save)
-            region_config["threshold"].trace_add("write", delayed_save)
+            region_config["threshold"].trace_add("write", immediate_save)
             if hasattr(region_config.get("key"), "trace_add"):
                 region_config["key"].trace_add("write", immediate_save)
+            region_config["delay_min"].trace_add("write", immediate_save)
+            region_config["delay_max"].trace_add("write", immediate_save)
+            region_config["alarm"].trace_add("write", immediate_save)
 
         for region_config in self.app.number_regions:
             setup_region_listeners(region_config)
@@ -684,14 +697,14 @@ class ConfigManager:
 
         def setup_ocr_group_listeners(group):
             group["enabled"].trace_add("write", immediate_save)
-            group["interval"].trace_add("write", delayed_save)
-            group["pause"].trace_add("write", delayed_save)
+            group["interval"].trace_add("write", immediate_save)
+            group["pause"].trace_add("write", immediate_save)
             if hasattr(group.get("key"), "trace_add"):
                 group["key"].trace_add("write", immediate_save)
-            group["delay_min"].trace_add("write", delayed_save)
-            group["delay_max"].trace_add("write", delayed_save)
+            group["delay_min"].trace_add("write", immediate_save)
+            group["delay_max"].trace_add("write", immediate_save)
             group["alarm"].trace_add("write", immediate_save)
-            group["keywords"].trace_add("write", delayed_save)
+            group["keywords"].trace_add("write", immediate_save)
             group["language"].trace_add("write", immediate_save)
             group["click"].trace_add("write", immediate_save)
 
@@ -712,7 +725,7 @@ class ConfigManager:
         if hasattr(self.app, 'script_text'):
             def on_script_change(event):
                 if self.app.script_text.edit_modified():
-                    delayed_save()
+                    immediate_save()
                     self.app.script_text.edit_modified(False)
             self.app.script_text.bind("<<Modified>>", on_script_change)
             self.app.script_text.edit_modified(False)
@@ -720,7 +733,7 @@ class ConfigManager:
         if hasattr(self.app, 'color_commands'):
             def on_color_commands_change(event):
                 if self.app.color_commands.edit_modified():
-                    delayed_save()
+                    immediate_save()
                     self.app.color_commands.edit_modified(False)
             self.app.color_commands.bind("<<Modified>>", on_color_commands_change)
             self.app.color_commands.edit_modified(False)
@@ -729,19 +742,19 @@ class ConfigManager:
             self.app.color_enabled.trace_add("write", immediate_save)
 
         if hasattr(self.app, 'tolerance_var'):
-            self.app.tolerance_var.trace_add("write", delayed_save)
+            self.app.tolerance_var.trace_add("write", immediate_save)
 
         if hasattr(self.app, 'interval_var'):
-            self.app.interval_var.trace_add("write", delayed_save)
+            self.app.interval_var.trace_add("write", immediate_save)
         
         if hasattr(self.app, 'delay_var'):
-            self.app.delay_var.trace_add("write", delayed_save)
+            self.app.delay_var.trace_add("write", immediate_save)
         
         if hasattr(self.app, 'combo_key_delay'):
-            self.app.combo_key_delay.trace_add("write", delayed_save)
+            self.app.combo_key_delay.trace_add("write", immediate_save)
         
         if hasattr(self.app, 'combo_after_delay'):
-            self.app.combo_after_delay.trace_add("write", delayed_save)
+            self.app.combo_after_delay.trace_add("write", immediate_save)
 
     def clear_ocr_groups(self):
         """清空所有OCR组"""

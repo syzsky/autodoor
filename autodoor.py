@@ -32,7 +32,7 @@ from modules.alarm import AlarmModule
 from modules.script import ScriptModule
 from modules.color import ColorRecognitionManager
 
-VERSION = "2.1.1"
+VERSION = "2.1.2"
 
 
 class AutoDoorOCR:
@@ -463,8 +463,21 @@ class AutoDoorOCR:
 
 
 def main():
-    app = AutoDoorOCR()
-    app.run()
+    import traceback
+    try:
+        app = AutoDoorOCR()
+        app.run()
+    except Exception as e:
+        error_msg = f"程序启动失败: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        try:
+            log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "autodoor.log")
+            with open(log_file, 'a', encoding='utf-8') as f:
+                import datetime
+                f.write(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {error_msg}\n")
+        except Exception:
+            pass
+        raise
 
 
 if __name__ == "__main__":

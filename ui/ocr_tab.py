@@ -86,11 +86,11 @@ def create_ocr_group(app, index):
     key_btn.configure(command=lambda: start_key_listening(app, key_entry, key_btn))
     key_btn.pack(side='left', padx=(0, 8))
     
-    ctk.CTkLabel(row1, text='时长:', font=Theme.get_font('xs')).pack(side='left')
-    delay_min_entry = NumericEntry(row1, textvariable=group_vars["delay_min_var"], width=35, height=24)
+    ctk.CTkLabel(row1, text='按键时长:', font=Theme.get_font('xs')).pack(side='left')
+    delay_min_entry = NumericEntry(row1, textvariable=group_vars["delay_min_var"], width=45, height=24)
     delay_min_entry.pack(side='left', padx=(2, 2))
     ctk.CTkLabel(row1, text='-', font=Theme.get_font('xs')).pack(side='left')
-    delay_max_entry = NumericEntry(row1, textvariable=group_vars["delay_max_var"], width=35, height=24)
+    delay_max_entry = NumericEntry(row1, textvariable=group_vars["delay_max_var"], width=45, height=24)
     delay_max_entry.pack(side='left', padx=(2, 2))
     ctk.CTkLabel(row1, text='ms', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
     
@@ -103,12 +103,12 @@ def create_ocr_group(app, index):
     row2.pack(fill='x', padx=10, pady=(4, 8))
     
     ctk.CTkLabel(row2, text='间隔:', font=Theme.get_font('xs')).pack(side='left')
-    interval_entry = NumericEntry(row2, textvariable=group_vars["interval_var"], width=35, height=24)
+    interval_entry = NumericEntry(row2, textvariable=group_vars["interval_var"], width=45, height=24)
     interval_entry.pack(side='left', padx=(2, 2))
     ctk.CTkLabel(row2, text='秒', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
     
     ctk.CTkLabel(row2, text='暂停:', font=Theme.get_font('xs')).pack(side='left')
-    pause_entry = NumericEntry(row2, textvariable=group_vars["pause_var"], width=40, height=24)
+    pause_entry = NumericEntry(row2, textvariable=group_vars["pause_var"], width=45, height=24)
     pause_entry.pack(side='left', padx=(2, 2))
     ctk.CTkLabel(row2, text='秒', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
     
@@ -156,6 +156,10 @@ def add_ocr_group(app):
     if len(app.ocr_groups) >= 15:
         return
     create_ocr_group(app, len(app.ocr_groups))
+    if hasattr(app, '_setup_ocr_group_listeners') and app.ocr_groups:
+        app._setup_ocr_group_listeners(app.ocr_groups[-1])
+    if hasattr(app, 'config_manager'):
+        app.config_manager.defer_save_config()
 
 
 def delete_ocr_group(app, group_frame, confirm=True):
@@ -170,6 +174,9 @@ def delete_ocr_group(app, group_frame, confirm=True):
             app.ocr_groups.pop(i)
             renumber_ocr_groups(app)
             break
+    
+    if hasattr(app, 'config_manager'):
+        app.config_manager.defer_save_config()
 
 
 def renumber_ocr_groups(app):

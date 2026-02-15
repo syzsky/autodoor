@@ -155,8 +155,8 @@ def on_mouse_up(app, event):
 
     cancel_selection(app)
 
-    # 保存配置
-    app.config_manager.defer_save_config()
+    if hasattr(app, 'config_manager') and app.config_manager:
+        app.config_manager.defer_save_config()
 
 
 def cancel_selection(app):
@@ -186,5 +186,8 @@ def on_number_region_mouse_up(app, event):
     app.logging_manager.log_message(f"已选择数字识别区域{region_index+1}: {region}")
     cancel_selection(app)
 
-    # 保存配置
-    app.save_config()
+    if hasattr(app, 'save_config') and callable(app.save_config):
+        try:
+            app.save_config()
+        except Exception:
+            pass

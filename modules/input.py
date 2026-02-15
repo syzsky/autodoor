@@ -12,8 +12,11 @@ class KeyEventExecutor:
     def execute_keypress(self, key):
         delay_min = max(1, int(self.delay_min_var.get()))
         delay_max = max(delay_min, int(self.delay_max_var.get()))
-        delay = random.randint(delay_min, delay_max) / 1000
-        time.sleep(delay)
+        
+        press_delay = random.randint(delay_min, delay_max) / 1000
+        hold_delay = random.randint(delay_min, delay_max) / 1000
+        
+        time.sleep(press_delay)
         self.input_controller.key_down(key)
-        time.sleep(0.1)
+        time.sleep(hold_delay)
         self.input_controller.key_up(key)

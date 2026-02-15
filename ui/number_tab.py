@@ -88,11 +88,11 @@ def create_number_region(app, index):
     key_btn.configure(command=lambda: start_key_listening(app, key_entry, key_btn))
     key_btn.pack(side='left', padx=(0, 8))
     
-    ctk.CTkLabel(row1, text='时长:', font=Theme.get_font('xs')).pack(side='left')
-    delay_min_entry = NumericEntry(row1, textvariable=group_vars["delay_min_var"], width=35, height=24)
+    ctk.CTkLabel(row1, text='按键时长:', font=Theme.get_font('xs')).pack(side='left')
+    delay_min_entry = NumericEntry(row1, textvariable=group_vars["delay_min_var"], width=45, height=24)
     delay_min_entry.pack(side='left', padx=(2, 2))
     ctk.CTkLabel(row1, text='-', font=Theme.get_font('xs')).pack(side='left')
-    delay_max_entry = NumericEntry(row1, textvariable=group_vars["delay_max_var"], width=35, height=24)
+    delay_max_entry = NumericEntry(row1, textvariable=group_vars["delay_max_var"], width=45, height=24)
     delay_max_entry.pack(side='left', padx=(2, 2))
     ctk.CTkLabel(row1, text='ms', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
     
@@ -127,6 +127,10 @@ def add_number_region(app):
     if len(app.number_regions) >= 15:
         return
     create_number_region(app, len(app.number_regions))
+    if hasattr(app, '_setup_region_listeners') and app.number_regions:
+        app._setup_region_listeners(app.number_regions[-1])
+    if hasattr(app, 'config_manager'):
+        app.config_manager.defer_save_config()
 
 
 def delete_number_region(app, group_frame, confirm=True):
@@ -141,6 +145,9 @@ def delete_number_region(app, group_frame, confirm=True):
             app.number_regions.pop(i)
             renumber_number_regions(app)
             break
+    
+    if hasattr(app, 'config_manager'):
+        app.config_manager.defer_save_config()
 
 
 def renumber_number_regions(app):

@@ -23,7 +23,11 @@ def select_alarm_sound(app):
     if filename:
         app.alarm_sound_path.set(filename)
         app.logging_manager.log_message(f"已选择全局报警声音: {os.path.basename(filename)}")
-        app.save_config()
+        if hasattr(app, 'save_config') and callable(app.save_config):
+            try:
+                app.save_config()
+            except Exception:
+                pass
 
 
 class AlarmModule:

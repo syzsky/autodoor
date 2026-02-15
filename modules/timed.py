@@ -145,6 +145,10 @@ class TimedModule:
             group["position_y"].set(pos_y)
             group["position_var"].set(f"{pos_x},{pos_y}")
 
-            self.app.save_config()
+            if hasattr(self.app, 'save_config') and callable(self.app.save_config):
+                try:
+                    self.app.save_config()
+                except Exception:
+                    pass
 
         self.app.cancel_selection()

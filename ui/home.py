@@ -40,10 +40,10 @@ def create_home_tab(app):
     }
     
     app.module_check_vars = {
-        "ocr": tk.BooleanVar(value=True),
-        "timed": tk.BooleanVar(value=True),
-        "number": tk.BooleanVar(value=True),
-        "script": tk.BooleanVar(value=True)
+        "ocr": tk.BooleanVar(value=False),
+        "timed": tk.BooleanVar(value=False),
+        "number": tk.BooleanVar(value=False),
+        "script": tk.BooleanVar(value=False)
     }
     
     module_names = {

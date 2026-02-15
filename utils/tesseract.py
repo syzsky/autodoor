@@ -194,7 +194,8 @@ class TesseractManager:
                 self.app.logging_manager.log_message("Tesseract OCR未配置")
                 return False
             else:
-                self.app.config_manager.defer_save_config()
+                if hasattr(self.app, 'config_manager') and self.app.config_manager:
+                    self.app.config_manager.defer_save_config()
 
         try:
             if not self._validate_tesseract_path():
@@ -274,8 +275,8 @@ class TesseractManager:
             self.app.status_var.set("就绪")
             messagebox.showinfo("成功", "Tesseract路径设置成功！")
 
-            # 保存配置
-            self.app.config_manager.defer_save_config()
+            if hasattr(self.app, 'config_manager') and self.app.config_manager:
+                self.app.config_manager.defer_save_config()
 
         except (subprocess.CalledProcessError, FileNotFoundError):
             messagebox.showwarning("警告", "无法使用指定的Tesseract路径！")
