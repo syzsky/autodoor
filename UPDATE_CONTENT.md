@@ -15,3 +15,4 @@
 - 修复脚本延迟设置不保存的问题：新增 `delay_var`、`combo_key_delay`、`combo_after_delay` 配置项保存
 - 尝试修复MacOS兼容性问题：尝试修复MacOS在V2.0版本更新后的多个兼容性问题
 - 修复部分按键不支持的问题：修复了pageup、pagedown、space三个按键无法设置的问题
+- 修复2.1.0版本的部分问题：修复无法正确获取版本更新和TesseractOCR路径的问题

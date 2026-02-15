@@ -1,5 +1,6 @@
 import datetime
 import tkinter as tk
+import threading
 
 
 class LoggingManager:
@@ -17,7 +18,7 @@ class LoggingManager:
     
     def log_message(self, message):
         """
-        记录日志信息
+        记录日志信息（线程安全）
         Args:
             message: 要记录的日志消息
         """
@@ -30,6 +31,22 @@ class LoggingManager:
         except Exception as e:
             print(f"写入日志文件失败: {str(e)}")
 
+        if threading.current_thread() is not threading.main_thread():
+            if hasattr(self.app, 'root') and self.app.root:
+                try:
+                    self.app.root.after(0, lambda: self._update_gui(log_entry, message))
+                except Exception:
+                    pass
+        else:
+            self._update_gui(log_entry, message)
+
+    def _update_gui(self, log_entry, message):
+        """
+        更新GUI控件（必须在主线程中调用）
+        Args:
+            log_entry: 完整的日志条目
+            message: 原始消息
+        """
         if hasattr(self.app, 'home_log_text'):
             try:
                 self.app.home_log_text.configure(state='normal')
@@ -40,7 +57,10 @@ class LoggingManager:
                 print(f"写入日志文本框失败: {str(e)}")
 
         if hasattr(self.app, 'status_var'):
-            self.app.status_var.set(message.split(":")[0] if ":" in message else message)
+            try:
+                self.app.status_var.set(message.split(":")[0] if ":" in message else message)
+            except Exception as e:
+                print(f"更新状态栏失败: {str(e)}")
 
     def clear_log(self):
         """清除日志"""

@@ -37,7 +37,10 @@ class VersionChecker:
                     if 'update' in config:
                         self.ignored_version = config.get('update', {}).get('ignored_version')
         except Exception as e:
-            self.app.logging_manager.log_message(f"加载已忽略版本失败: {str(e)}")
+            try:
+                self.app.logging_manager.log_message(f"加载已忽略版本失败: {str(e)}")
+            except Exception:
+                print(f"加载已忽略版本失败: {str(e)}")
 
     def check_for_updates(self, manual=False):
         """检查版本更新"""
@@ -81,7 +84,10 @@ class VersionChecker:
                     self.show_no_update_notification()
 
         except Exception as e:
-            self.app.logging_manager.log_message(f"版本检查失败: {str(e)}")
+            try:
+                self.app.logging_manager.log_message(f"版本检查失败: {str(e)}")
+            except Exception:
+                print(f"版本检查失败: {str(e)}")
 
     def _is_newer_version(self, latest):
         """检查是否为新版本"""
@@ -142,18 +148,23 @@ class VersionChecker:
             notification_window.transient(self.app.root)
             notification_window.grab_set()
 
-            # 计算并设置窗口位置到主窗口中心
             self.app.root.update_idletasks()
-            root_x = self.app.root.winfo_x()
-            root_y = self.app.root.winfo_y()
+            self.app.root.update()
+            
+            root_x = self.app.root.winfo_rootx()
+            root_y = self.app.root.winfo_rooty()
             root_width = self.app.root.winfo_width()
             root_height = self.app.root.winfo_height()
 
-            # 计算弹窗位置
+            if root_width < 100 or root_height < 100:
+                root_width = 1050
+                root_height = 700
+                root_x = (notification_window.winfo_screenwidth() - root_width) // 2
+                root_y = (notification_window.winfo_screenheight() - root_height) // 2
+
             pos_x = root_x + (root_width // 2) - (window_width // 2)
             pos_y = root_y + (root_height // 2) - (window_height // 2)
 
-            # 设置弹窗位置
             notification_window.geometry(f"{window_width}x{window_height}+{pos_x}+{pos_y}")
 
             # 添加内容
@@ -187,8 +198,19 @@ class VersionChecker:
             tk.ttk.Button(button_frame, text="稍后提醒", command=notification_window.destroy).pack(side=tk.LEFT, padx=(0, 10))
             tk.ttk.Button(button_frame, text="忽略此版本", command=lambda: self.ignore_version(latest_version, notification_window)).pack(side=tk.LEFT)
 
-        # 在主线程中显示通知
-        self.app.root.after(0, show_notification)
+        def schedule_notification(retry_count=0):
+            if not (hasattr(self.app, 'root') and self.app.root):
+                print("显示更新通知失败: root 窗口未初始化")
+                return
+            try:
+                self.app.root.after(0, show_notification)
+            except Exception as e:
+                if retry_count < 5:
+                    threading.Timer(0.5, lambda: schedule_notification(retry_count + 1)).start()
+                else:
+                    print(f"显示更新通知失败: {str(e)}")
+
+        schedule_notification()
 
     def open_update_link(self, url):
         """打开更新链接"""
@@ -196,7 +218,10 @@ class VersionChecker:
             import webbrowser
             webbrowser.open(url)
         except Exception as e:
-            self.app.logging_manager.log_message(f"打开更新链接失败: {str(e)}")
+            try:
+                self.app.logging_manager.log_message(f"打开更新链接失败: {str(e)}")
+            except Exception:
+                print(f"打开更新链接失败: {str(e)}")
 
     def ignore_version(self, version, notification_window):
         """忽略指定版本"""
@@ -230,9 +255,15 @@ class VersionChecker:
                 with open(config_file_path, 'w', encoding='utf-8') as f:
                     json.dump(config, f, indent=2, ensure_ascii=False, default=str)
                 
-                self.app.logging_manager.log_message(f"已忽略版本: {version}")
+                try:
+                    self.app.logging_manager.log_message(f"已忽略版本: {version}")
+                except Exception:
+                    print(f"已忽略版本: {version}")
         except Exception as e:
-            self.app.logging_manager.log_message(f"忽略版本失败: {str(e)}")
+            try:
+                self.app.logging_manager.log_message(f"忽略版本失败: {str(e)}")
+            except Exception:
+                print(f"忽略版本失败: {str(e)}")
         finally:
             # 无论是否发生异常，都关闭通知窗口
             notification_window.destroy()
@@ -247,20 +278,25 @@ class VersionChecker:
             notification_window.transient(self.app.root)
             notification_window.grab_set()
             
-            # 计算主窗口中心位置，使弹窗居中显示
             self.app.root.update_idletasks()
-            root_x = self.app.root.winfo_x()
-            root_y = self.app.root.winfo_y()
+            self.app.root.update()
+            
+            root_x = self.app.root.winfo_rootx()
+            root_y = self.app.root.winfo_rooty()
             root_width = self.app.root.winfo_width()
             root_height = self.app.root.winfo_height()
             
-            # 计算弹窗位置
+            if root_width < 100 or root_height < 100:
+                root_width = 1050
+                root_height = 700
+                root_x = (notification_window.winfo_screenwidth() - root_width) // 2
+                root_y = (notification_window.winfo_screenheight() - root_height) // 2
+            
             dialog_width = 300
             dialog_height = 150
             pos_x = root_x + (root_width // 2) - (dialog_width // 2)
             pos_y = root_y + (root_height // 2) - (dialog_height // 2)
             
-            # 设置弹窗位置
             notification_window.geometry(f"{dialog_width}x{dialog_height}+{pos_x}+{pos_y}")
             
             # 添加内容
@@ -276,20 +312,31 @@ class VersionChecker:
             
             tk.ttk.Button(button_frame, text="确定", command=notification_window.destroy).pack()
 
-        # 在主线程中显示通知
-        self.app.root.after(0, show_notification)
+        def schedule_notification(retry_count=0):
+            if not (hasattr(self.app, 'root') and self.app.root):
+                print("显示无更新通知失败: root 窗口未初始化")
+                return
+            try:
+                self.app.root.after(0, show_notification)
+            except Exception as e:
+                if retry_count < 5:
+                    threading.Timer(0.5, lambda: schedule_notification(retry_count + 1)).start()
+                else:
+                    print(f"显示无更新通知失败: {str(e)}")
+
+        schedule_notification()
 
     def start_auto_check(self):
         """启动自动检查线程"""
         def check_loop():
-            last_check_time = 0
+            time.sleep(2)
+            last_check_time = time.time()
             while True:
-                # 检查是否在间隔时间内
                 current_time = time.time()
                 if current_time - last_check_time >= self.check_interval:
                     self.check_for_updates()
                     last_check_time = current_time
-                time.sleep(60)  # 每分钟检查一次是否需要执行
+                time.sleep(60)
         
         thread = threading.Thread(target=check_loop, daemon=True)
         thread.start()

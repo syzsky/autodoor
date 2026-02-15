@@ -5,7 +5,7 @@ import threading
 import os
 
 from ui.theme import Theme, init_theme
-from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_section_title, create_divider
+from ui.widgets import AnimatedButton
 from ui.home import create_home_tab
 from ui.ocr_tab import create_ocr_tab
 from ui.timed_tab import create_timed_tab
@@ -32,28 +32,7 @@ from modules.alarm import AlarmModule
 from modules.script import ScriptModule
 from modules.color import ColorRecognitionManager
 
-try:
-    from pynput import keyboard
-    PYINPUT_AVAILABLE = True
-except ImportError:
-    PYINPUT_AVAILABLE = False
-
-try:
-    import pygame
-    try:
-        pygame.mixer.init()
-        PYGAME_AVAILABLE = True
-    except pygame.error:
-        PYGAME_AVAILABLE = False
-except ImportError:
-    PYGAME_AVAILABLE = False
-
-VERSION = "2.1.0"
-
-try:
-    import screeninfo
-except ImportError:
-    screeninfo = None
+VERSION = "2.1.1"
 
 
 class AutoDoorOCR:
@@ -132,8 +111,6 @@ class AutoDoorOCR:
         self.logging_manager = LoggingManager(self)
         self.logging_manager.log_message(f"[{self.platform_adapter.platform}] 日志文件路径: {self.log_file_path}")
         self.version_checker = VersionChecker(self)
-        self.version_checker.start_auto_check()
-        self.version_checker.check_for_updates()
         self.input_controller = InputController(self)
         self.thread_manager = ThreadManager(self)
         self.event_manager = EventManager(self)
@@ -155,6 +132,7 @@ class AutoDoorOCR:
         self.root.title(f"AutoDoor OCR v{VERSION}")
         self.root.geometry("1050x700")
         self.root.minsize(950, 600)
+        self.root.protocol("WM_DELETE_WINDOW", lambda: exit_program(self))
         
         self._init_tk_variables()
         self._create_layout()
@@ -428,6 +406,9 @@ class AutoDoorOCR:
 
         self.setup_shortcuts()
         self.event_manager.start_event_thread()
+
+        self.version_checker.start_auto_check()
+        self.root.after(1500, lambda: self.version_checker.check_for_updates())
 
     def check_for_updates(self):
         self.version_checker.check_for_updates(manual=True)

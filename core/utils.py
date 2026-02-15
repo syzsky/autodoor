@@ -123,7 +123,7 @@ def exit_program(app):
     if hasattr(app, 'global_listener') and app.global_listener:
         app.global_listener.stop()
 
-    app.is_event_running = False
+    app.event_manager.is_event_running = False
     
     app.logging_manager.log_message("程序正在退出...")
     app.root.quit()

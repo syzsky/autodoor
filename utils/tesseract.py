@@ -26,47 +26,34 @@ class TesseractManager:
         Returns:
             str: Tesseract可执行文件的路径，如果未找到则返回空字符串
         """
-        # 获取程序运行目录
         if hasattr(sys, '_MEIPASS'):
-            # 打包后的环境，使用_MEIPASS获取运行目录
             app_root = sys._MEIPASS
         else:
-            # 开发环境，使用当前文件所在目录
-            app_root = os.path.dirname(os.path.abspath(__file__))
+            app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-        # 使用平台适配器获取可能的Tesseract路径
         possible_paths = self.app.platform_adapter.get_tesseract_paths(app_root)
         
-        # 查找存在的Tesseract可执行文件
         tesseract_path = ""
         for path in possible_paths:
             if os.path.exists(path):
                 tesseract_path = path
                 break
 
-        # 确保tessdata目录存在
         if tesseract_path:
-            # 尝试多个可能的tessdata目录路径
             possible_tessdata_paths = [
-                os.path.join(os.path.dirname(tesseract_path), "tessdata"),  # tesseract同目录下的tessdata
-                os.path.join(app_root, "tessdata"),  # 应用根目录下的tessdata
-                os.path.join(app_root, "tesseract", "tessdata"),  # tesseract子目录下的tessdata
-                # macOS应用包路径
+                os.path.join(os.path.dirname(tesseract_path), "tessdata"),
+                os.path.join(app_root, "tessdata"),
+                os.path.join(app_root, "tesseract", "tessdata"),
                 os.path.join(os.path.dirname(os.path.dirname(app_root)), "Resources", "tesseract", "tessdata"),
-                # macOS系统路径
-                "/usr/local/share/tessdata",  # Homebrew (Intel)
-                "/opt/homebrew/share/tessdata",  # Homebrew (Apple Silicon)
+                "/usr/local/share/tessdata",
+                "/opt/homebrew/share/tessdata",
             ]
             
             for tessdata_path in possible_tessdata_paths:
                 if os.path.exists(tessdata_path):
-                    self.app.logging_manager.log_message(f"找到tessdata目录: {tessdata_path}")
-                    # 设置TESSDATA_PREFIX环境变量
                     os.environ["TESSDATA_PREFIX"] = tessdata_path
-                    self.app.logging_manager.log_message(f"设置TESSDATA_PREFIX环境变量: {tessdata_path}")
                     break
 
-        self.app.logging_manager.log_message(f"默认Tesseract路径: {tesseract_path}")
         return tesseract_path
     
     def _validate_tesseract_path(self):
@@ -133,8 +120,6 @@ class TesseractManager:
                 version_parts = version_output.split()
                 if len(version_parts) >= 2:
                     version_str = version_parts[1]
-                    self.app.logging_manager.log_message(f"检测到Tesseract版本: {version_str}")
-
                     try:
                         cleaned_version = version_str.lstrip('v')
                         major_version = int(cleaned_version.split('.')[0])
@@ -142,8 +127,7 @@ class TesseractManager:
                             self.app.logging_manager.log_message(f"Tesseract版本太旧 ({version_str})，建议使用4.x或更高版本")
                             return False
                     except (ValueError, IndexError):
-                        self.app.logging_manager.log_message(f"无法解析Tesseract版本: {version_str}")
-                        # 继续执行，不因为版本解析失败而直接返回False
+                        pass
             return True
         except Exception as e:
             self.app.logging_manager.log_message(f"版本检查失败: {str(e)}")
@@ -204,16 +188,13 @@ class TesseractManager:
         Returns:
             bool: 如果Tesseract OCR可用则返回True，否则返回False
         """
-        # 如果tesseract路径为空，尝试获取默认路径
         if not self.app.tesseract_path:
             self.app.tesseract_path = self.get_default_tesseract_path()
             if not self.app.tesseract_path:
-                self.app.logging_manager.log_message("Tesseract路径未配置")
+                self.app.logging_manager.log_message("Tesseract OCR未配置")
                 return False
             else:
-                self.app.logging_manager.log_message(f"使用默认Tesseract路径: {self.app.tesseract_path}")
-                # 保存配置，确保默认路径被保存到配置文件
-                self.app._defer_save_config()
+                self.app.config_manager.defer_save_config()
 
         try:
             if not self._validate_tesseract_path():
@@ -228,11 +209,10 @@ class TesseractManager:
             if not self._test_tesseract_functionality():
                 return False
 
-            # 配置界面中的路径变量
             if hasattr(self.app, 'tesseract_path_var'):
                 self.app.tesseract_path_var.set(self.app.tesseract_path)
 
-            self.app.logging_manager.log_message("Tesseract OCR引擎检测通过")
+            self.app.logging_manager.log_message(f"Tesseract OCR引擎就绪: {self.app.tesseract_path}")
             return True
 
         except subprocess.TimeoutExpired:
