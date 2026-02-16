@@ -80,22 +80,6 @@ class AutoDoorOCR:
             "color": 2,
             "script": 1
         }
-    
-    @property
-    def is_running(self) -> bool:
-        return self._is_running_atomic.get()
-    
-    @is_running.setter
-    def is_running(self, value: bool) -> None:
-        self._is_running_atomic.set(value)
-    
-    @property
-    def is_paused(self) -> bool:
-        return self._is_paused_atomic.get()
-    
-    @is_paused.setter
-    def is_paused(self, value: bool) -> None:
-        self._is_paused_atomic.set(value)
 
         self.timed_enabled_var = None
         self.timed_groups = []
@@ -116,6 +100,22 @@ class AutoDoorOCR:
         self.pages = {}
         self.module_switches = {}
         self.module_indicators = {}
+    
+    @property
+    def is_running(self) -> bool:
+        return self._is_running_atomic.get()
+    
+    @is_running.setter
+    def is_running(self, value: bool) -> None:
+        self._is_running_atomic.set(value)
+    
+    @property
+    def is_paused(self) -> bool:
+        return self._is_paused_atomic.get()
+    
+    @is_paused.setter
+    def is_paused(self, value: bool) -> None:
+        self._is_paused_atomic.set(value)
 
     def _init_platform(self):
         self.platform_adapter = PlatformAdapter(self)

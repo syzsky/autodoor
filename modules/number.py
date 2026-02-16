@@ -68,8 +68,18 @@ class NumberModule:
                         self.app.alarm_module.play_alarm_sound(self.app.number_regions[region_index]["alarm"])
 
                         if key:
-                            self.app.event_manager.add_event(('keypress', key), ('number', region_index))
                             self.app.logging_manager.log_message(f"数字识别{region_index+1}触发按键: {key}")
+                            
+                            delay_min = int(self.app.number_regions[region_index]["delay_min"].get())
+                            delay_max = int(self.app.number_regions[region_index]["delay_max"].get())
+                            import random
+                            hold_delay = random.randint(delay_min, delay_max) / 1000
+                            
+                            self.app.input_controller.key_down(key, priority=self.PRIORITY)
+                            time.sleep(hold_delay)
+                            self.app.input_controller.key_up(key, priority=self.PRIORITY)
+                            
+                            self.app.logging_manager.log_message(f"按下了 {key} 键，按住时长 {int(hold_delay*1000)} 毫秒")
                         else:
                             self.app.logging_manager.log_message(f"数字识别{region_index+1}按键配置为空，仅执行报警操作")
                 else:

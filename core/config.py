@@ -20,6 +20,9 @@ class ConfigManager:
         Returns:
             dict or None: 如果成功读取则返回配置字典，否则返回None
         """
+        if not os.path.exists(self.config_file_path):
+            return None
+        
         try:
             with open(self.config_file_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
@@ -218,7 +221,11 @@ class ConfigManager:
                     if i < len(self.app.timed_groups):
                         for key, value in group_config.items():
                             if key in self.app.timed_groups[i]:
-                                if hasattr(self.app.timed_groups[i][key], 'set'):
+                                if key == 'enabled':
+                                    self.app.timed_groups[i][key].set(value)
+                                    group_frame = self.app.timed_groups[i]['frame']
+                                    update_group_style(group_frame, value)
+                                elif hasattr(self.app.timed_groups[i][key], 'set'):
                                     self.app.timed_groups[i][key].set(value)
                         
                         pos_x = group_config.get('position_x', 0)
@@ -245,7 +252,11 @@ class ConfigManager:
                     if i < len(self.app.number_regions):
                         for key, value in region_config.items():
                             if key in self.app.number_regions[i]:
-                                if key == 'region' and value is not None:
+                                if key == 'enabled':
+                                    self.app.number_regions[i][key].set(value)
+                                    group_frame = self.app.number_regions[i]['frame']
+                                    update_group_style(group_frame, value)
+                                elif key == 'region' and value is not None:
                                     try:
                                         region = tuple(value)
                                         self.app.number_regions[i][key] = region

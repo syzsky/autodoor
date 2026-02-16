@@ -99,8 +99,18 @@ class TimedModule:
                     if stop_event.is_set():
                         return
 
-                    self.app.event_manager.add_event(('keypress', key), ('timed', group_index))
                     self.app.logging_manager.log_message(f"[{self.app.platform_adapter.platform}] 定时任务{group_index+1}触发按键: {key}")
+                    
+                    delay_min = int(group["delay_min"].get())
+                    delay_max = int(group["delay_max"].get())
+                    import random
+                    hold_delay = random.randint(delay_min, delay_max) / 1000
+                    
+                    self.app.input_controller.key_down(key, priority=self.PRIORITY)
+                    time.sleep(hold_delay)
+                    self.app.input_controller.key_up(key, priority=self.PRIORITY)
+                    
+                    self.app.logging_manager.log_message(f"按下了 {key} 键，按住时长 {int(hold_delay*1000)} 毫秒")
                 else:
                     self.app.logging_manager.log_message(f"[{self.app.platform_adapter.platform}] 定时任务{group_index+1}按键配置为空")
             except Exception as e:

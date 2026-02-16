@@ -510,7 +510,18 @@ class OCRModule:
         if not self.app.is_running or getattr(self.app, 'system_stopped', False):
             return
 
-        self.app.event_manager.add_event(('keypress', key), ('ocr', group_index))
+        group = self.app.ocr_groups[group_index]
+        delay_min = int(group.get("delay_min", tk.StringVar(value="300")).get())
+        delay_max = int(group.get("delay_max", tk.StringVar(value="500")).get())
+        
+        import random
+        hold_delay = random.randint(delay_min, delay_max) / 1000
+        
+        self.app.input_controller.key_down(key, priority=self.PRIORITY)
+        time.sleep(hold_delay)
+        self.app.input_controller.key_up(key, priority=self.PRIORITY)
+        
+        self.app.logging_manager.log_message(f"按下了 {key} 键，按住时长 {int(hold_delay*1000)} 毫秒")
         self.last_trigger_times[group_index] = time.time()
     
     def _play_alarm_if_enabled(self, alarm_enabled, group_index):

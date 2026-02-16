@@ -4,6 +4,32 @@ import time
 from core.priority_lock import PriorityLock, get_module_priority
 
 
+KEY_NAME_MAPPING = {
+    'alt_l': 'altleft',
+    'alt_r': 'altright',
+    'control_l': 'ctrlleft',
+    'control_r': 'ctrlright',
+    'shift_l': 'shiftleft',
+    'shift_r': 'shiftright',
+    'win_l': 'winleft',
+    'win_r': 'winright',
+    'super_l': 'winleft',
+    'super_r': 'winright',
+    'meta_l': 'winleft',
+    'meta_r': 'winright',
+    'escape': 'escape',
+    'return': 'enter',
+    'backspace': 'backspace',
+    'tab': 'tab',
+    'space': 'space',
+    'prior': 'pageup',
+    'next': 'pagedown',
+    'caps_lock': 'capslock',
+    'num_lock': 'numlock',
+    'scroll_lock': 'scrolllock',
+}
+
+
 class InputController:
     """
     输入控制器类，提供通用的按键和鼠标操作方法
@@ -77,9 +103,10 @@ class InputController:
     def key_down(self, key, priority=0):
         with self.key_lock.acquire(priority):
             try:
-                pyautogui.keyDown(key.lower())
+                mapped_key = KEY_NAME_MAPPING.get(key.lower(), key.lower())
+                pyautogui.keyDown(mapped_key)
                 if self.app:
-                    self.app.logging_manager.log_message(f"执行: 按下 {key}")
+                    self.app.logging_manager.log_message(f"执行: 按下 {key} (映射: {mapped_key})")
             except pyautogui.FailSafeException:
                 if self.app:
                     self.app.logging_manager.log_message("⚠️ 检测到用户移动鼠标到屏幕角落，操作已取消")
@@ -101,9 +128,10 @@ class InputController:
     def key_up(self, key, priority=0):
         with self.key_lock.acquire(priority):
             try:
-                pyautogui.keyUp(key.lower())
+                mapped_key = KEY_NAME_MAPPING.get(key.lower(), key.lower())
+                pyautogui.keyUp(mapped_key)
                 if self.app:
-                    self.app.logging_manager.log_message(f"执行: 抬起 {key}")
+                    self.app.logging_manager.log_message(f"执行: 抬起 {key} (映射: {mapped_key})")
             except pyautogui.FailSafeException:
                 if self.app:
                     self.app.logging_manager.log_message("⚠️ 检测到用户移动鼠标到屏幕角落，操作已取消")
