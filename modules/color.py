@@ -5,9 +5,17 @@ from PIL import Image, ImageGrab
 import imagehash
 import tkinter as tk
 from tkinter import messagebox
+from core.priority_lock import get_module_priority
+
 
 class ColorRecognition:
-    """颜色识别类"""
+    """
+    颜色识别类
+    优先级: 2 (Number=5 > Timed=4 > OCR=3 > Color=2 > Script=1)
+    """
+    
+    PRIORITY = 2
+    
     def __init__(self, app):
         self.app = app
         self.is_running = False
@@ -18,10 +26,8 @@ class ColorRecognition:
         self.interval = 5.0
         self.commands = ""
         
-        # 禁用CoreGraphics相关功能
         self.core_graphics_available = False
         
-        # 图像哈希缓存，用于检测区域是否变化
         self.last_image_hash = None
 
     def set_region(self, region):
@@ -85,7 +91,7 @@ class ColorRecognition:
             try:
                 from utils.screenshot import ScreenshotManager
                 screenshot_manager = ScreenshotManager()
-                screenshot = screenshot_manager.get_region_screenshot(self.region)
+                screenshot = screenshot_manager.get_region_screenshot(self.region, priority=self.PRIORITY)
             except Exception as e:
                 self.app.logging_manager.log_message(f"截图失败: {str(e)}")
             

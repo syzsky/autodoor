@@ -101,7 +101,7 @@ class PermissionManager:
                 return False
             
             return True
-        except Exception as e:
+        except Exception:
             return False
     
     def check_permissions_async(self, callback=None):

@@ -49,10 +49,11 @@ class AutoDoorOCR:
     def _init_basic_settings(self):
         pyautogui.FAILSAFE = False
         self.version = VERSION
-        self.state_lock = threading.Lock()
+        
+        from core.atomic import AtomicBool
+        self._is_running_atomic = AtomicBool(False)
+        self._is_paused_atomic = AtomicBool(False)
 
-        self.is_running = False
-        self.is_paused = False
         self.is_selecting = False
         self.last_trigger_time = 0
         self.system_stopped = False
@@ -79,6 +80,22 @@ class AutoDoorOCR:
             "color": 2,
             "script": 1
         }
+    
+    @property
+    def is_running(self) -> bool:
+        return self._is_running_atomic.get()
+    
+    @is_running.setter
+    def is_running(self, value: bool) -> None:
+        self._is_running_atomic.set(value)
+    
+    @property
+    def is_paused(self) -> bool:
+        return self._is_paused_atomic.get()
+    
+    @is_paused.setter
+    def is_paused(self, value: bool) -> None:
+        self._is_paused_atomic.set(value)
 
         self.timed_enabled_var = None
         self.timed_groups = []
@@ -408,7 +425,6 @@ class AutoDoorOCR:
         self.event_manager.start_event_thread()
 
         self.version_checker.start_auto_check()
-        self.root.after(1500, lambda: self.version_checker.check_for_updates())
 
     def check_for_updates(self):
         self.version_checker.check_for_updates(manual=True)

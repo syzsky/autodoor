@@ -1,10 +1,16 @@
 import threading
 import time
 from PIL import Image, ImageGrab
+from core.priority_lock import PriorityLock, get_module_priority
 
 
 class ScreenshotManager:
-    """全局截图管理器，实现截图资源共享"""
+    """
+    全局截图管理器，实现截图资源共享
+    
+    使用优先级锁确保高优先级模块优先获取截图资源。
+    优先级顺序：Number(5) > Timed(4) > OCR(3) > Color(2) > Script(1)
+    """
     
     _instance = None
     _lock = threading.Lock()
@@ -24,11 +30,19 @@ class ScreenshotManager:
         self.last_full_screenshot = None
         self.last_time = 0
         self.cache_duration = cache_duration
-        self.screenshot_lock = threading.Lock()
+        self.screenshot_lock = PriorityLock()
     
-    def get_full_screenshot(self):
-        """获取全屏截图（带缓存）"""
-        with self.screenshot_lock:
+    def get_full_screenshot(self, priority: int = 0):
+        """
+        获取全屏截图（带缓存和优先级）
+        
+        Args:
+            priority: 优先级，数值越大优先级越高
+        
+        Returns:
+            PIL.Image: 截图副本，失败返回 None
+        """
+        with self.screenshot_lock.acquire(priority):
             current_time = time.time()
             
             if (self.last_full_screenshot is not None and 
@@ -42,12 +56,21 @@ class ScreenshotManager:
             except Exception:
                 return None
     
-    def get_region_screenshot(self, region):
-        """获取区域截图（带缓存）"""
+    def get_region_screenshot(self, region, priority: int = 0):
+        """
+        获取区域截图（带缓存和优先级）
+        
+        Args:
+            region: 区域坐标 (x1, y1, x2, y2)
+            priority: 优先级
+        
+        Returns:
+            PIL.Image: 区域截图，失败返回 None
+        """
         if not region:
             return None
         
-        full_screenshot = self.get_full_screenshot()
+        full_screenshot = self.get_full_screenshot(priority)
         if full_screenshot is None:
             return None
         
@@ -64,7 +87,7 @@ class ScreenshotManager:
     
     def clear_cache(self):
         """清除缓存"""
-        with self.screenshot_lock:
+        with self.screenshot_lock.acquire(10):
             self.last_full_screenshot = None
             self.last_time = 0
     

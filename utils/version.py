@@ -327,16 +327,10 @@ class VersionChecker:
         schedule_notification()
 
     def start_auto_check(self):
-        """启动自动检查线程"""
-        def check_loop():
+        """启动一次性版本检查线程，检查完成后自动退出"""
+        def check_once():
             time.sleep(2)
-            last_check_time = time.time()
-            while True:
-                current_time = time.time()
-                if current_time - last_check_time >= self.check_interval:
-                    self.check_for_updates()
-                    last_check_time = current_time
-                time.sleep(60)
+            self.check_for_updates()
         
-        thread = threading.Thread(target=check_loop, daemon=True)
+        thread = threading.Thread(target=check_once, daemon=True)
         thread.start()

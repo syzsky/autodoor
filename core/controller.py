@@ -74,8 +74,7 @@ class ModuleController:
 
         self.app.alarm_module.play_start_sound()
         
-        with self.app.state_lock:
-            self.app.is_running = True
+        self.app.is_running = True
 
     def stop_all(self):
         """停止运行"""
@@ -117,8 +116,7 @@ class ModuleController:
         
         self._toggle_all_ui_state("normal")
         
-        with self.app.state_lock:
-            self.app.is_running = False
+        self.app.is_running = False
     
     def _toggle_all_ui_state(self, state):
         """递归地禁用或启用所有UI控件

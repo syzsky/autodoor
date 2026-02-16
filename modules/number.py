@@ -3,9 +3,14 @@ import time
 import re
 from PIL import Image, ImageGrab
 from input.permissions import PermissionManager
+from core.priority_lock import get_module_priority
+
 
 class NumberModule:
-    """数字识别模块"""
+    """数字识别模块 - 优先级最高(5)"""
+    
+    PRIORITY = 5
+    
     def __init__(self, app):
         self.app = app
     
@@ -43,9 +48,8 @@ class NumberModule:
 
     def number_recognition_loop(self, region_index, region, threshold, key, stop_event):
         while not stop_event.is_set() and self.app.number_regions[region_index]["enabled"].get():
-            with self.app.state_lock:
-                if not self.app.is_running:
-                    break
+            if not self.app.is_running:
+                break
             try:
                 time.sleep(1)
 
@@ -107,7 +111,7 @@ class NumberModule:
         try:
             from utils.screenshot import ScreenshotManager
             screenshot_manager = ScreenshotManager()
-            return screenshot_manager.get_region_screenshot(region)
+            return screenshot_manager.get_region_screenshot(region, priority=self.PRIORITY)
         except Exception as e:
             self.app.logging_manager.log_message(f"数字识别错误: 屏幕截图失败 - {str(e)}")
             return None

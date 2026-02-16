@@ -7,8 +7,17 @@ try:
 except ImportError:
     screeninfo = None
 
+from core.priority_lock import get_module_priority
+
+
 class TimedModule:
-    """定时任务模块"""
+    """
+    定时任务模块
+    优先级: 4 (Number=5 > Timed=4 > OCR=3 > Color=2 > Script=1)
+    """
+    
+    PRIORITY = 4
+    
     def __init__(self, app):
         self.app = app
     
@@ -74,7 +83,7 @@ class TimedModule:
                             return
 
                         try:
-                            self.app.input_controller.click(pos_x, pos_y)
+                            self.app.input_controller.click(pos_x, pos_y, priority=self.PRIORITY)
                             time.sleep(0.5)
                             if stop_event.is_set():
                                 return

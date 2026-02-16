@@ -4,9 +4,17 @@ import re
 import tkinter as tk
 
 from modules.recorder import RecorderBase
+from core.priority_lock import get_module_priority
+
 
 class ScriptModule:
-    """脚本模块"""
+    """
+    脚本模块
+    优先级: 1 (Number=5 > Timed=4 > OCR=3 > Color=2 > Script=1)
+    """
+    
+    PRIORITY = 1
+    
     def __init__(self, app):
         """
         初始化脚本模块
@@ -87,7 +95,12 @@ class ScriptModule:
             self.app.alarm_module.play_stop_sound()
 
 class ScriptExecutor(RecorderBase):
-    """脚本执行器类"""
+    """
+    脚本执行器类
+    优先级: 1 (最低)
+    """
+    PRIORITY = 1
+    
     def __init__(self, app):
         super().__init__(app)
         self.is_running = False
@@ -99,7 +112,6 @@ class ScriptExecutor(RecorderBase):
         self.last_event_time = None
         self.recording_grace_period = False
         
-        # 禁用CoreGraphics相关功能
         self.core_graphics_available = False
 
     def _optimize_delay(self, command, next_command=None):
@@ -168,11 +180,11 @@ class ScriptExecutor(RecorderBase):
                                 try:
                                     if command["type"] == "keydown":
                                         if key not in pressed_keys:
-                                            self.app.input_controller.key_down(key)
+                                            self.app.input_controller.key_down(key, priority=self.PRIORITY)
                                             pressed_keys.add(key)
                                     elif command["type"] == "keyup":
                                         if key in pressed_keys:
-                                            self.app.input_controller.key_up(key)
+                                            self.app.input_controller.key_up(key, priority=self.PRIORITY)
                                             pressed_keys.remove(key)
                                 except Exception as e:
                                     self.app.logging_manager.log_message(f"执行按键 {key} 时出错: {str(e)}")
@@ -186,7 +198,7 @@ class ScriptExecutor(RecorderBase):
             finally:
                 for key in pressed_keys:
                     try:
-                        self.app.input_controller.key_up(key)
+                        self.app.input_controller.key_up(key, priority=self.PRIORITY)
                         self.app.logging_manager.log_message(f"确保抬起: {key}")
                     except Exception as e:
                         self.app.logging_manager.log_message(f"抬起按键 {key} 时出错: {str(e)}")
@@ -243,11 +255,11 @@ class ScriptExecutor(RecorderBase):
                             
                             if command["type"] == "keydown":
                                 if key not in pressed_keys:
-                                    self.app.input_controller.key_down(key)
+                                    self.app.input_controller.key_down(key, priority=self.PRIORITY)
                                     pressed_keys.add(key)
                             elif command["type"] == "keyup":
                                 if key in pressed_keys:
-                                    self.app.input_controller.key_up(key)
+                                    self.app.input_controller.key_up(key, priority=self.PRIORITY)
                                     pressed_keys.remove(key)
                     else:
                             next_cmd = commands[i + 1] if i + 1 < len(commands) else None
@@ -259,7 +271,7 @@ class ScriptExecutor(RecorderBase):
             finally:
                 for key in pressed_keys:
                     try:
-                        self.app.input_controller.key_up(key)
+                        self.app.input_controller.key_up(key, priority=self.PRIORITY)
                         self.app.logging_manager.log_message(f"确保抬起: {key}")
                     except Exception as e:
                         self.app.logging_manager.log_message(f"抬起按键 {key} 时出错: {str(e)}")
@@ -346,9 +358,9 @@ class ScriptExecutor(RecorderBase):
                         break
                     
                     if command["type"] == "keydown":
-                        self.app.input_controller.key_down(key)
+                        self.app.input_controller.key_down(key, priority=self.PRIORITY)
                     else:
-                        self.app.input_controller.key_up(key)
+                        self.app.input_controller.key_up(key, priority=self.PRIORITY)
             elif command["type"] in ["mouse_down", "mouse_up"]:
                 button = command["button"]
                 count = int(command["count"])
@@ -363,14 +375,14 @@ class ScriptExecutor(RecorderBase):
                         break
                     
                     if command["type"] == "mouse_down":
-                        self.app.input_controller.mouse_down(button=button)
+                        self.app.input_controller.mouse_down(button=button, priority=self.PRIORITY)
                     else:
-                        self.app.input_controller.mouse_up(button=button)
+                        self.app.input_controller.mouse_up(button=button, priority=self.PRIORITY)
             elif command["type"] == "moveto":
                 x = int(command["x"])
                 y = int(command["y"])
                 if self.is_running and not self.is_paused:
-                    self.app.input_controller.move_to(x, y)
+                    self.app.input_controller.move_to(x, y, priority=self.PRIORITY)
             elif command["type"] == "delay":
                 delay_time = command["time"] / 1000
                 self.app.logging_manager.log_message(f"执行: 延迟 {delay_time}秒")
@@ -510,7 +522,6 @@ class ScriptExecutor(RecorderBase):
                     if not self.is_recording:
                         return False
                     if getattr(self, 'recording_grace_period', False):
-                        # 缓冲期结束
                         self.recording_grace_period = False
                         return
                     
@@ -518,11 +529,28 @@ class ScriptExecutor(RecorderBase):
                         key_name = key.char
                     except AttributeError:
                         key_name = key.name
-                    except Exception as e:
+                    except Exception:
                         return
                     
-                    # 检查是否是录制快捷键（F11），如果是则不记录
-                    if key_name == 'f11':
+                    pynput_to_pyautogui_map = {
+                        'page_up': 'pageup',
+                        'page_down': 'pagedown',
+                        'ctrl_l': 'ctrlleft',
+                        'ctrl_r': 'ctrlright',
+                        'shift_l': 'shiftleft',
+                        'shift_r': 'shiftright',
+                        'alt_l': 'altleft',
+                        'alt_r': 'altright',
+                        'cmd': 'command',
+                        'cmd_l': 'command',
+                        'cmd_r': 'command',
+                        'win_l': 'winleft',
+                        'win_r': 'winright',
+                    }
+                    key_name = pynput_to_pyautogui_map.get(key_name, key_name)
+                    
+                    record_hotkey = self.app.record_hotkey_var.get().lower()
+                    if key_name == record_hotkey:
                         return
                     
                     # 只记录首次按下的事件，避免重复记录
@@ -551,11 +579,28 @@ class ScriptExecutor(RecorderBase):
                         key_name = key.char
                     except AttributeError:
                         key_name = key.name
-                    except Exception as e:
+                    except Exception:
                         return
                     
-                    # 检查是否是录制快捷键（F11），如果是则不记录
-                    if key_name == 'f11':
+                    pynput_to_pyautogui_map = {
+                        'page_up': 'pageup',
+                        'page_down': 'pagedown',
+                        'ctrl_l': 'ctrlleft',
+                        'ctrl_r': 'ctrlright',
+                        'shift_l': 'shiftleft',
+                        'shift_r': 'shiftright',
+                        'alt_l': 'altleft',
+                        'alt_r': 'altright',
+                        'cmd': 'command',
+                        'cmd_l': 'command',
+                        'cmd_r': 'command',
+                        'win_l': 'winleft',
+                        'win_r': 'winright',
+                    }
+                    key_name = pynput_to_pyautogui_map.get(key_name, key_name)
+                    
+                    record_hotkey = self.app.record_hotkey_var.get().lower()
+                    if key_name == record_hotkey:
                         return
                     
                     # 只记录首次释放的事件
@@ -598,7 +643,7 @@ class ScriptExecutor(RecorderBase):
                     
                     try:
                         button_name = button.name
-                    except Exception as e:
+                    except Exception:
                         return
                     
                     # 使用最后记录的鼠标位置或当前位置

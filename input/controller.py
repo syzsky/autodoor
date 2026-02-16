@@ -1,15 +1,22 @@
 import pyautogui
 import threading
 import time
+from core.priority_lock import PriorityLock, get_module_priority
+
 
 class InputController:
-    """输入控制器类，提供通用的按键和鼠标操作方法"""
+    """
+    输入控制器类，提供通用的按键和鼠标操作方法
+    
+    使用优先级锁确保高优先级模块优先执行输入操作。
+    优先级顺序：Number(5) > Timed(4) > OCR(3) > Color(2) > Script(1)
+    """
     
     def __init__(self, app=None):
         self.app = app
         self.core_graphics_available = False
-        self.key_lock = threading.Lock()
-        self.mouse_lock = threading.Lock()
+        self.key_lock = PriorityLock()
+        self.mouse_lock = PriorityLock()
         if self.app:
             if hasattr(self.app, 'logging_manager'):
                 self.app.logging_manager.log_message("InputController初始化完成，使用PyAutoGUI执行所有输入操作")
@@ -40,8 +47,8 @@ class InputController:
         return wrapper
     
     @handle_permission_errors
-    def press_key(self, key, delay=0, module_info=None):
-        with self.key_lock:
+    def press_key(self, key, delay=0, priority=0):
+        with self.key_lock.acquire(priority):
             try:
                 if delay > 0:
                     time.sleep(delay)
@@ -67,8 +74,8 @@ class InputController:
                             self.app.logging_manager.log_message(f"备用按键执行错误: {str(e)}")
     
     @handle_permission_errors
-    def key_down(self, key):
-        with self.key_lock:
+    def key_down(self, key, priority=0):
+        with self.key_lock.acquire(priority):
             try:
                 pyautogui.keyDown(key.lower())
                 if self.app:
@@ -91,8 +98,8 @@ class InputController:
                             self.app.logging_manager.log_message(f"备用按键执行错误: {str(e)}")
     
     @handle_permission_errors
-    def key_up(self, key):
-        with self.key_lock:
+    def key_up(self, key, priority=0):
+        with self.key_lock.acquire(priority):
             try:
                 pyautogui.keyUp(key.lower())
                 if self.app:
@@ -102,8 +109,8 @@ class InputController:
                     self.app.logging_manager.log_message("⚠️ 检测到用户移动鼠标到屏幕角落，操作已取消")
     
     @handle_permission_errors
-    def click(self, x, y):
-        with self.mouse_lock:
+    def click(self, x, y, priority=0):
+        with self.mouse_lock.acquire(priority):
             try:
                 pyautogui.click(x, y)
                 if self.app:
@@ -113,8 +120,8 @@ class InputController:
                     self.app.logging_manager.log_message("⚠️ 检测到用户移动鼠标到屏幕角落，操作已取消")
     
     @handle_permission_errors
-    def mouse_down(self, x=None, y=None, button='left'):
-        with self.mouse_lock:
+    def mouse_down(self, x=None, y=None, button='left', priority=0):
+        with self.mouse_lock.acquire(priority):
             try:
                 if x is not None and y is not None:
                     pyautogui.moveTo(x, y)
@@ -126,8 +133,8 @@ class InputController:
                     self.app.logging_manager.log_message("⚠️ 检测到用户移动鼠标到屏幕角落，操作已取消")
     
     @handle_permission_errors
-    def mouse_up(self, x=None, y=None, button='left'):
-        with self.mouse_lock:
+    def mouse_up(self, x=None, y=None, button='left', priority=0):
+        with self.mouse_lock.acquire(priority):
             try:
                 if x is not None and y is not None:
                     pyautogui.moveTo(x, y)
@@ -139,8 +146,8 @@ class InputController:
                     self.app.logging_manager.log_message("⚠️ 检测到用户移动鼠标到屏幕角落，操作已取消")
     
     @handle_permission_errors
-    def move_to(self, x, y):
-        with self.mouse_lock:
+    def move_to(self, x, y, priority=0):
+        with self.mouse_lock.acquire(priority):
             try:
                 pyautogui.moveTo(x, y)
                 if self.app:

@@ -7,11 +7,17 @@ from PIL import Image, ImageGrab
 import imagehash
 
 from utils.image import _preprocess_image
+from core.priority_lock import get_module_priority
+
 
 class OCRModule:
     """
     OCR模块，负责文字识别核心逻辑
+    优先级: 3 (Number=5 > Timed=4 > OCR=3 > Color=2 > Script=1)
     """
+    
+    PRIORITY = 3
+    
     def __init__(self, app):
         self.app = app
         self.last_recognition_times = {}
@@ -33,9 +39,8 @@ class OCRModule:
             messagebox.showwarning("警告", "请至少启用一个识别组并选择区域")
             return
 
-        with self.app.state_lock:
-            self.app.is_running = True
-            self.app.is_paused = False
+        self.app.is_running = True
+        self.app.is_paused = False
 
         self.app.status_labels["ocr"].set("文字识别: 运行中")
         self.app.logging_manager.log_message("开始监控...")
@@ -45,8 +50,7 @@ class OCRModule:
 
     def stop_monitoring(self):
         """停止监控"""
-        with self.app.state_lock:
-            self.app.is_running = False
+        self.app.is_running = False
 
         self.app.status_labels["ocr"].set("文字识别: 未运行")
     
@@ -63,18 +67,14 @@ class OCRModule:
         frame_counts = {i: 0 for i in range(len(self.app.ocr_groups))}
 
         while True:
-            with self.app.state_lock:
-                if not self.app.is_running:
-                    break
+            if not self.app.is_running:
+                break
             try:
-                # 等待下一次识别，使用最小间隔
                 min_interval = self._calculate_min_interval()
                 self._wait_for_interval(min_interval)
 
-                # 检查是否需要暂停
-                with self.app.state_lock:
-                    if self.app.is_paused:
-                        continue
+                if self.app.is_paused:
+                    continue
 
                 current_time = time.time()
 
@@ -112,9 +112,8 @@ class OCRModule:
             interval: 间隔时间（秒）
         """
         for _ in range(interval):
-            with self.app.state_lock:
-                if not self.app.is_running:
-                    break
+            if not self.app.is_running:
+                break
             time.sleep(1)
     
     def _should_process_group(self, group, i, current_time):
@@ -208,7 +207,7 @@ class OCRModule:
         try:
             from utils.screenshot import ScreenshotManager
             screenshot_manager = ScreenshotManager()
-            return screenshot_manager.get_region_screenshot((left, top, right, bottom))
+            return screenshot_manager.get_region_screenshot((left, top, right, bottom), priority=self.PRIORITY)
         except Exception as e:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 屏幕截图失败 - {str(e)}")
             return None
@@ -290,10 +289,8 @@ class OCRModule:
             group_index: OCR组索引
         """
         try:
-            # 检查是否正在运行
-            with self.app.state_lock:
-                if not self.app.is_running:
-                    return
+            if not self.app.is_running:
+                return
 
             # 验证输入参数
             valid, region, keywords_str, current_lang, click_enabled = self._validate_ocr_group_input(group, group_index)
@@ -352,10 +349,8 @@ class OCRModule:
             frame_counts: 帧计数
         """
         try:
-            # 检查是否正在运行
-            with self.app.state_lock:
-                if not self.app.is_running:
-                    return
+            if not self.app.is_running:
+                return
 
             # 验证输入参数
             valid, region, keywords_str, current_lang, click_enabled = self._validate_ocr_group_input(group, group_index)
@@ -529,9 +524,8 @@ class OCRModule:
     
     def trigger_action_for_group(self, group, group_index, click_enabled, click_pos=None):
         try:
-            with self.app.state_lock:
-                if not self.app.is_running or getattr(self.app, 'system_stopped', False):
-                    return
+            if not self.app.is_running or getattr(self.app, 'system_stopped', False):
+                return
 
             valid, key, delay_min, delay_max, alarm_enabled, region = self._validate_trigger_input(group, group_index)
             if not valid:
