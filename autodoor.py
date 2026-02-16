@@ -32,7 +32,7 @@ from modules.alarm import AlarmModule
 from modules.script import ScriptModule
 from modules.color import ColorRecognitionManager
 
-VERSION = "2.1.2"
+VERSION = "2.1.3"
 
 
 class AutoDoorOCR:
