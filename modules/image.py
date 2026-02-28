@@ -21,8 +21,9 @@ class ImageDetection:
     
     PRIORITY = 4
     
-    def __init__(self, app):
+    def __init__(self, app, group_index=0):
         self.app = app
+        self.group_index = group_index
         self.is_running = False
         self.detection_thread = None
         self.region = None
@@ -168,19 +169,54 @@ class ImageDetection:
         if not match_result:
             return
         
+        if not self.app.is_running or getattr(self.app, 'system_stopped', False):
+            return
+        
         abs_x, abs_y, match_score = match_result
         
-        click_enabled = True
-        if hasattr(self.app, 'image_groups'):
-            for group in self.app.image_groups:
-                if group.get("enabled") and group.get("enabled").get():
-                    click_enabled = group.get("click", tk.BooleanVar(value=True)).get()
-                    break
+        group = None
+        if hasattr(self.app, 'image_groups') and self.group_index < len(self.app.image_groups):
+            group = self.app.image_groups[self.group_index]
+        
+        if not group:
+            return
+        
+        key = group.get("key", tk.StringVar(value="")).get()
+        if not key:
+            return
+        
+        try:
+            delay_min = int(group.get("delay_min", tk.StringVar(value="300")).get())
+        except (ValueError, TypeError):
+            delay_min = 300
+        try:
+            delay_max = int(group.get("delay_max", tk.StringVar(value="500")).get())
+        except (ValueError, TypeError):
+            delay_max = 500
+        
+        alarm_enabled = group.get("alarm", tk.BooleanVar(value=False)).get()
+        click_enabled = group.get("click", tk.BooleanVar(value=True)).get()
         
         if click_enabled:
             try:
                 self.app.input_controller.click(abs_x, abs_y)
                 time.sleep(self.app.click_delay if hasattr(self.app, 'click_delay') else 0.1)
+            except Exception:
+                pass
+        
+        import random
+        hold_delay = random.randint(delay_min, delay_max) / 1000
+        
+        self.app.input_controller.key_down(key, priority=self.PRIORITY)
+        time.sleep(hold_delay)
+        self.app.input_controller.key_up(key, priority=self.PRIORITY)
+        
+        self.app.logging_manager.log_message(f"检测组{self.group_index+1}按下了 {key} 键，按住时长 {int(hold_delay*1000)} 毫秒")
+        
+        if alarm_enabled:
+            try:
+                temp_alarm_var = tk.BooleanVar(value=True)
+                self.app.alarm_module.play_alarm_sound(temp_alarm_var)
             except Exception:
                 pass
         
@@ -282,7 +318,7 @@ class ImageDetectionManager:
             return
         
         if group_index not in self.image_detections:
-            self.image_detections[group_index] = ImageDetection(self.app)
+            self.image_detections[group_index] = ImageDetection(self.app, group_index)
         
         detection = self.image_detections[group_index]
         detection.set_region(group["region"])
