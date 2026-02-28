@@ -6,7 +6,7 @@ name: AutoDoor Build and Release
 
 on:
   push:
-    branches: [ master, refactor ]
+    branches: [ master, refactor, test ]
     tags: [ 'autodoor_V*' ]
   pull_request:
     branches: [ master ]
@@ -164,6 +164,7 @@ jobs:
     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/autodoor_V')
     permissions:
       contents: write
+      actions: read
     steps:
     - name: Checkout code
       uses: actions/checkout@v4

@@ -810,11 +810,8 @@ class ScriptExecutor(RecorderBase):
               and time.time() - start < 0.5:
             time.sleep(0.01)
         
-        # 生成录制脚本
-        try:
-            self.generate_recorded_script()
-        except Exception as e:
-            pass
+        # 脚本生成已在录制线程的 finally 块中处理
+        # 此处不再重复生成脚本
         
         # 播放停止运行音效
         try:
@@ -848,10 +845,9 @@ class ScriptExecutor(RecorderBase):
                         script_content += f"{button}{action} 1\n"
                         event_types[event["type"]] += 1
             
-            # 将生成的脚本插入到文本框
+            # 将生成的脚本插入到文本框末尾
             self.app.root.after(0, lambda:
-                (self.app.script_text.delete(1.0, self.app.script_text.index(tk.END)),
-                 self.app.script_text.insert(1.0, script_content),
+                (self.app.script_text.insert(self.app.script_text.index(tk.END), script_content),
                  self.app.script_text.see(tk.END))
             )
         except Exception as e:

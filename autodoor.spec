@@ -120,6 +120,7 @@ a = Analysis(
         'ui.basic_tab',
         'ui.builder',
         'ui.home',
+        'ui.image_tab',
         'ui.number_tab',
         'ui.ocr_tab',
         'ui.script_tab',
@@ -132,6 +133,7 @@ a = Analysis(
         'modules',
         'modules.alarm',
         'modules.color',
+        'modules.image',
         'modules.input',
         'modules.number',
         'modules.ocr',
@@ -177,6 +179,7 @@ a = Analysis(
         'numpy.core.multiarray',
         'six',
         'imagehash',
+        'cv2',
     ],
     hookspath=[],
     hooksconfig={},
@@ -199,10 +202,7 @@ a = Analysis(
         'pyqt5', 'pyside6', 'wxpython', 'tkinterdnd2',
         
         # PIL扩展
-        'pillow_heif', 'PIL._imagingtk', 'PIL._tkinter_finder', 'PIL.ImageQt', 'PIL.ImageTk',
-        
-        # 完全排除OpenCV
-        'cv2',
+        'pillow_heif', 'PIL._tkinter_finder', 'PIL.ImageQt',
         
         # NumPy扩展（保留核心numpy）
         'numpy.testing', 'numpy.f2py', 'numpy.distutils',
