@@ -70,7 +70,6 @@ autodoor_config.json
 # Documentation (exclude generated docs, keep README)
 /md/
 /docs/
-项目架构文档.md
 
 # Temporary files
 *.tmp

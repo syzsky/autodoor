@@ -643,6 +643,9 @@ class Theme:
 - Windows：以管理员身份运行
 - macOS：检查"安全性与隐私"设置
 
+## 联系作者
+- QQ群：1081721730
+
 ## 许可证
 
 MIT License
