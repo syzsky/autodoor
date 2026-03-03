@@ -2,6 +2,7 @@ import customtkinter as ctk
 import tkinter as tk
 from ui.theme import Theme
 from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_divider
+from ui.utils import toggle_group_bg, add_group, delete_group
 
 
 def create_ocr_tab(app):
@@ -145,38 +146,24 @@ def create_ocr_group(app, index):
     app.ocr_groups.append(group_config)
 
 
-def toggle_group_bg(frame, enabled):
-    if enabled:
-        frame.configure(fg_color=Theme.COLORS['info_light'], border_color=Theme.COLORS['primary'])
-    else:
-        frame.configure(fg_color='#ffffff', border_color=Theme.COLORS['border'])
-
-
 def add_ocr_group(app):
-    if len(app.ocr_groups) >= 15:
-        return
-    create_ocr_group(app, len(app.ocr_groups))
-    if hasattr(app, '_setup_ocr_group_listeners') and app.ocr_groups:
-        app._setup_ocr_group_listeners(app.ocr_groups[-1])
-    if hasattr(app, 'config_manager'):
-        app.config_manager.defer_save_config()
+    return add_group(
+        app=app,
+        groups=app.ocr_groups,
+        create_func=lambda idx: create_ocr_group(app, idx),
+        listener_setup_func=getattr(app, '_setup_ocr_group_listeners', None)
+    )
 
 
 def delete_ocr_group(app, group_frame, confirm=True):
-    if confirm:
-        from tkinter import messagebox
-        if not messagebox.askyesno("确认删除", "确定要删除该识别组吗？"):
-            return
-    
-    for i, group in enumerate(app.ocr_groups):
-        if group["frame"] == group_frame:
-            group["frame"].destroy()
-            app.ocr_groups.pop(i)
-            renumber_ocr_groups(app)
-            break
-    
-    if hasattr(app, 'config_manager'):
-        app.config_manager.defer_save_config()
+    return delete_group(
+        app=app,
+        groups=app.ocr_groups,
+        group_frame=group_frame,
+        renumber_func=lambda: renumber_ocr_groups(app),
+        confirm=confirm,
+        confirm_message="确定要删除该识别组吗？"
+    )
 
 
 def renumber_ocr_groups(app):

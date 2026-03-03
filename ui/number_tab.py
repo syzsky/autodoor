@@ -2,6 +2,7 @@ import customtkinter as ctk
 import tkinter as tk
 from ui.theme import Theme
 from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_divider
+from ui.utils import toggle_group_bg, add_group, delete_group
 
 
 def create_number_tab(app):
@@ -116,38 +117,24 @@ def create_number_region(app, index):
     app.number_regions.append(group_config)
 
 
-def toggle_group_bg(frame, enabled):
-    if enabled:
-        frame.configure(fg_color=Theme.COLORS['info_light'], border_color=Theme.COLORS['primary'])
-    else:
-        frame.configure(fg_color='#ffffff', border_color=Theme.COLORS['border'])
-
-
 def add_number_region(app):
-    if len(app.number_regions) >= 15:
-        return
-    create_number_region(app, len(app.number_regions))
-    if hasattr(app, '_setup_region_listeners') and app.number_regions:
-        app._setup_region_listeners(app.number_regions[-1])
-    if hasattr(app, 'config_manager'):
-        app.config_manager.defer_save_config()
+    return add_group(
+        app=app,
+        groups=app.number_regions,
+        create_func=lambda idx: create_number_region(app, idx),
+        listener_setup_func=getattr(app, '_setup_region_listeners', None)
+    )
 
 
 def delete_number_region(app, group_frame, confirm=True):
-    if confirm:
-        from tkinter import messagebox
-        if not messagebox.askyesno("确认删除", "确定要删除该识别组吗？"):
-            return
-    
-    for i, group in enumerate(app.number_regions):
-        if group["frame"] == group_frame:
-            group["frame"].destroy()
-            app.number_regions.pop(i)
-            renumber_number_regions(app)
-            break
-    
-    if hasattr(app, 'config_manager'):
-        app.config_manager.defer_save_config()
+    return delete_group(
+        app=app,
+        groups=app.number_regions,
+        group_frame=group_frame,
+        renumber_func=lambda: renumber_number_regions(app),
+        confirm=confirm,
+        confirm_message="确定要删除该识别组吗？"
+    )
 
 
 def renumber_number_regions(app):

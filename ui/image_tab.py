@@ -2,6 +2,7 @@ import customtkinter as ctk
 import tkinter as tk
 from ui.theme import Theme
 from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_divider
+from ui.utils import toggle_group_bg, add_group, delete_group
 from PIL import Image as PILImage
 
 
@@ -185,41 +186,26 @@ def create_image_group(app, index):
     app.image_groups.append(group_config)
 
 
-def toggle_group_bg(frame, enabled):
-    """切换组背景色"""
-    if enabled:
-        frame.configure(fg_color=Theme.COLORS['info_light'], border_color=Theme.COLORS['primary'])
-    else:
-        frame.configure(fg_color='#ffffff', border_color=Theme.COLORS['border'])
-
-
 def add_image_group(app):
     """新增图像检测组"""
-    if len(app.image_groups) >= 15:
-        return
-    create_image_group(app, len(app.image_groups))
-    if hasattr(app, '_setup_image_group_listeners') and app.image_groups:
-        app._setup_image_group_listeners(app.image_groups[-1])
-    if hasattr(app, 'config_manager'):
-        app.config_manager.defer_save_config()
+    return add_group(
+        app=app,
+        groups=app.image_groups,
+        create_func=lambda idx: create_image_group(app, idx),
+        listener_setup_func=getattr(app, '_setup_image_group_listeners', None)
+    )
 
 
 def delete_image_group(app, group_frame, confirm=True):
     """删除图像检测组"""
-    if confirm:
-        from tkinter import messagebox
-        if not messagebox.askyesno("确认删除", "确定要删除该检测组吗？"):
-            return
-    
-    for i, group in enumerate(app.image_groups):
-        if group["frame"] == group_frame:
-            group["frame"].destroy()
-            app.image_groups.pop(i)
-            renumber_image_groups(app)
-            break
-    
-    if hasattr(app, 'config_manager'):
-        app.config_manager.defer_save_config()
+    return delete_group(
+        app=app,
+        groups=app.image_groups,
+        group_frame=group_frame,
+        renumber_func=lambda: renumber_image_groups(app),
+        confirm=confirm,
+        confirm_message="确定要删除该检测组吗？"
+    )
 
 
 def renumber_image_groups(app):
