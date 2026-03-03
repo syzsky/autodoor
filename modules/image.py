@@ -40,24 +40,6 @@ class ImageDetection:
         """设置检测区域"""
         self.region = region
     
-    def set_reference_image(self, image_path):
-        """设置参考图像（模板）"""
-        if not os.path.exists(image_path):
-            return False
-        
-        if not CV2_AVAILABLE:
-            return False
-        
-        try:
-            self.template_image = cv2.imread(image_path, cv2.IMREAD_COLOR)
-            if self.template_image is None:
-                return False
-            
-            self.template_path = image_path
-            return True
-        except Exception:
-            return False
-    
     def start_detection(self, threshold, interval, pause, commands):
         """开始检测"""
         self.threshold = float(threshold) / 100.0
