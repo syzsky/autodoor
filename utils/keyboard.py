@@ -93,18 +93,3 @@ def _restore_button_state(button):
         button.configure(state="normal")
     else:
         button.configure(state="normal")
-
-
-def get_available_keys():
-    """获取所有可用的按键列表"""
-    return [
-        "space", "enter", "tab", "escape", "backspace",
-        "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
-        "insert", "delete", "home", "end", "pageup", "pagedown",
-        "up", "down", "left", "right",
-        "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
-        "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
-        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-        "equal", "minus", "plus", "bracketleft", "bracketright",
-        "semicolon", "quote", "backslash", "comma", "period", "slash"
-    ]

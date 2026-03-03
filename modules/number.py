@@ -43,8 +43,6 @@ class NumberModule:
         self.app.number_stop_events.clear()
         if self.app.number_threads:
             self.app.number_threads.clear()
-        if "number" in self.app.status_labels:
-            self.app.status_labels["number"].set("数字识别: 未运行")
 
     def number_recognition_loop(self, region_index, region, threshold, key, stop_event):
         while not stop_event.is_set() and self.app.number_regions[region_index]["enabled"].get():
@@ -70,16 +68,15 @@ class NumberModule:
                         if key:
                             self.app.logging_manager.log_message(f"数字识别{region_index+1}触发按键: {key}")
                             
-                            delay_min = int(self.app.number_regions[region_index]["delay_min"].get())
-                            delay_max = int(self.app.number_regions[region_index]["delay_max"].get())
-                            import random
-                            hold_delay = random.randint(delay_min, delay_max) / 1000
+                            from modules.input import KeyEventExecutor
+                            delay_min_var = self.app.number_regions[region_index]["delay_min"]
+                            delay_max_var = self.app.number_regions[region_index]["delay_max"]
+                            executor = KeyEventExecutor(self.app.input_controller, delay_min_var, delay_max_var, self.PRIORITY)
+                            executor.execute_keypress(key)
                             
-                            self.app.input_controller.key_down(key, priority=self.PRIORITY)
-                            time.sleep(hold_delay)
-                            self.app.input_controller.key_up(key, priority=self.PRIORITY)
-                            
-                            self.app.logging_manager.log_message(f"按下了 {key} 键，按住时长 {int(hold_delay*1000)} 毫秒")
+                            delay_min = int(delay_min_var.get())
+                            delay_max = int(delay_max_var.get())
+                            self.app.logging_manager.log_message(f"数字识别{region_index+1}按下了 {key} 键，按住时长范围: {delay_min}-{delay_max} 毫秒")
                         else:
                             self.app.logging_manager.log_message(f"数字识别{region_index+1}按键配置为空，仅执行报警操作")
                 else:
@@ -128,10 +125,14 @@ class NumberModule:
 
     def ocr_number(self, image):
         import pytesseract
+        from utils.image import _preprocess_image
         
-        image = image.convert('L')
+        processed_image = _preprocess_image(image, group_index=None)
+        if processed_image is None:
+            processed_image = image.convert('L')
+        
         config = '--psm 7 --oem 3 -c tessedit_char_whitelist=0123456789/'
-        text = pytesseract.image_to_string(image, lang='eng', config=config)
+        text = pytesseract.image_to_string(processed_image, lang='eng', config=config)
 
         text = text.strip().replace('\n', '').replace('\r', '')
 

@@ -43,8 +43,6 @@ class ScriptModule:
                 return
             
             self.app.script_executor.run_script(script_content)
-            if hasattr(self.app, 'status_labels') and "script" in self.app.status_labels:
-                self.app.status_labels["script"].set("脚本运行: 运行中")
             self.app.status_var.set("脚本执行中...")
             self.app.logging_manager.log_message("脚本已启动")
             
@@ -59,8 +57,6 @@ class ScriptModule:
         """
         if hasattr(self.app, 'script_executor') and hasattr(self.app.script_executor, 'is_running') and self.app.script_executor.is_running:
             self.app.script_executor.stop_script()
-            if hasattr(self.app, 'status_labels') and "script" in self.app.status_labels:
-                self.app.status_labels["script"].set("脚本运行: 未运行")
             self.app.status_var.set("脚本已停止")
         
         if stop_color_recognition:
@@ -76,8 +72,6 @@ class ScriptModule:
             self.app.record_btn.configure(text="录制中...", state="disabled")
         if hasattr(self.app, 'stop_record_btn'):
             self.app.stop_record_btn.configure(state="normal")
-        if hasattr(self.app, 'status_labels') and "script" in self.app.status_labels:
-            self.app.status_labels["script"].set("脚本运行: 录制中")
         self.app.status_var.set("录制中...")
         self.app.alarm_module.play_start_sound()
 
@@ -89,8 +83,6 @@ class ScriptModule:
                 self.app.record_btn.configure(text="开始录制", state="normal")
             if hasattr(self.app, 'stop_record_btn'):
                 self.app.stop_record_btn.configure(state="disabled")
-            if hasattr(self.app, 'status_labels') and "script" in self.app.status_labels:
-                self.app.status_labels["script"].set("脚本运行: 未运行")
             self.app.status_var.set("录制已停止")
             self.app.alarm_module.play_stop_sound()
 

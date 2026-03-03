@@ -52,9 +52,8 @@ class AutoDoorOCR:
         pyautogui.FAILSAFE = False
         self.version = VERSION
         
-        from core.atomic import AtomicBool
-        self._is_running_atomic = AtomicBool(False)
-        self._is_paused_atomic = AtomicBool(False)
+        from core.atomic import AppState
+        self._state = AppState()
 
         self.is_selecting = False
         self.last_trigger_time = 0
@@ -108,19 +107,19 @@ class AutoDoorOCR:
     
     @property
     def is_running(self) -> bool:
-        return self._is_running_atomic.get()
+        return self._state.is_running
     
     @is_running.setter
     def is_running(self, value: bool) -> None:
-        self._is_running_atomic.set(value)
+        self._state.is_running = value
     
     @property
     def is_paused(self) -> bool:
-        return self._is_paused_atomic.get()
+        return self._state.is_paused
     
     @is_paused.setter
     def is_paused(self, value: bool) -> None:
-        self._is_paused_atomic.set(value)
+        self._state.is_paused = value
 
     def _init_platform(self):
         self.platform_adapter = PlatformAdapter(self)
@@ -165,7 +164,7 @@ class AutoDoorOCR:
         self.alarm_sound_path = tk.StringVar(value="")
         self.alarm_volume = tk.IntVar(value=70)
         self.alarm_volume_str = tk.StringVar(value="70")
-        for module in ["ocr", "timed", "number"]:
+        for module in ["ocr", "timed", "number", "image"]:
             self.alarm_enabled[module] = tk.BooleanVar(value=False)
         self.ocr_delay_min = tk.IntVar(value=300)
         self.ocr_delay_max = tk.IntVar(value=500)

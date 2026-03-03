@@ -107,10 +107,6 @@ class NumericEntry(ctk.CTkEntry):
         except tk.TclError:
             self._valid = True
             self.configure(border_color=Theme.COLORS['border'])
-    
-    def is_valid(self):
-        return self._valid
-    
     def get_value(self, default=0):
         try:
             val = self.get()

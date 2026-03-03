@@ -45,10 +45,6 @@ class OCRProxy:
         """新增文字识别组"""
         add_ocr_group(self.app)
     
-    def delete_group_by_button(self, button):
-        """通过按钮删除对应的文字识别组"""
-        pass
-    
     def delete_group(self, index, confirm=True):
         """删除文字识别组"""
         delete_ocr_group(self.app, index, confirm)
@@ -88,10 +84,6 @@ class TimedProxy:
         """新增定时组"""
         add_timed_group(self.app)
     
-    def delete_group_by_button(self, button):
-        """通过按钮删除对应的定时组"""
-        pass
-    
     def delete_group(self, index, confirm=True):
         """删除定时组"""
         delete_timed_group(self.app, index, confirm)
@@ -126,10 +118,6 @@ class NumberProxy:
     def add_region(self):
         """新增数字识别区域"""
         add_number_region(self.app)
-    
-    def delete_region_by_button(self, button):
-        """通过按钮删除对应的数字识别区域"""
-        pass
     
     def delete_region(self, index, confirm=True):
         """删除数字识别区域"""

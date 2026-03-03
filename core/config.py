@@ -362,7 +362,7 @@ class ConfigManager:
             self.app.alarm_volume_str.set(str(alarm_config['volume']))
 
         # 加载各模块报警开关状态
-        for module in ["ocr", "timed", "number"]:
+        for module in ["ocr", "timed", "number", "image"]:
             module_config = alarm_config.get(module, {})
             if 'enabled' in module_config:
                 self.app.alarm_enabled[module].set(module_config['enabled'])
@@ -594,6 +594,9 @@ class ConfigManager:
             },
             'number': {
                 'enabled': self.app.alarm_enabled['number'].get()
+            },
+            'image': {
+                'enabled': self.app.alarm_enabled['image'].get()
             }
         }
     

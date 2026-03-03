@@ -182,17 +182,6 @@ class ImageDetection:
             return
         
         key = group.get("key", tk.StringVar(value="")).get()
-        if not key:
-            return
-        
-        try:
-            delay_min = int(group.get("delay_min", tk.StringVar(value="300")).get())
-        except (ValueError, TypeError):
-            delay_min = 300
-        try:
-            delay_max = int(group.get("delay_max", tk.StringVar(value="500")).get())
-        except (ValueError, TypeError):
-            delay_max = 500
         
         alarm_enabled = group.get("alarm", tk.BooleanVar(value=False)).get()
         click_enabled = group.get("click", tk.BooleanVar(value=True)).get()
@@ -204,14 +193,14 @@ class ImageDetection:
             except Exception:
                 pass
         
-        import random
-        hold_delay = random.randint(delay_min, delay_max) / 1000
-        
-        self.app.input_controller.key_down(key, priority=self.PRIORITY)
-        time.sleep(hold_delay)
-        self.app.input_controller.key_up(key, priority=self.PRIORITY)
-        
-        self.app.logging_manager.log_message(f"检测组{self.group_index+1}按下了 {key} 键，按住时长 {int(hold_delay*1000)} 毫秒")
+        if key:
+            from modules.input import KeyEventExecutor
+            delay_min_var = group["delay_min"]
+            delay_max_var = group["delay_max"]
+            executor = KeyEventExecutor(self.app.input_controller, delay_min_var, delay_max_var, self.PRIORITY)
+            executor.execute_keypress(key)
+            
+            self.app.logging_manager.log_message(f"检测组{self.group_index+1}按下了 {key} 键")
         
         if alarm_enabled:
             try:
@@ -333,8 +322,6 @@ class ImageDetectionManager:
         
         detection.start_detection(threshold, interval, pause, commands)
         
-        if hasattr(self.app, 'status_labels') and "image" in self.app.status_labels:
-            self.app.status_labels["image"].set(f"图像检测: 运行中 (组{group_index + 1})")
         self.app.status_var.set(f"图像检测组{group_index + 1}运行中...")
     
     def stop_detection(self, group_index):
@@ -343,21 +330,33 @@ class ImageDetectionManager:
             self.image_detections[group_index].stop_detection()
             del self.image_detections[group_index]
         
-        if hasattr(self.app, 'status_labels') and "image" in self.app.status_labels:
-            self.app.status_labels["image"].set("图像检测: 未运行")
         self.app.status_var.set("图像检测已停止")
     
     def start_all_detection(self):
         """开始所有已启用的检测组"""
+        def start_func():
+            start_count = 0
+            for i, group in enumerate(self.app.image_groups):
+                if group["enabled"].get():
+                    if group.get("template_image") is None:
+                        continue
+                    if not group.get("region"):
+                        continue
+                    self.start_detection(i)
+                    start_count += 1
+            return start_count
+        
         has_enabled = False
-        for i, group in enumerate(self.app.image_groups):
+        for group in self.app.image_groups:
             if group["enabled"].get():
                 has_enabled = True
-                self.start_detection(i)
+                break
         
         if not has_enabled:
             messagebox.showwarning("警告", "请至少启用一个检测组")
             return
+        
+        self.app.start_module("image", start_func)
     
     def stop_all_detection(self):
         """停止所有检测组"""
@@ -365,50 +364,4 @@ class ImageDetectionManager:
             self.image_detections[group_index].stop_detection()
         self.image_detections.clear()
         
-        if hasattr(self.app, 'status_labels') and "image" in self.app.status_labels:
-            self.app.status_labels["image"].set("图像检测: 未运行")
         self.app.status_var.set("图像检测已停止")
-    
-    def trigger_action_for_group(self, group, group_index, click_enabled=False, click_pos=None):
-        """为检测组触发动作"""
-        try:
-            if not self.app.is_running or getattr(self.app, 'system_stopped', False):
-                return
-            
-            key = group.get("key", tk.StringVar(value="")).get()
-            if not key:
-                return
-            
-            try:
-                delay_min = int(group.get("delay_min", tk.StringVar(value="300")).get())
-            except (ValueError, TypeError):
-                delay_min = 300
-            try:
-                delay_max = int(group.get("delay_max", tk.StringVar(value="500")).get())
-            except (ValueError, TypeError):
-                delay_max = 500
-            
-            alarm_enabled = group.get("alarm", tk.BooleanVar(value=False)).get()
-            
-            if click_enabled and click_pos:
-                click_x, click_y = click_pos
-                if click_x is not None and click_y is not None:
-                    self.app.input_controller.click(click_x, click_y)
-                    time.sleep(self.app.click_delay if hasattr(self.app, 'click_delay') else 0.1)
-            
-            import random
-            hold_delay = random.randint(delay_min, delay_max) / 1000
-            
-            self.app.input_controller.key_down(key, priority=ImageDetection.PRIORITY)
-            time.sleep(hold_delay)
-            self.app.input_controller.key_up(key, priority=ImageDetection.PRIORITY)
-            
-            if alarm_enabled:
-                try:
-                    temp_alarm_var = tk.BooleanVar(value=True)
-                    self.app.alarm_module.play_alarm_sound(temp_alarm_var)
-                except Exception:
-                    pass
-        
-        except Exception:
-            pass

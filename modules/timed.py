@@ -47,8 +47,6 @@ class TimedModule:
         self.app.timed_stop_events.clear()
         if self.app.timed_threads:
             self.app.timed_threads.clear()
-        if "timed" in self.app.status_labels:
-            self.app.status_labels["timed"].set("定时功能: 未运行")
 
     def timed_task_loop(self, group_index, interval, key, stop_event):
         while not stop_event.is_set() and self.app.timed_groups[group_index]["enabled"].get():
@@ -101,16 +99,13 @@ class TimedModule:
 
                     self.app.logging_manager.log_message(f"[{self.app.platform_adapter.platform}] 定时任务{group_index+1}触发按键: {key}")
                     
-                    delay_min = int(group["delay_min"].get())
-                    delay_max = int(group["delay_max"].get())
-                    import random
-                    hold_delay = random.randint(delay_min, delay_max) / 1000
+                    from modules.input import KeyEventExecutor
+                    delay_min_var = group["delay_min"]
+                    delay_max_var = group["delay_max"]
+                    executor = KeyEventExecutor(self.app.input_controller, delay_min_var, delay_max_var, self.PRIORITY)
+                    executor.execute_keypress(key)
                     
-                    self.app.input_controller.key_down(key, priority=self.PRIORITY)
-                    time.sleep(hold_delay)
-                    self.app.input_controller.key_up(key, priority=self.PRIORITY)
-                    
-                    self.app.logging_manager.log_message(f"按下了 {key} 键，按住时长 {int(hold_delay*1000)} 毫秒")
+                    self.app.logging_manager.log_message(f"定时任务{group_index+1}按下了 {key} 键")
                 else:
                     self.app.logging_manager.log_message(f"[{self.app.platform_adapter.platform}] 定时任务{group_index+1}按键配置为空")
             except Exception as e:

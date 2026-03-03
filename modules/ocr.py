@@ -39,20 +39,18 @@ class OCRModule:
             messagebox.showwarning("警告", "请至少启用一个识别组并选择区域")
             return
 
-        self.app.is_running = True
-        self.app.is_paused = False
+        def start_func():
+            self.app.is_running = True
+            self.app.is_paused = False
+            self.app.ocr_thread = threading.Thread(target=self.ocr_loop, daemon=True)
+            self.app.ocr_thread.start()
+            return 1
 
-        self.app.status_labels["ocr"].set("文字识别: 运行中")
-        self.app.logging_manager.log_message("开始监控...")
-
-        self.app.ocr_thread = threading.Thread(target=self.ocr_loop, daemon=True)
-        self.app.ocr_thread.start()
+        self.app.start_module("ocr", start_func)
 
     def stop_monitoring(self):
         """停止监控"""
         self.app.is_running = False
-
-        self.app.status_labels["ocr"].set("文字识别: 未运行")
     
     def ocr_loop(self):
         """
@@ -373,34 +371,20 @@ class OCRModule:
             group_index: OCR组索引
         
         Returns:
-            tuple: (valid, key, delay_min, delay_max, alarm_enabled, region)
+            tuple: (valid, key, alarm_enabled, region)
         """
         if not group:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 组配置为空")
-            return False, None, None, None, None, None
+            return False, None, None, None
 
         key = group.get("key", tk.StringVar(value="")).get()
-        try:
-            delay_min = int(group.get("delay_min", tk.StringVar(value="300")).get())
-        except (ValueError, TypeError):
-            delay_min = 300
-        try:
-            delay_max = int(group.get("delay_max", tk.StringVar(value="500")).get())
-        except (ValueError, TypeError):
-            delay_max = 500
         alarm_enabled = group.get("alarm", tk.BooleanVar(value=False)).get()
         region = group.get("region")
 
         if not key:
-            self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 未设置触发按键")
-            return False, None, None, None, None, None
+            self.app.logging_manager.log_message(f"识别组{group_index+1}警告: 未设置触发按键")
 
-        if delay_min < 0 or delay_max < delay_min:
-            self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 延迟参数无效")
-            delay_min = 300
-            delay_max = 500
-
-        return True, key, delay_min, delay_max, alarm_enabled, region
+        return True, key, alarm_enabled, region
     
     def _calculate_click_position(self, click_pos, region, group_index):
         """
@@ -452,18 +436,18 @@ class OCRModule:
         if not self.app.is_running or getattr(self.app, 'system_stopped', False):
             return
 
+        if not key:
+            return
+
         group = self.app.ocr_groups[group_index]
-        delay_min = int(group.get("delay_min", tk.StringVar(value="300")).get())
-        delay_max = int(group.get("delay_max", tk.StringVar(value="500")).get())
         
-        import random
-        hold_delay = random.randint(delay_min, delay_max) / 1000
+        from modules.input import KeyEventExecutor
+        delay_min_var = group["delay_min"]
+        delay_max_var = group["delay_max"]
+        executor = KeyEventExecutor(self.app.input_controller, delay_min_var, delay_max_var, self.PRIORITY)
+        executor.execute_keypress(key)
         
-        self.app.input_controller.key_down(key, priority=self.PRIORITY)
-        time.sleep(hold_delay)
-        self.app.input_controller.key_up(key, priority=self.PRIORITY)
-        
-        self.app.logging_manager.log_message(f"按下了 {key} 键，按住时长 {int(hold_delay*1000)} 毫秒")
+        self.app.logging_manager.log_message(f"识别组{group_index+1}按下了 {key} 键")
         self.last_trigger_times[group_index] = time.time()
     
     def _play_alarm_if_enabled(self, alarm_enabled, group_index):
@@ -480,7 +464,7 @@ class OCRModule:
             if not self.app.is_running or getattr(self.app, 'system_stopped', False):
                 return
 
-            valid, key, delay_min, delay_max, alarm_enabled, region = self._validate_trigger_input(group, group_index)
+            valid, key, alarm_enabled, region = self._validate_trigger_input(group, group_index)
             if not valid:
                 return
 
