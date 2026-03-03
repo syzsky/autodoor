@@ -52,56 +52,6 @@ def delete_group_by_button(app, button, groups, group_type, delete_func):
     messagebox.showerror("错误", f"无法找到对应的{group_type}，请重试！")
 
 
-def delete_group(app, index, groups, group_type, min_count, rename_func, log_prefix, confirm=True):
-    """通用的删除组方法
-    Args:
-        app: 主应用实例
-        index: 要删除的组索引
-        groups: 组列表
-        group_type: 组类型名称（用于日志和提示）
-        min_count: 最小保留数量
-        rename_func: 重新编号函数
-        log_prefix: 日志前缀
-        confirm: 是否显示确认对话框，默认为True
-    """
-    if len(groups) <= min_count:
-        messagebox.showwarning("警告", f"至少需要保留{min_count}个{group_type}！")
-        return
-
-    if confirm:
-        if not messagebox.askyesno("确认", f"确定要删除{group_type}{index+1}吗？"):
-            return
-
-    if index >= len(groups):
-        index = len(groups) - 1
-
-    if 0 <= index < len(groups):
-        groups[index]["frame"].destroy()
-        del groups[index]
-        rename_func()
-        app.logging_manager.log_message(f"已删除{log_prefix}{index+1}")
-    else:
-        messagebox.showerror("错误", f"索引无效，无法删除{group_type}！")
-
-
-def add_group(app, groups, max_count, create_func, group_type, log_prefix):
-    """通用的新增组方法
-    Args:
-        app: 主应用实例
-        groups: 组列表
-        max_count: 最大允许数量
-        create_func: 创建组的函数
-        group_type: 组类型名称（用于提示）
-        log_prefix: 日志前缀
-    """
-    if len(groups) >= max_count:
-        messagebox.showwarning("警告", f"最多只能创建{max_count}个{group_type}！")
-        return
-
-    create_func(len(groups))
-    app.logging_manager.log_message(f"新增{log_prefix}{len(groups)}")
-
-
 def exit_program(app):
     """退出程序
     Args:
