@@ -14,10 +14,10 @@ from core.click_handler import ClickHandler
 class TimedModule:
     """
     定时任务模块
-    优先级: 4 (Number=5 > Timed=4 > OCR=3 > Color=2 > Script=1)
+    优先级: 5 (Number=6 > Timed=5 > Image=4 > OCR=3 > Color=2 > Script=1)
     """
     
-    PRIORITY = 4
+    PRIORITY = get_module_priority('timed')
     
     def __init__(self, app):
         self.app = app

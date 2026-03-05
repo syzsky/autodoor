@@ -74,15 +74,6 @@ class AutoDoorOCR:
         self.timed_stop_events = {}
         self.number_stop_events = {}
 
-        self.PRIORITIES = {
-            "number": 6,
-            "timed": 5,
-            "image": 4,
-            "ocr": 3,
-            "color": 2,
-            "script": 1
-        }
-
         self.timed_enabled_var = None
         self.timed_groups = []
         self.number_enabled_var = None

@@ -1,7 +1,7 @@
 import pyautogui
 import threading
 import time
-from core.priority_lock import PriorityLock, get_module_priority
+from core.priority_lock import PriorityLock
 
 
 KEY_NAME_MAPPING = {
@@ -39,7 +39,6 @@ class InputController:
     输入控制器类，提供通用的按键和鼠标操作方法
     
     使用优先级锁确保高优先级模块优先执行输入操作。
-    优先级顺序：Number(5) > Timed(4) > OCR(3) > Color(2) > Script(1)
     """
     
     def __init__(self, app=None):
@@ -83,9 +82,10 @@ class InputController:
                 if delay > 0:
                     time.sleep(delay)
                 
-                pyautogui.press(key.lower(), interval=delay)
+                mapped_key = KEY_NAME_MAPPING.get(key.lower(), key.lower())
+                pyautogui.press(mapped_key, interval=delay)
                 if self.app:
-                    self.app.logging_manager.log_message(f"[{self.app.platform_adapter.platform}] 执行按键: {key}")
+                    self.app.logging_manager.log_message(f"[{self.app.platform_adapter.platform}] 执行按键: {key} (映射: {mapped_key})")
             except pyautogui.FailSafeException:
                 if self.app:
                     self.app.logging_manager.log_message("⚠️ 检测到用户移动鼠标到屏幕角落，操作已取消")
@@ -96,7 +96,8 @@ class InputController:
                     if self.app:
                         self.app.logging_manager.log_message(f"  → 尝试备用按键: {self.fallback_keys[key]}")
                     try:
-                        pyautogui.press(self.fallback_keys[key].lower(), interval=delay)
+                        fallback_mapped = KEY_NAME_MAPPING.get(self.fallback_keys[key].lower(), self.fallback_keys[key].lower())
+                        pyautogui.press(fallback_mapped, interval=delay)
                         if self.app:
                             self.app.logging_manager.log_message(f"执行: 按下备用按键 {self.fallback_keys[key]}")
                     except Exception as e:

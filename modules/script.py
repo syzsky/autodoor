@@ -7,13 +7,30 @@ from modules.recorder import RecorderBase
 from core.priority_lock import get_module_priority
 
 
+pynput_to_pyautogui_map = {
+    'page_up': 'pageup',
+    'page_down': 'pagedown',
+    'ctrl_l': 'ctrlleft',
+    'ctrl_r': 'ctrlright',
+    'shift_l': 'shiftleft',
+    'shift_r': 'shiftright',
+    'alt_l': 'altleft',
+    'alt_r': 'altright',
+    'cmd': 'command',
+    'cmd_l': 'command',
+    'cmd_r': 'command',
+    'win_l': 'winleft',
+    'win_r': 'winright',
+}
+
+
 class ScriptModule:
     """
     脚本模块
-    优先级: 1 (Number=5 > Timed=4 > OCR=3 > Color=2 > Script=1)
+    优先级: 1 (Number=6 > Timed=5 > Image=4 > OCR=3 > Color=2 > Script=1)
     """
     
-    PRIORITY = 1
+    PRIORITY = get_module_priority('script')
     
     def __init__(self, app):
         """
@@ -91,7 +108,7 @@ class ScriptExecutor(RecorderBase):
     脚本执行器类
     优先级: 1 (最低)
     """
-    PRIORITY = 1
+    PRIORITY = get_module_priority('script')
     
     def __init__(self, app):
         super().__init__(app)
@@ -524,28 +541,12 @@ class ScriptExecutor(RecorderBase):
                     except Exception:
                         return
                     
-                    pynput_to_pyautogui_map = {
-                        'page_up': 'pageup',
-                        'page_down': 'pagedown',
-                        'ctrl_l': 'ctrlleft',
-                        'ctrl_r': 'ctrlright',
-                        'shift_l': 'shiftleft',
-                        'shift_r': 'shiftright',
-                        'alt_l': 'altleft',
-                        'alt_r': 'altright',
-                        'cmd': 'command',
-                        'cmd_l': 'command',
-                        'cmd_r': 'command',
-                        'win_l': 'winleft',
-                        'win_r': 'winright',
-                    }
                     key_name = pynput_to_pyautogui_map.get(key_name, key_name)
                     
                     record_hotkey = self.app.record_hotkey_var.get().lower()
                     if key_name == record_hotkey:
                         return
                     
-                    # 只记录首次按下的事件，避免重复记录
                     if key_name not in pressed_keys:
                         current_time = time.time()
                         delay = int((current_time - self.last_event_time) * 1000)
@@ -574,28 +575,12 @@ class ScriptExecutor(RecorderBase):
                     except Exception:
                         return
                     
-                    pynput_to_pyautogui_map = {
-                        'page_up': 'pageup',
-                        'page_down': 'pagedown',
-                        'ctrl_l': 'ctrlleft',
-                        'ctrl_r': 'ctrlright',
-                        'shift_l': 'shiftleft',
-                        'shift_r': 'shiftright',
-                        'alt_l': 'altleft',
-                        'alt_r': 'altright',
-                        'cmd': 'command',
-                        'cmd_l': 'command',
-                        'cmd_r': 'command',
-                        'win_l': 'winleft',
-                        'win_r': 'winright',
-                    }
                     key_name = pynput_to_pyautogui_map.get(key_name, key_name)
                     
                     record_hotkey = self.app.record_hotkey_var.get().lower()
                     if key_name == record_hotkey:
                         return
                     
-                    # 只记录首次释放的事件
                     if key_name in pressed_keys:
                         current_time = time.time()
                         delay = int((current_time - self.last_event_time) * 1000)
@@ -710,49 +695,32 @@ class ScriptExecutor(RecorderBase):
 
     def _keycode_to_name(self, keycode):
         """将macOS keycode转换为按键名称"""
-        # 完整的按键映射表
         key_map = {
-            # 字母键
             0: 'a', 1: 's', 2: 'd', 3: 'f', 4: 'h', 5: 'g', 6: 'z', 7: 'x', 8: 'c', 9: 'v',
             11: 'b', 12: 'q', 13: 'w', 14: 'e', 15: 'r', 16: 'y', 17: 't',
             
-            # 数字键
             18: '1', 19: '2', 20: '3', 21: '4', 22: '6', 23: '5', 25: '9', 26: '7', 28: '8', 29: '0',
             
-            # 符号键
             24: 'equal', 27: 'minus', 30: 'right_bracket', 33: 'left_bracket', 36: 'return',
             39: 'apostrophe', 41: 'semicolon', 42: 'backslash', 43: 'comma', 44: 'slash',
             45: 'n', 46: 'm', 47: 'period',
             
-            # 控制键
             48: 'tab', 49: 'space', 50: 'grave', 51: 'delete', 53: 'escape',
             54: 'command', 55: 'shift', 56: 'caps_lock', 57: 'option', 58: 'control',
             59: 'right_shift', 60: 'right_option', 61: 'right_control',
             
-            # 功能键
-            63: 'function', 64: 'f17', 69: 'f18', 70: 'f19', 71: 'f20',
-            72: 'f5', 73: 'f6', 74: 'f7', 75: 'f3', 76: 'f8', 77: 'f9', 78: 'f11',
-            79: 'f13', 80: 'f16', 81: 'f14', 82: 'f10', 83: 'f12', 84: 'f15',
-            89: 'f4', 91: 'f2', 93: 'f1',
+            63: 'function', 64: 'f17', 65: 'kp_multiply', 66: 'volume_up', 67: 'kp_subtract',
+            69: 'kp_add', 70: 'f19', 71: 'f20',
+            72: 'f5', 73: 'f6', 74: 'f7', 75: 'kp_decimal', 76: 'kp_divide', 77: 'f9', 78: 'kp_enter',
+            79: 'f13', 80: 'f16', 81: 'kp_equal', 82: 'kp_0', 83: 'kp_1', 84: 'kp_2',
+            85: 'kp_3', 86: 'kp_4', 87: 'kp_5', 88: 'kp_6', 89: 'kp_7',
+            90: 'kp_8', 91: 'kp_9', 92: 'page_down', 93: 'f1',
             
-            # 特殊键
-            65: 'volume_up', 66: 'volume_down', 67: 'mute', 85: 'help',
-            86: 'home', 87: 'page_up', 88: 'forward_delete', 90: 'end', 92: 'page_down',
-            
-            # 方向键
             123: 'left', 124: 'right', 125: 'down', 126: 'up',
-            
-            # 数字键盘键
-            82: 'kp_0', 83: 'kp_1', 84: 'kp_2', 85: 'kp_3', 86: 'kp_4',
-            87: 'kp_5', 88: 'kp_6', 89: 'kp_7', 90: 'kp_8', 91: 'kp_9',
-            65: 'kp_multiply', 67: 'kp_subtract', 69: 'kp_add', 75: 'kp_decimal',
-            76: 'kp_divide', 78: 'kp_enter'
         }
         
-        # 尝试获取按键名称
         key_name = key_map.get(keycode, None)
         
-        # 如果未找到，返回一个默认值
         if not key_name:
             key_name = f"key_{keycode}"
         

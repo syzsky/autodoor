@@ -14,10 +14,10 @@ from core.click_handler import ClickHandler
 class OCRModule:
     """
     OCR模块，负责文字识别核心逻辑
-    优先级: 3 (Number=5 > Timed=4 > OCR=3 > Color=2 > Script=1)
+    优先级: 3 (Number=6 > Timed=5 > Image=4 > OCR=3 > Color=2 > Script=1)
     """
     
-    PRIORITY = 3
+    PRIORITY = get_module_priority('ocr')
     
     def __init__(self, app):
         self.app = app

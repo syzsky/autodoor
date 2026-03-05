@@ -1,7 +1,7 @@
 import threading
 import time
 from PIL import Image, ImageGrab
-from core.priority_lock import PriorityLock, get_module_priority
+from core.priority_lock import PriorityLock
 
 try:
     import screeninfo

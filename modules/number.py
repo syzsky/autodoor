@@ -7,9 +7,9 @@ from core.priority_lock import get_module_priority
 
 
 class NumberModule:
-    """数字识别模块 - 优先级最高(5)"""
+    """数字识别模块 - 优先级最高(6)"""
     
-    PRIORITY = 5
+    PRIORITY = get_module_priority('number')
     
     def __init__(self, app):
         self.app = app

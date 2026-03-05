@@ -11,10 +11,10 @@ from core.priority_lock import get_module_priority
 class ColorRecognition:
     """
     颜色识别类
-    优先级: 2 (Number=5 > Timed=4 > OCR=3 > Color=2 > Script=1)
+    优先级: 2 (Number=6 > Timed=5 > Image=4 > OCR=3 > Color=2 > Script=1)
     """
     
-    PRIORITY = 2
+    PRIORITY = get_module_priority('color')
     
     def __init__(self, app):
         self.app = app

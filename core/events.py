@@ -7,7 +7,7 @@ from core.priority_lock import get_module_priority
 class EventManager:
     """
     事件管理器类，负责事件队列的管理和处理
-    支持优先级调度：Number(5) > Timed(4) > OCR(3) > Color(2) > Script(1)
+    支持优先级调度：Number(6) > Timed(5) > Image(4) > OCR(3) > Color(2) > Script(1)
     """
     
     DEFAULT_IDLE_DELAY = 0.05
@@ -71,7 +71,7 @@ class EventManager:
         """
         if priority is None and module_info:
             module_type = module_info[0]
-            priority = self.app.PRIORITIES.get(module_type, 0)
+            priority = get_module_priority(module_type)
         elif priority is None:
             priority = 0
         

@@ -13,6 +13,7 @@ except ImportError:
     CV2_AVAILABLE = False
 
 from core.click_handler import ClickHandler
+from core.priority_lock import get_module_priority
 
 
 class ImageDetection:
@@ -21,7 +22,7 @@ class ImageDetection:
     优先级: 4 (Number=6 > Timed=5 > Image=4 > OCR=3 > Color=2 > Script=1)
     """
     
-    PRIORITY = 4
+    PRIORITY = get_module_priority('image')
     
     def __init__(self, app, group_index=0):
         self.app = app
