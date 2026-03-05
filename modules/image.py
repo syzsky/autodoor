@@ -12,6 +12,8 @@ try:
 except ImportError:
     CV2_AVAILABLE = False
 
+from utils.screenshot import ScreenshotManager
+from utils.recognition import ImageRecognizer
 from core.click_handler import ClickHandler
 from core.priority_lock import get_module_priority
 
@@ -39,6 +41,7 @@ class ImageDetection:
         self.click_handler = ClickHandler(app)
         self.last_trigger_time = 0
         self.last_match_pos = None
+        self.screenshot_manager = ScreenshotManager()
     
     def set_region(self, region):
         """设置检测区域"""
@@ -91,7 +94,7 @@ class ImageDetection:
         self.detection_thread.start()
     
     def detect_image(self):
-        """执行图像检测 - 模板匹配"""
+        """执行图像检测 - 使用公共识别工具类"""
         if not self.region or self.template_image is None:
             return None
         
@@ -106,13 +109,7 @@ class ImageDetection:
                     self.app.root.after(0, lambda: self.app._guide_screen_recording_setup())
                     return None
             
-            screenshot = None
-            try:
-                from utils.screenshot import ScreenshotManager
-                screenshot_manager = ScreenshotManager()
-                screenshot = screenshot_manager.get_region_screenshot(self.region, priority=self.PRIORITY)
-            except Exception:
-                return None
+            screenshot = self.screenshot_manager.get_region_screenshot(self.region, priority=self.PRIORITY)
             
             if not screenshot:
                 return None
@@ -120,32 +117,21 @@ class ImageDetection:
             if screenshot.size[0] == 0 or screenshot.size[1] == 0:
                 return None
             
-            screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+            matched, click_pos, score = ImageRecognizer.match_template(
+                screenshot, self.template_image, self.threshold,
+                log_func=self.app.logging_manager.log_message,
+                group_index=self.group_index
+            )
             
-            template_h, template_w = self.template_image.shape[:2]
-            screenshot_h, screenshot_w = screenshot_cv.shape[:2]
-            
-            if template_w > screenshot_w or template_h > screenshot_h:
-                return None
-            
-            result = cv2.matchTemplate(screenshot_cv, self.template_image, cv2.TM_CCOEFF_NORMED)
-            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-            
-            if max_val >= self.threshold:
-                self.app.logging_manager.log_message(f"图像匹配成功：匹配度: {max_val:.2%}")
-                
-                center_x = max_loc[0] + template_w // 2
-                center_y = max_loc[1] + template_h // 2
-                
-                abs_x = self.region[0] + center_x
-                abs_y = self.region[1] + center_y
+            if matched and click_pos:
+                abs_x = self.region[0] + click_pos[0]
+                abs_y = self.region[1] + click_pos[1]
                 
                 self.last_match_pos = (abs_x, abs_y)
                 
-                return (abs_x, abs_y, max_val)
-            else:
-                self.app.logging_manager.log_message(f"图像匹配失败：匹配度: {max_val:.2%}")
-                return None
+                return (abs_x, abs_y, score)
+            
+            return None
                 
         except Exception:
             return None

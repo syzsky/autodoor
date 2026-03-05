@@ -263,3 +263,58 @@ class UIProxy:
         if hasattr(self.app, 'status_var'):
             self.app.status_var.set("")
         self.app.root.update_idletasks()
+
+
+class BackgroundProxy:
+    """后台监控代理类"""
+    
+    def __init__(self, app):
+        self.app = app
+    
+    def create_tab(self, parent):
+        """创建后台监控标签页"""
+        from ui.background_tab import create_background_tab
+        create_background_tab(self.app)
+    
+    def create_group(self, index, monitor_type="ocr"):
+        """创建单个后台监控组"""
+        from ui.background_tab import create_background_group
+        create_background_group(self.app, index, monitor_type)
+    
+    def add_group(self, monitor_type="ocr"):
+        """新增后台监控组"""
+        from ui.background_tab import add_background_group
+        add_background_group(self.app, monitor_type)
+    
+    def delete_group(self, index, confirm=True):
+        """删除后台监控组"""
+        from ui.background_tab import delete_background_group
+        delete_background_group(self.app, index, confirm)
+    
+    def start_region_selection(self, index):
+        """开始选择监控区域"""
+        from ui.background_tab import start_bg_region_selection
+        start_bg_region_selection(self.app, index)
+    
+    def select_template_image(self, index):
+        """选择模板图像（图像监控组）"""
+        from ui.background_tab import select_bg_template_image
+        select_bg_template_image(self.app, index)
+    
+    def select_color(self, index):
+        """选择目标颜色（颜色监控组）"""
+        from ui.background_tab import select_bg_color
+        select_bg_color(self.app, index)
+    
+    def find_window(self):
+        """查找目标窗口"""
+        from ui.background_tab import find_target_window
+        find_target_window(self.app)
+    
+    def start_monitoring(self):
+        """开始后台监控"""
+        self.app.background_manager.start_all_groups()
+    
+    def stop_monitoring(self):
+        """停止后台监控"""
+        self.app.background_manager.stop_all_groups()

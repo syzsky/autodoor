@@ -20,7 +20,7 @@ from core.events import EventManager
 from core.logging import LoggingManager
 from core.utils import exit_program
 from core.controller import ModuleController
-from core.proxy import OCRProxy, TimedProxy, NumberProxy, ScriptProxy, ColorProxy, ImageDetectionProxy, UIProxy
+from core.proxy import OCRProxy, TimedProxy, NumberProxy, ScriptProxy, ColorProxy, ImageDetectionProxy, UIProxy, BackgroundProxy
 from input.permissions import PermissionManager
 from input.controller import InputController
 from input.keyboard import setup_shortcuts
@@ -33,6 +33,7 @@ from modules.alarm import AlarmModule
 from modules.script import ScriptModule
 from modules.color import ColorRecognitionManager
 from modules.image import ImageDetectionManager
+from modules.background import BackgroundManager
 
 VERSION = "2.2.2"
 
@@ -89,6 +90,8 @@ class AutoDoorOCR:
         self.current_ocr_region_index = None
         self.image_groups = []
         self.current_image_region_index = None
+        self.background_groups = []
+        self.bg_group_counter = 0
         
         self._current_page = 'home'
         self.nav_items = {}
@@ -137,6 +140,7 @@ class AutoDoorOCR:
         self.color = ColorProxy(self)
         self.image = ImageDetectionProxy(self)
         self.ui = UIProxy(self)
+        self.background = BackgroundProxy(self)
 
     def _init_ui(self):
         init_theme()
@@ -250,6 +254,7 @@ class AutoDoorOCR:
             ('timed', '⏱', '定时功能'),
             ('number', '🔢', '数字识别'),
             ('image', '🖼', '图像检测'),
+            ('background', '🖥', '后台监控'),
             ('script', '📜', '脚本运行'),
             ('settings', '⚙', '基本设置')
         ]
@@ -320,6 +325,8 @@ class AutoDoorOCR:
         create_timed_tab(self)
         create_number_tab(self)
         create_image_tab(self)
+        from ui.background_tab import create_background_tab
+        create_background_tab(self)
         create_script_tab(self)
         create_basic_tab(self)
         
@@ -385,12 +392,14 @@ class AutoDoorOCR:
         self.tesseract_manager = TesseractManager(self)
         self.color_recognition_manager = ColorRecognitionManager(self)
         self.image_detection_manager = ImageDetectionManager(self)
+        self.background_manager = BackgroundManager(self)
         self.MODULES = {
             "ocr": {"threads": "ocr_threads", "stop_func": "ocr.stop_monitoring", "label": "文字识别"},
             "timed": {"threads": "timed_threads", "stop_func": "timed.stop_tasks", "label": "定时功能"},
             "number": {"threads": "number_threads", "stop_func": "number.stop_recognition", "label": "数字识别"},
             "image": {"threads": "image_threads", "stop_func": "image.stop_detection", "label": "图像检测"},
-            "color": {"threads": "color_threads", "stop_func": "color.stop_recognition", "label": "颜色识别"}
+            "color": {"threads": "color_threads", "stop_func": "color.stop_recognition", "label": "颜色识别"},
+            "background": {"threads": "background_threads", "stop_func": "background.stop_monitoring", "label": "后台监控"}
         }
         self.module_controller = ModuleController(self)
 

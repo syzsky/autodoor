@@ -1,12 +1,13 @@
 import threading
 import time
-import random
 import tkinter as tk
 from tkinter import messagebox
-from PIL import Image, ImageGrab
+from PIL import Image
 import imagehash
 
 from utils.image import _preprocess_image
+from utils.screenshot import ScreenshotManager
+from utils.recognition import OCRRecognizer
 from core.priority_lock import get_module_priority
 from core.click_handler import ClickHandler
 
@@ -24,6 +25,7 @@ class OCRModule:
         self.last_recognition_times = {}
         self.last_trigger_times = {}
         self.click_handler = ClickHandler(app)
+        self.screenshot_manager = ScreenshotManager()
     
     def start_monitoring(self):
         """开始监控"""
@@ -58,11 +60,9 @@ class OCRModule:
         """
         OCR识别循环
         """
-        # 初始化每个组的上次识别时间和上次触发时间
-        self.last_recognition_times = {i: 0 for i in range(len(self.app.ocr_groups))}  # 用于识别间隔
-        self.last_trigger_times = {i: 0 for i in range(len(self.app.ocr_groups))}  # 用于暂停期
+        self.last_recognition_times = {i: 0 for i in range(len(self.app.ocr_groups))}
+        self.last_trigger_times = {i: 0 for i in range(len(self.app.ocr_groups))}
         
-        # 初始化图像哈希缓存，用于增量截图优化
         last_hashes = {i: None for i in range(len(self.app.ocr_groups))}
         frame_counts = {i: 0 for i in range(len(self.app.ocr_groups))}
 
@@ -78,12 +78,9 @@ class OCRModule:
 
                 current_time = time.time()
 
-                # 遍历所有OCR组，并行处理
                 for i, group in enumerate(self.app.ocr_groups):
                     if self._should_process_group(group, i, current_time):
-                        # 执行OCR识别（使用优化后的版本）
                         self.perform_ocr_for_group_optimized(group, i, last_hashes, frame_counts)
-                        # 更新上次识别时间
                         self.last_recognition_times[i] = current_time
             except Exception as e:
                 self.app.logging_manager.log_message(f"错误: {str(e)}")
@@ -106,11 +103,6 @@ class OCRModule:
         return 5        
     
     def _wait_for_interval(self, interval):
-        """
-        等待设定的间隔时间
-        Args:
-            interval: 间隔时间（秒）
-        """
         for _ in range(interval):
             if not self.app.is_running:
                 break
@@ -141,15 +133,6 @@ class OCRModule:
         return True
     
     def _validate_ocr_group_input(self, group, group_index):
-        """
-        验证OCR组输入参数
-        Args:
-            group: OCR组配置字典
-            group_index: OCR组索引
-        
-        Returns:
-            tuple: (valid, region, keywords_str, current_lang, click_enabled)
-        """
         if not group:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 组配置为空")
             return False, None, None, None, None
@@ -165,15 +148,6 @@ class OCRModule:
         return True, region, keywords_str, current_lang, click_enabled
     
     def _validate_region_coordinates(self, region, group_index):
-        """
-        验证并规范化区域坐标
-        Args:
-            region: 区域坐标
-            group_index: OCR组索引
-        
-        Returns:
-            tuple: (valid, left, top, right, bottom)
-        """
         try:
             x1, y1, x2, y2 = region
             if len(region) != 4:
@@ -182,13 +156,11 @@ class OCRModule:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 区域坐标无效 - {str(e)}")
             return False, None, None, None, None
 
-        # 确保坐标是(left, top, right, bottom)格式
         left = min(x1, x2)
         top = min(y1, y2)
         right = max(x1, x2)
         bottom = max(y1, y2)
 
-        # 验证区域大小
         if (right - left) < 10 or (bottom - top) < 10:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 识别区域太小")
             return False, None, None, None, None
@@ -205,160 +177,79 @@ class OCRModule:
                 return None
         
         try:
-            from utils.screenshot import ScreenshotManager
-            screenshot_manager = ScreenshotManager()
-            return screenshot_manager.get_region_screenshot((left, top, right, bottom), priority=self.PRIORITY)
+            return self.screenshot_manager.get_region_screenshot((left, top, right, bottom), priority=self.PRIORITY)
         except Exception as e:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 屏幕截图失败 - {str(e)}")
             return None
     
-
-    
-    def _perform_ocr(self, image, lang, group_index):
-        """
-        执行OCR识别
-        Args:
-            image: 处理后的图像
-            lang: 识别语言
-            group_index: OCR组索引
-
-        Returns:
-            str: 识别结果
-        """
-        try:
-            import pytesseract
-            # 使用优化的Tesseract配置进行OCR识别
-            custom_config = r'--psm 6 --oem 3'
-            text = pytesseract.image_to_string(image, lang=lang, config=custom_config)
-            return text
-        except Exception as e:
-            self.app.logging_manager.log_message(f"识别组{group_index+1}错误: OCR识别失败 - {str(e)}")
-            return None
-    
-    def _find_keyword_position(self, image, keywords, lang, left, top, right, bottom, group_index):
-        """
-        查找关键词位置
-        Args:
-            image: 处理后的图像
-            keywords: 关键词列表
-            lang: 识别语言
-            left: 左上角x坐标
-            top: 左上角y坐标
-            right: 右下角x坐标
-            bottom: 右下角y坐标
-            group_index: OCR组索引
-
-        Returns:
-            tuple: 点击位置坐标
-        """
-        try:
-            import pytesseract
-            # 使用image_to_data获取文字位置信息，使用相同的优化配置
-            custom_config = r'--psm 6 --oem 3'
-            data = pytesseract.image_to_data(image, lang=lang, config=custom_config, output_type=pytesseract.Output.DICT)
-
-            # 遍历所有识别到的文字，找到关键词的位置
-            for i in range(len(data['text'])):
-                word = data['text'][i].lower().strip()
-                if word in keywords or any(keyword in word for keyword in keywords):
-                    # 获取文字的边界框
-                    left_word = data['left'][i]
-                    top_word = data['top'][i]
-                    width = data['width'][i]
-                    height = data['height'][i]
-
-                    # 计算文字中心位置（相对于截图）
-                    center_x = left_word + width // 2
-                    center_y = top_word + height // 2
-
-                    # 转换为屏幕坐标
-                    return (left + center_x, top + center_y)
-
-            # 如果没有找到关键词位置，使用区域中心
-            return ((left + right) // 2, (top + bottom) // 2)
-        except Exception as e:
-            self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 获取文字位置失败 - {str(e)}")
-            # 失败时使用区域中心
-            return ((left + right) // 2, (top + bottom) // 2)
-    
     def perform_ocr_for_group_optimized(self, group, group_index, last_hashes, frame_counts):
         """
         为单个OCR组执行OCR识别（优化版本，使用增量截图和自适应帧率）
-        Args:
-            group: OCR组配置字典
-            group_index: OCR组索引
-            last_hashes: 上次图像哈希缓存
-            frame_counts: 帧计数
         """
         try:
             if not self.app.is_running:
                 return
 
-            # 验证输入参数
             valid, region, keywords_str, current_lang, click_enabled = self._validate_ocr_group_input(group, group_index)
             if not valid:
                 return
 
-            # 验证区域坐标
             valid, left, top, right, bottom = self._validate_region_coordinates(region, group_index)
             if not valid:
                 return
 
-            # 截取屏幕区域
             screenshot = self._capture_screen_region(left, top, right, bottom, group_index)
             if not screenshot:
                 return
 
-            # 计算图像哈希，用于检测画面变化
             current_hash = imagehash.average_hash(screenshot.resize((64, 64)))
             
-            # 检查画面是否变化，避免重复OCR
             if current_hash == last_hashes.get(group_index) and frame_counts.get(group_index, 0) % 5 != 0:
-                # 画面未变化，跳过OCR（节省80%+ CPU）
                 frame_counts[group_index] += 1
                 return
             
-            # 更新哈希缓存
             last_hashes[group_index] = current_hash
             frame_counts[group_index] += 1
 
-            # 开始计时，用于自适应帧率
             start_time = time.time()
 
-            # 图像预处理
             processed_image = _preprocess_image(screenshot, group_index)
             if not processed_image:
                 return
 
-            # OCR识别
-            text = self._perform_ocr(processed_image, current_lang, group_index)
-            if not text:
-                return
-
-            # 计算OCR耗时
-            elapsed_time = time.time() - start_time
-            
-            # 自适应帧率：根据OCR耗时调整延迟
-            # 目标10 FPS，根据实际耗时调整睡眠时间
-            sleep_time = max(0.01, 0.1 - elapsed_time)
-            time.sleep(sleep_time)
-
-            self.app.logging_manager.log_message(f"识别组{group_index+1}识别结果: '{text.strip()}' (耗时: {elapsed_time:.2f}s, 延迟: {sleep_time:.2f}s)")
-
-            # 检查是否包含关键词
-            lower_text = text.lower()
             if keywords_str:
                 keywords = [keyword.strip().lower() for keyword in keywords_str.split(",") if keyword.strip()]
+                
+                text = OCRRecognizer.get_text(processed_image, current_lang)
+                if not text:
+                    return
+                
+                lower_text = text.lower()
+                
+                elapsed_time = time.time() - start_time
+                sleep_time = max(0.01, 0.1 - elapsed_time)
+                time.sleep(sleep_time)
+
+                self.app.logging_manager.log_message(f"识别组{group_index+1}识别结果: '{text.strip()}' (耗时: {elapsed_time:.2f}s, 延迟: {sleep_time:.2f}s)")
+
                 if any(keyword in lower_text for keyword in keywords):
-                    # 确定点击位置
                     if click_enabled:
-                        click_pos = self._find_keyword_position(processed_image, keywords, current_lang, left, top, right, bottom, group_index)
+                        rel_pos = OCRRecognizer.find_keyword_position(processed_image, keywords, current_lang)
+                        if rel_pos:
+                            click_pos = (left + rel_pos[0], top + rel_pos[1])
+                        else:
+                            click_pos = ((left + right) // 2, (top + bottom) // 2)
                     else:
-                        # 未启用点击，使用区域中心
                         click_pos = ((left + right) // 2, (top + bottom) // 2)
 
-                    # 触发动作，传递文字位置
                     self.trigger_action_for_group(group, group_index, click_enabled, click_pos)
+            else:
+                text = OCRRecognizer.get_text(processed_image, current_lang)
+                if text:
+                    elapsed_time = time.time() - start_time
+                    sleep_time = max(0.01, 0.1 - elapsed_time)
+                    time.sleep(sleep_time)
+                    self.app.logging_manager.log_message(f"识别组{group_index+1}识别结果: '{text.strip()}' (耗时: {elapsed_time:.2f}s)")
 
         except Exception as e:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 未知错误 - {str(e)}")
@@ -366,15 +257,6 @@ class OCRModule:
             self.app.logging_manager.log_message(f"错误详情: {traceback.format_exc()}")
     
     def _validate_trigger_input(self, group, group_index):
-        """
-        验证触发动作的输入参数
-        Args:
-            group: OCR组配置字典
-            group_index: OCR组索引
-        
-        Returns:
-            tuple: (valid, key, alarm_enabled, region)
-        """
         if not group:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 组配置为空")
             return False, None, None, None
@@ -389,16 +271,6 @@ class OCRModule:
         return True, key, alarm_enabled, region
     
     def _calculate_click_position(self, click_pos, region, group_index):
-        """
-        计算点击位置
-        Args:
-            click_pos: 点击位置坐标
-            region: 区域坐标
-            group_index: OCR组索引
-
-        Returns:
-            tuple: (click_x, click_y)
-        """
         if click_pos is not None:
             return click_pos
 
@@ -407,7 +279,6 @@ class OCRModule:
             return None, None
 
         try:
-            # 计算点击位置（区域中心）
             x1, y1, x2, y2 = region
             click_x = (x1 + x2) // 2
             click_y = (y1 + y2) // 2

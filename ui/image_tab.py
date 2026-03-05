@@ -52,7 +52,7 @@ def create_image_group(app, index):
     group_frame.pack(fill='x', pady=(0, 10))
     
     header = ctk.CTkFrame(group_frame, fg_color='transparent')
-    header.pack(fill='x', padx=10, pady=(4, 0))
+    header.pack(fill='x', padx=10, pady=(6, 2))
     
     title_label = ctk.CTkLabel(header, text=f'检测组 {index + 1}', font=Theme.get_font('base'))
     title_label.pack(side='left')
@@ -71,26 +71,24 @@ def create_image_group(app, index):
     content_frame = ctk.CTkFrame(group_frame, fg_color='transparent')
     content_frame.pack(fill='x', padx=10, pady=0)
     
-    # 左侧配置区域
     left_frame = ctk.CTkFrame(content_frame, fg_color='transparent')
     left_frame.pack(side='left', fill='x', expand=True)
     
-    # 右侧预览区域（在空白区域中心）
     right_frame = ctk.CTkFrame(content_frame, fg_color='transparent')
     right_frame.pack(side='left', fill='both', expand=True)
     
-    # 预览容器 - 居中显示
-    preview_container = ctk.CTkFrame(right_frame, fg_color=Theme.COLORS['border'], corner_radius=6, width=140, height=70)
-    preview_container.pack(padx=5, pady=5, expand=True)
-    preview_container.pack_propagate(False)
+    preview_container = ctk.CTkFrame(right_frame, fg_color=Theme.COLORS['border'], corner_radius=6)
+    preview_container.pack(padx=5, pady=(2, 5), fill='both', expand=True)
     
-    # 预览标签
     image_preview = ctk.CTkLabel(preview_container, text='预览', font=Theme.get_font('xs'),
-                                  text_color=Theme.COLORS['text_muted'], width=136, height=66)
-    image_preview.pack(padx=2, pady=2)
+                                  text_color=Theme.COLORS['text_muted'])
+    image_preview.pack(padx=2, pady=2, fill='both', expand=True)
     
     row1 = ctk.CTkFrame(left_frame, fg_color='transparent')
     row1.pack(fill='x', pady=2)
+    
+    row2 = ctk.CTkFrame(left_frame, fg_color='transparent')
+    row2.pack(fill='x', pady=2)
     
     select_region_btn = AnimatedButton(row1, text='选择区域', font=Theme.get_font('xs'), width=60, height=24,
                                         corner_radius=4, fg_color=Theme.COLORS['primary'],
@@ -101,65 +99,60 @@ def create_image_group(app, index):
     region_entry = ctk.CTkEntry(row1, textvariable=group_vars["region_var"], width=130, height=24, state='disabled')
     region_entry.pack(side='left', padx=(0, 8))
     
-    select_image_btn = AnimatedButton(row1, text='选择图像', font=Theme.get_font('xs'), width=60, height=24,
+    ctk.CTkLabel(row1, text='按键:', font=Theme.get_font('xs')).pack(side='left')
+    key_entry = ctk.CTkEntry(row1, textvariable=group_vars["key_var"], width=50, height=24, state='disabled')
+    key_entry.pack(side='left', padx=(2, 2))
+    
+    from utils.keyboard import start_key_listening
+    key_btn = AnimatedButton(row1, text='修改', font=Theme.get_font('xs'), width=24, height=24, corner_radius=4,
+                             fg_color=Theme.COLORS['primary'], hover_color=Theme.COLORS['primary_hover'])
+    key_btn.configure(command=lambda: start_key_listening(app, key_entry, key_btn))
+    key_btn.pack(side='left', padx=(0, 8))
+    
+    ctk.CTkLabel(row1, text='按键时长:', font=Theme.get_font('xs')).pack(side='left')
+    delay_min_entry = NumericEntry(row1, textvariable=group_vars["delay_min_var"], width=45, height=24)
+    delay_min_entry.pack(side='left', padx=(2, 2))
+    ctk.CTkLabel(row1, text='-', font=Theme.get_font('xs')).pack(side='left')
+    delay_max_entry = NumericEntry(row1, textvariable=group_vars["delay_max_var"], width=45, height=24)
+    delay_max_entry.pack(side='left', padx=(2, 2))
+    ctk.CTkLabel(row1, text='ms', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
+    
+    alarm_frame = ctk.CTkFrame(row1, fg_color='transparent')
+    alarm_frame.pack(side='left')
+    ctk.CTkLabel(alarm_frame, text='报警', font=Theme.get_font('xs')).pack(side='left', padx=(0, 2))
+    ctk.CTkSwitch(alarm_frame, text='', width=36, variable=group_vars["alarm_var"]).pack(side='left')
+    
+    ctk.CTkLabel(row2, text='间隔:', font=Theme.get_font('xs')).pack(side='left')
+    interval_entry = NumericEntry(row2, textvariable=group_vars["interval_var"], width=45, height=24)
+    interval_entry.pack(side='left', padx=(2, 2))
+    ctk.CTkLabel(row2, text='秒', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
+    
+    ctk.CTkLabel(row2, text='暂停:', font=Theme.get_font('xs')).pack(side='left')
+    pause_entry = NumericEntry(row2, textvariable=group_vars["pause_var"], width=45, height=24)
+    pause_entry.pack(side='left', padx=(2, 2))
+    ctk.CTkLabel(row2, text='秒', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
+    
+    select_image_btn = AnimatedButton(row2, text='选择图像', font=Theme.get_font('xs'), width=60, height=24,
                                        corner_radius=4, fg_color=Theme.COLORS['primary'],
                                        hover_color=Theme.COLORS['primary_hover'],
                                        command=lambda: select_reference_image(app, index))
     select_image_btn.pack(side='left', padx=(0, 4))
     
-    image_path_entry = ctk.CTkEntry(row1, textvariable=group_vars["image_path_var"], width=100, height=24, state='disabled')
+    image_path_entry = ctk.CTkEntry(row2, textvariable=group_vars["image_path_var"], width=80, height=24, state='disabled')
     image_path_entry.pack(side='left', padx=(0, 4))
     
-    crop_image_btn = AnimatedButton(row1, text='截图', font=Theme.get_font('xs'), width=36, height=24,
+    crop_image_btn = AnimatedButton(row2, text='截图', font=Theme.get_font('xs'), width=36, height=24,
                                      corner_radius=4, fg_color=Theme.COLORS['info'],
                                      hover_color=Theme.COLORS['info_hover'],
                                      command=lambda: crop_reference_image(app, index))
     crop_image_btn.pack(side='left', padx=(0, 8))
     
-    ctk.CTkLabel(row1, text='匹配度:', font=Theme.get_font('xs')).pack(side='left')
-    threshold_entry = NumericEntry(row1, textvariable=group_vars["threshold_var"], width=30, height=24)
+    ctk.CTkLabel(row2, text='阈值:', font=Theme.get_font('xs')).pack(side='left')
+    threshold_entry = NumericEntry(row2, textvariable=group_vars["threshold_var"], width=30, height=24)
     threshold_entry.pack(side='left', padx=(2, 0))
+    ctk.CTkLabel(row2, text='%', font=Theme.get_font('xs')).pack(side='left')
     
-    row2 = ctk.CTkFrame(left_frame, fg_color='transparent')
-    row2.pack(fill='x', pady=2)
-    
-    ctk.CTkLabel(row2, text='按键:', font=Theme.get_font('xs')).pack(side='left')
-    key_entry = ctk.CTkEntry(row2, textvariable=group_vars["key_var"], width=50, height=24, state='disabled')
-    key_entry.pack(side='left', padx=(2, 2))
-    
-    from utils.keyboard import start_key_listening
-    key_btn = AnimatedButton(row2, text='修改', font=Theme.get_font('xs'), width=24, height=24, corner_radius=4,
-                             fg_color=Theme.COLORS['primary'], hover_color=Theme.COLORS['primary_hover'])
-    key_btn.configure(command=lambda: start_key_listening(app, key_entry, key_btn))
-    key_btn.pack(side='left', padx=(0, 8))
-    
-    ctk.CTkLabel(row2, text='按键时长:', font=Theme.get_font('xs')).pack(side='left')
-    delay_min_entry = NumericEntry(row2, textvariable=group_vars["delay_min_var"], width=45, height=24)
-    delay_min_entry.pack(side='left', padx=(2, 2))
-    ctk.CTkLabel(row2, text='-', font=Theme.get_font('xs')).pack(side='left')
-    delay_max_entry = NumericEntry(row2, textvariable=group_vars["delay_max_var"], width=45, height=24)
-    delay_max_entry.pack(side='left', padx=(2, 2))
-    ctk.CTkLabel(row2, text='ms', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
-    
-    alarm_frame = ctk.CTkFrame(row2, fg_color='transparent')
-    alarm_frame.pack(side='left')
-    ctk.CTkLabel(alarm_frame, text='报警', font=Theme.get_font('xs')).pack(side='left', padx=(0, 2))
-    ctk.CTkSwitch(alarm_frame, text='', width=36, variable=group_vars["alarm_var"]).pack(side='left')
-    
-    row3 = ctk.CTkFrame(left_frame, fg_color='transparent')
-    row3.pack(fill='x', pady=(2, 4))
-    
-    ctk.CTkLabel(row3, text='间隔:', font=Theme.get_font('xs')).pack(side='left')
-    interval_entry = NumericEntry(row3, textvariable=group_vars["interval_var"], width=45, height=24)
-    interval_entry.pack(side='left', padx=(2, 2))
-    ctk.CTkLabel(row3, text='秒', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
-    
-    ctk.CTkLabel(row3, text='暂停:', font=Theme.get_font('xs')).pack(side='left')
-    pause_entry = NumericEntry(row3, textvariable=group_vars["pause_var"], width=45, height=24)
-    pause_entry.pack(side='left', padx=(2, 2))
-    ctk.CTkLabel(row3, text='秒', font=Theme.get_font('xs')).pack(side='left', padx=(0, 8))
-    
-    click_frame = ctk.CTkFrame(row3, fg_color='transparent')
+    click_frame = ctk.CTkFrame(row2, fg_color='transparent')
     click_frame.pack(side='left')
     ctk.CTkLabel(click_frame, text='点击', font=Theme.get_font('xs')).pack(side='left', padx=(0, 2))
     ctk.CTkSwitch(click_frame, text='', width=36, variable=group_vars["click_var"]).pack(side='left')
@@ -181,7 +174,8 @@ def create_image_group(app, index):
         "alarm": group_vars["alarm_var"],
         "click": group_vars["click_var"],
         "title_label": title_label,
-        "image_preview": image_preview
+        "image_preview": image_preview,
+        "preview_container": preview_container
     }
     app.image_groups.append(group_config)
 
@@ -227,6 +221,7 @@ def update_image_preview(app, index, image_path):
     
     group = app.image_groups[index]
     image_preview = group.get("image_preview")
+    preview_container = group.get("preview_container")
     
     if not image_preview or not image_path:
         return
@@ -239,7 +234,16 @@ def update_image_preview(app, index, image_path):
         image = PILImage.open(image_path)
         orig_w, orig_h = image.size
         
-        max_w, max_h = 136, 66
+        if preview_container:
+            preview_container.update_idletasks()
+            max_w = preview_container.winfo_width() - 4
+            max_h = preview_container.winfo_height() - 4
+            if max_w < 50:
+                max_w = 140
+            if max_h < 30:
+                max_h = 70
+        else:
+            max_w, max_h = 140, 70
         
         ratio = min(max_w / orig_w, max_h / orig_h)
         new_w = int(orig_w * ratio)

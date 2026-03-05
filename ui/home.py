@@ -37,7 +37,8 @@ def create_home_tab(app):
         "timed": tk.BooleanVar(value=False),
         "number": tk.BooleanVar(value=False),
         "image": tk.BooleanVar(value=False),
-        "script": tk.BooleanVar(value=False)
+        "script": tk.BooleanVar(value=False),
+        "background": tk.BooleanVar(value=False)
     }
     
     module_names = {
@@ -45,6 +46,7 @@ def create_home_tab(app):
         "timed": "定时功能",
         "number": "数字识别",
         "image": "图像检测",
+        "background": "后台监控",
         "script": "脚本运行"
     }
     

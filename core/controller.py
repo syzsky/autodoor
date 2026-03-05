@@ -1,6 +1,7 @@
 """
 模块控制器，负责统一管理各功能模块的启动和停止
 """
+import tkinter as tk
 from ui.theme import Theme
 
 
@@ -76,6 +77,10 @@ class ModuleController:
             self.app.script.start()
             self._update_indicator("script", True)
 
+        if self.app.module_check_vars.get("background", tk.BooleanVar(value=False)).get():
+            self.app.background_manager.start_all_groups()
+            self._update_indicator("background", True)
+
         self.app.alarm_module.play_start_sound()
         
         self.app.is_running = True
@@ -100,6 +105,10 @@ class ModuleController:
         
         self.app.script.stop(stop_color_recognition=False)
         self._update_indicator("script", False)
+        
+        if hasattr(self.app, 'background_manager'):
+            self.app.background_manager.stop_all_groups()
+            self._update_indicator("background", False)
         
         if hasattr(self.app, 'color_recognition_manager') and hasattr(self.app.color_recognition_manager, 'color_recognition'):
             cr = self.app.color_recognition_manager.color_recognition

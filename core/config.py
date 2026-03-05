@@ -143,6 +143,8 @@ class ConfigManager:
             },
             # 图像检测配置
             'image_detection': self._get_image_detection_config(),
+            # 后台监控配置
+            'background_monitor': self._get_background_config(),
             # 快捷键配置 - 新增
             'shortcuts': self._get_shortcuts_config(),
             # 报警功能配置
@@ -309,6 +311,75 @@ class ConfigManager:
             if len(self.app.image_groups) == 0:
                 self.app.image.create_group(0)
     
+    def load_background_config(self, config):
+        """加载后台监控配置"""
+        bg_config = self.get_config_value(config, 'background_monitor', {})
+        
+        target_window = bg_config.get('target_window', {})
+        if hasattr(self.app, 'bg_window_title_var'):
+            self.app.bg_window_title_var.set(target_window.get('title', ''))
+        
+        if hasattr(self.app, 'bg_group_counter'):
+            self.app.bg_group_counter = 0
+        
+        groups = bg_config.get('groups', [])
+        
+        if not hasattr(self.app, 'background_groups'):
+            return
+        
+        for group in self.app.background_groups:
+            if 'frame' in group:
+                group['frame'].destroy()
+        self.app.background_groups.clear()
+        
+        for group_config in groups:
+            if not isinstance(group_config, dict):
+                continue
+            
+            group_type = group_config.get('type', 'ocr')
+            
+            from ui.background_tab import create_background_group
+            
+            index = len(self.app.background_groups) + 1
+            create_background_group(self.app, index, group_type)
+            
+            group = self.app.background_groups[-1]
+            group_index = len(self.app.background_groups) - 1
+            
+            if hasattr(self.app, 'bg_group_counter'):
+                self.app.bg_group_counter = len(self.app.background_groups)
+            
+            for key, value in group_config.items():
+                if key in group:
+                    if key == 'enabled':
+                        group[key].set(value)
+                    elif key == 'region' and value is not None:
+                        group['region'] = tuple(value)
+                        group['region_var'].set(f"({value[0]}, {value[1]}) - ({value[2]}, {value[3]})")
+                    elif key == 'region_ratio' and value is not None:
+                        group['region_ratio'] = tuple(value)
+                    elif key == 'target_color' and value is not None:
+                        group['target_color'] = tuple(value)
+                        if 'color_var' in group:
+                            r, g, b = tuple(value)
+                            group['color_var'].set(f"RGB({r}, {g}, {b})")
+                        if 'color_display' in group:
+                            r, g, b = tuple(value)
+                            group['color_display'].configure(fg_color=f"#{r:02x}{g:02x}{b:02x}")
+                    elif hasattr(group[key], 'set'):
+                        group[key].set(value)
+            
+            if group_type == 'image' and group_config.get('template_image_path'):
+                self._load_bg_template_image(group_index, group_config['template_image_path'])
+        
+        if len(self.app.background_groups) == 0:
+            if hasattr(self.app, 'background'):
+                self.app.background.create_group(1, "ocr")
+                self.app.background.create_group(2, "image")
+                self.app.background.create_group(3, "color")
+                if hasattr(self.app, 'bg_group_counter'):
+                    self.app.bg_group_counter = 3
+    
     def _load_reference_image(self, group_index, image_path):
         """加载参考图像（模板）"""
         import os
@@ -343,6 +414,37 @@ class ConfigManager:
                 update_image_preview(self.app, group_index, image_path)
             except Exception as e:
                 self.app.logging_manager.log_message(f"[图像检测] 加载参考图像失败: {str(e)}")
+    
+    def _load_bg_template_image(self, group_index, image_path):
+        """加载后台监控图像模板"""
+        import os
+        
+        try:
+            import cv2
+            CV2_AVAILABLE = True
+        except ImportError:
+            CV2_AVAILABLE = False
+        
+        if not CV2_AVAILABLE:
+            return
+        
+        if not os.path.exists(image_path):
+            return
+        
+        try:
+            template = cv2.imread(image_path, cv2.IMREAD_COLOR)
+            if template is None:
+                return
+            
+            if group_index < len(self.app.background_groups):
+                self.app.background_groups[group_index]["template_image"] = template
+                self.app.background_groups[group_index]["template_image_path"] = image_path
+                self.app.background_groups[group_index]["image_path_var"].set(os.path.basename(image_path))
+                
+                from ui.background_tab import update_bg_image_preview
+                update_bg_image_preview(self.app, group_index, image_path)
+        except Exception:
+            pass
     
     def load_alarm_config(self, config):
         """
@@ -380,8 +482,8 @@ class ConfigManager:
         if 'home_checkboxes' in config and hasattr(self.app, 'module_check_vars'):
             home_checkboxes = config['home_checkboxes']
             if home_checkboxes:
-                for module in ['ocr', 'timed', 'number', 'image', 'script']:
-                    if module in home_checkboxes:
+                for module in ['ocr', 'timed', 'number', 'image', 'script', 'background']:
+                    if module in home_checkboxes and module in self.app.module_check_vars:
                         self.app.module_check_vars[module].set(home_checkboxes[module])
     
     def load_script_config(self, config):
@@ -570,6 +672,57 @@ class ConfigManager:
             'path': self.app.tesseract_path
         }
     
+    def _get_background_config(self):
+        """获取后台监控配置"""
+        groups_config = []
+        
+        if not hasattr(self.app, 'background_groups'):
+            return {'groups': []}
+        
+        for group in self.app.background_groups:
+            group_data = {
+                'index': group.get('index', 1),
+                'type': group.get('type', 'ocr'),
+                'enabled': group.get('enabled', tk.BooleanVar(value=False)).get(),
+                'region': list(group['region']) if group.get('region') else None,
+                'region_ratio': list(group['region_ratio']) if group.get('region_ratio') else None,
+                'interval': group.get('interval', tk.StringVar(value='5')).get(),
+                'pause': group.get('pause', tk.StringVar(value='180')).get(),
+                'key': group.get('key', tk.StringVar(value='')).get(),
+                'delay_min': group.get('delay_min', tk.StringVar(value='100')).get(),
+                'delay_max': group.get('delay_max', tk.StringVar(value='200')).get(),
+                'click_enabled': group.get('click_enabled', tk.BooleanVar(value=False)).get(),
+                'alarm': group.get('alarm', tk.BooleanVar(value=False)).get()
+            }
+            
+            group_type = group.get('type', 'ocr')
+            if group_type == 'ocr':
+                group_data.update({
+                    'keywords': group.get('keywords', tk.StringVar(value='')).get(),
+                    'language': group.get('language', tk.StringVar(value='eng')).get()
+                })
+            elif group_type == 'image':
+                group_data.update({
+                    'template_image_path': group.get('template_image_path', ''),
+                    'threshold': group.get('threshold', tk.StringVar(value='80')).get()
+                })
+            elif group_type == 'color':
+                group_data.update({
+                    'target_color': group.get('target_color'),
+                    'tolerance': group.get('tolerance', tk.StringVar(value='10')).get()
+                })
+            
+            groups_config.append(group_data)
+        
+        return {
+            'target_window': {
+                'title': self.app.bg_window_title_var.get() if hasattr(self.app, 'bg_window_title_var') else ''
+            },
+            'switch_delay': 0.05,
+            'restore_delay': 0.02,
+            'groups': groups_config
+        }
+    
     def _get_shortcuts_config(self):
         """获取快捷键配置"""
         return {
@@ -607,7 +760,8 @@ class ConfigManager:
             'timed': self.app.module_check_vars['timed'].get(),
             'number': self.app.module_check_vars['number'].get(),
             'image': self.app.module_check_vars.get('image', tk.BooleanVar(value=False)).get(),
-            'script': self.app.module_check_vars.get('script', tk.BooleanVar(value=False)).get()
+            'script': self.app.module_check_vars.get('script', tk.BooleanVar(value=False)).get(),
+            'background': self.app.module_check_vars.get('background', tk.BooleanVar(value=False)).get()
         }
     
     def _get_script_config(self):
@@ -735,6 +889,7 @@ class ConfigManager:
             self.load_timed_config(config)
             self.load_number_config(config)
             self.load_image_detection_config(config)
+            self.load_background_config(config)
             self.load_alarm_config(config)
             self.load_shortcuts_config(config)
             self.load_home_checkboxes_config(config)
@@ -840,6 +995,33 @@ class ConfigManager:
             setup_image_group_listeners(group)
 
         self.app._setup_image_group_listeners = setup_image_group_listeners
+
+        def setup_background_group_listeners(group):
+            group["enabled"].trace_add("write", immediate_save)
+            group["interval"].trace_add("write", immediate_save)
+            group["pause"].trace_add("write", immediate_save)
+            if hasattr(group.get("key"), "trace_add"):
+                group["key"].trace_add("write", immediate_save)
+            group["delay_min"].trace_add("write", immediate_save)
+            group["delay_max"].trace_add("write", immediate_save)
+            group["click_enabled"].trace_add("write", immediate_save)
+            group["alarm"].trace_add("write", immediate_save)
+            if group.get("type") == "ocr":
+                if hasattr(group.get("keywords"), "trace_add"):
+                    group["keywords"].trace_add("write", immediate_save)
+                if hasattr(group.get("language"), "trace_add"):
+                    group["language"].trace_add("write", immediate_save)
+            elif group.get("type") == "image":
+                if hasattr(group.get("threshold"), "trace_add"):
+                    group["threshold"].trace_add("write", immediate_save)
+            elif group.get("type") == "color":
+                if hasattr(group.get("tolerance"), "trace_add"):
+                    group["tolerance"].trace_add("write", immediate_save)
+
+        for group in self.app.background_groups:
+            setup_background_group_listeners(group)
+
+        self.app._setup_background_group_listeners = setup_background_group_listeners
 
         if hasattr(self.app, 'module_check_vars'):
             for module, var in self.app.module_check_vars.items():

@@ -106,6 +106,7 @@ MODULE_PRIORITIES = {
     'image': 4,
     'ocr': 3,
     'color': 2,
+    'background': 1,
     'script': 1,
 }
 

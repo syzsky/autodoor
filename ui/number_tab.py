@@ -61,7 +61,7 @@ def create_number_region(app, index):
                                command=lambda: delete_number_region(app, group_frame))
     delete_btn.pack(side='right')
     
-    create_divider(group_frame)
+    create_divider(group_frame, height=1, pady=(4, 2))
     
     row1 = ctk.CTkFrame(group_frame, fg_color='transparent')
     row1.pack(fill='x', padx=10, pady=(4, 8))

@@ -8,14 +8,16 @@ def _start_selection(app, selection_type, region_index):
     通用的区域选择方法
     Args:
         app: 应用实例
-        selection_type: 选择类型，"normal"、"number"、"ocr"、"image"或"crop"
-        region_index: 识别区域索引，仅当selection_type为"number"、"ocr"、"image"或"crop"时有效
+        selection_type: 选择类型，"normal"、"number"、"ocr"、"image"、"crop"、"bg_region"或"bg_crop"
+        region_index: 识别区域索引，仅当selection_type为"number"、"ocr"、"image"、"crop"、"bg_region"或"bg_crop"时有效
     """
     type_names = {
         "number": "数字识别区域",
         "ocr": "文字识别区域",
         "image": "图像检测区域",
-        "crop": "图像裁剪区域"
+        "crop": "图像裁剪区域",
+        "bg_region": "后台监控区域",
+        "bg_crop": "后台监控模板截图"
     }
     app.logging_manager.log_message(f"开始{type_names.get(selection_type, '')}区域选择...")
     app.is_selecting = True
@@ -29,6 +31,10 @@ def _start_selection(app, selection_type, region_index):
         app.current_image_region_index = region_index
     elif selection_type == "crop":
         app.current_image_region_index = region_index
+    elif selection_type == "bg_region":
+        app._bg_region_group_index = region_index
+    elif selection_type == "bg_crop":
+        app._bg_crop_group_index = region_index
 
     # 检查screeninfo库是否可用
     if screeninfo is None:
@@ -152,6 +158,16 @@ def on_mouse_up(app, event):
             cancel_selection(app)
             from ui.image_tab import save_cropped_image
             save_cropped_image(app, region)
+            return
+        elif app.selection_type == 'bg_region':
+            cancel_selection(app)
+            from ui.background_tab import save_bg_region
+            save_bg_region(app, region)
+            return
+        elif app.selection_type == 'bg_crop':
+            cancel_selection(app)
+            from ui.background_tab import save_bg_cropped_image
+            save_bg_cropped_image(app, region)
             return
         elif app.selection_type == 'color':
             if not hasattr(app, 'color_recognition_manager'):

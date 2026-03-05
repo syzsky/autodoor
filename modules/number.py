@@ -1,8 +1,10 @@
 import threading
 import time
-import re
-from PIL import Image, ImageGrab
+from PIL import Image
 from input.permissions import PermissionManager
+from utils.screenshot import ScreenshotManager
+from utils.recognition import NumberRecognizer
+from utils.image import _preprocess_image
 from core.priority_lock import get_module_priority
 
 
@@ -13,6 +15,7 @@ class NumberModule:
     
     def __init__(self, app):
         self.app = app
+        self.screenshot_manager = ScreenshotManager()
     
     def start_number_recognition(self):
         def start_func():
@@ -57,9 +60,10 @@ class NumberModule:
                 screenshot = self.take_screenshot(region)
                 if screenshot is None:
                     continue
+                
                 text = self.ocr_number(screenshot)
 
-                number = self.parse_number(text)
+                number = NumberRecognizer.parse_number(text, self.app._number_cache)
                 if number is not None:
                     self.app.logging_manager.log_message(f"数字识别{region_index+1}解析结果: {number}")
                     if number < threshold:
@@ -85,29 +89,6 @@ class NumberModule:
                 self.app.logging_manager.log_message(f"数字识别{region_index+1}错误: {str(e)}")
                 time.sleep(5)
 
-    def parse_number(self, text):
-        text = text.strip()
-        if not text:
-            return None
-
-        cache_key = text.lower()
-        if cache_key in self.app._number_cache:
-            return self.app._number_cache[cache_key]
-
-        number = None
-        try:
-            match = re.search(r'^\s*(\d+)\s*/', text)
-            if match:
-                number = int(match.group(1))
-        except Exception as e:
-            self.app.logging_manager.log_message(f"数字识别解析错误: {str(e)}")
-            number = None
-
-        if number is not None:
-            self.app._number_cache[cache_key] = number
-
-        return number
-
     def take_screenshot(self, region):
         if self.app.platform_adapter.platform == "Darwin":
             permission_manager = PermissionManager(self.app)
@@ -116,24 +97,14 @@ class NumberModule:
                 return None
         
         try:
-            from utils.screenshot import ScreenshotManager
-            screenshot_manager = ScreenshotManager()
-            return screenshot_manager.get_region_screenshot(region, priority=self.PRIORITY)
+            return self.screenshot_manager.get_region_screenshot(region, priority=self.PRIORITY)
         except Exception as e:
             self.app.logging_manager.log_message(f"数字识别错误: 屏幕截图失败 - {str(e)}")
             return None
 
     def ocr_number(self, image):
-        import pytesseract
-        from utils.image import _preprocess_image
-        
         processed_image = _preprocess_image(image, group_index=None)
         if processed_image is None:
             processed_image = image.convert('L')
         
-        config = '--psm 7 --oem 3 -c tessedit_char_whitelist=0123456789/'
-        text = pytesseract.image_to_string(processed_image, lang='eng', config=config)
-
-        text = text.strip().replace('\n', '').replace('\r', '')
-
-        return text
+        return NumberRecognizer.recognize(processed_image)

@@ -179,9 +179,9 @@ def create_section_title(parent, text, level=1):
     return ctk.CTkLabel(parent, text=text, font=font, text_color=text_color)
 
 
-def create_divider(parent):
-    divider = ctk.CTkFrame(parent, height=1, fg_color=Theme.COLORS['border'])
-    divider.pack(fill='x', pady=8)
+def create_divider(parent, height=1, pady=4):
+    divider = ctk.CTkFrame(parent, height=height, fg_color=Theme.COLORS['border'])
+    divider.pack(fill='x', pady=pady)
     return divider
 
 
