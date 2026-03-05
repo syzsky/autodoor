@@ -142,79 +142,16 @@ class ColorRecognitionManager:
     
     def select_color(self):
         """选择颜色"""
-        self.app.logging_manager.log_message("开始选择目标颜色...")
-        self.create_color_selection_window()
-    
-    def create_color_selection_window(self):
-        """创建颜色选择窗口"""
-        try:
-            import screeninfo
-            monitors = screeninfo.get_monitors()
+        def on_color_selected(color):
+            r, g, b = color
+            self.app.target_color = color
+            self.app.color_var.set(f"RGB({r}, {g}, {b})")
             
-            min_x = min(monitor.x for monitor in monitors)
-            min_y = min(monitor.y for monitor in monitors)
-            max_x = max(monitor.x + monitor.width for monitor in monitors)
-            max_y = max(monitor.y + monitor.height for monitor in monitors)
-        except ImportError:
-            messagebox.showerror("错误", "screeninfo库未安装，无法支持多显示器选择。请运行 'pip install screeninfo' 安装该库。")
-            return
-        except Exception:
-            min_x, min_y, max_x, max_y = 0, 0, 1920, 1080
+            if hasattr(self.app, 'color_display'):
+                self.app.color_display.configure(fg_color=f"#{r:02x}{g:02x}{b:02x}")
         
-        self.color_selection_window = tk.Toplevel(self.app.root)
-        self.color_selection_window.overrideredirect(True)
-        self.color_selection_window.geometry(f"{max_x - min_x}x{max_y - min_y}+{min_x}+{min_y}")
-        self.color_selection_window.attributes("-alpha", 0.3)
-        self.color_selection_window.attributes("-topmost", True)
-        self.color_selection_window.configure(cursor="crosshair")
-        
-        self.color_canvas = tk.Canvas(self.color_selection_window, bg="white", highlightthickness=0)
-        self.color_canvas.pack(fill=tk.BOTH, expand=True)
-        
-        self.color_canvas.bind("<Button-1>", self.on_color_select)
-        self.color_selection_window.bind("<Escape>", lambda e: self.cancel_color_selection())
-        self.color_selection_window.focus_set()
-    
-    def cancel_color_selection(self):
-        """取消颜色选择"""
-        self.app.logging_manager.log_message("已取消颜色选择")
-        if hasattr(self, 'color_selection_window') and self.color_selection_window.winfo_exists():
-            self.color_selection_window.destroy()
-    
-    def on_color_select(self, event):
-        self.color_selection_window.withdraw()
-        self.color_selection_window.update()
-        
-        abs_x, abs_y = event.x_root, event.y_root
-        
-        try:
-            screen = self.screenshot_manager.get_full_screenshot()
-        except Exception:
-            screen = ImageGrab.grab(all_screens=True)
-        
-        try:
-            import screeninfo
-            monitors = screeninfo.get_monitors()
-            min_x = min(monitor.x for monitor in monitors)
-            min_y = min(monitor.y for monitor in monitors)
-        except:
-            min_x, min_y = 0, 0
-        
-        rel_x = abs_x - min_x
-        rel_y = abs_y - min_y
-        
-        pixel = screen.getpixel((rel_x, rel_y))
-        
-        self.app.target_color = pixel
-        r, g, b = pixel
-        self.app.color_var.set(f"RGB({r}, {g}, {b})")
-        self.app.logging_manager.log_message(f"选择颜色: RGB({r}, {g}, {b})")
-        self.app.logging_manager.log_message(f"选择位置: ({abs_x}, {abs_y})")
-        
-        if hasattr(self.app, 'color_display'):
-            self.app.color_display.configure(fg_color=f"#{r:02x}{g:02x}{b:02x}")
-        
-        self.color_selection_window.destroy()
+        from ui.utils import create_color_picker
+        create_color_picker(self.app, on_color_selected, self.app.logging_manager.log_message)
     
     def start_color_recognition(self):
         """开始颜色识别"""

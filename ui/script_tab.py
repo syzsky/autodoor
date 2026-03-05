@@ -1,12 +1,9 @@
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import messagebox, filedialog
-from PIL import ImageGrab
-import screeninfo
 
 from ui.theme import Theme
 from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_divider
-
 
 def create_script_tab(app):
     page = ctk.CTkFrame(app.content_area, fg_color='transparent')

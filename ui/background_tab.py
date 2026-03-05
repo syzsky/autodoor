@@ -1,9 +1,7 @@
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import messagebox, filedialog
-import os
+from tkinter import messagebox
 import threading
-import time
 
 from ui.theme import Theme
 from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_divider
@@ -614,81 +612,16 @@ def save_bg_region(app, region):
 
 
 def select_bg_template_image(app, group_index):
-    file_path = filedialog.askopenfilename(
-        title="选择模板图像",
-        filetypes=[
-            ("图像文件", "*.png;*.jpg;*.jpeg;*.bmp;*.gif"),
-            ("所有文件", "*.*")
-        ]
-    )
-    
-    if file_path:
-        if group_index < 0 or group_index >= len(app.background_groups):
-            return
-        
-        group = app.background_groups[group_index]
-        try:
-            import cv2
-            template = cv2.imread(file_path, cv2.IMREAD_COLOR)
-            if template is None:
-                messagebox.showerror("错误", f"无法读取图像文件: {file_path}")
-                return
-            
-            group["template_image"] = template
-            group["template_image_path"] = file_path
-            group["image_path_var"].set(os.path.basename(file_path))
-            
-            update_bg_image_preview(app, group_index, file_path)
-            
-            app.logging_manager.log_message(f"监控组{group_index + 1}已加载模板: {file_path}")
-            
-        except ImportError:
-            messagebox.showerror("错误", "OpenCV未安装，无法使用图像检测功能")
-        except Exception as e:
-            messagebox.showerror("错误", f"加载图像失败: {str(e)}")
-        
-        if hasattr(app, 'config_manager') and app.config_manager:
-            app.config_manager.defer_save_config()
+    from ui.utils import select_template_image
+    select_template_image(app, app.background_groups, group_index, "监控组", app.logging_manager.log_message)
 
 
 def update_bg_image_preview(app, group_index, image_path):
+    from ui.utils import update_image_preview
     if group_index < 0 or group_index >= len(app.background_groups):
         return
-    
     group = app.background_groups[group_index]
-    image_preview = group.get("image_preview")
-    preview_container = group.get("preview_container")
-    
-    if not image_preview or not image_path:
-        return
-    
-    try:
-        if not os.path.exists(image_path):
-            return
-        
-        image = PILImage.open(image_path)
-        orig_w, orig_h = image.size
-        
-        if preview_container:
-            preview_container.update_idletasks()
-            max_w = preview_container.winfo_width() - 4
-            max_h = preview_container.winfo_height() - 4
-            if max_w < 50:
-                max_w = 140
-            if max_h < 30:
-                max_h = 70
-        else:
-            max_w, max_h = 140, 70
-        
-        ratio = min(max_w / orig_w, max_h / orig_h)
-        new_w = int(orig_w * ratio)
-        new_h = int(orig_h * ratio)
-        
-        ctk_image = ctk.CTkImage(light_image=image, size=(new_w, new_h))
-        image_preview.configure(image=ctk_image, text='')
-        image_preview.image = ctk_image
-    except Exception as e:
-        app.logging_manager.log_message(f"更新图像预览失败: {str(e)}")
+    update_image_preview(group.get("image_preview"), group.get("preview_container"), image_path)
 
 
 def crop_bg_template_image(app, group_index):
@@ -704,147 +637,36 @@ def crop_bg_template_image(app, group_index):
 
 
 def save_bg_cropped_image(app, region):
+    from ui.utils import save_cropped_template
+    
     group_index = getattr(app, '_bg_crop_group_index', None)
     
     if group_index is None:
         return
     
-    try:
-        import cv2
-        import numpy as np
-        
-        app.root.update()
-        time.sleep(0.1)
-        
-        from utils.screenshot import ScreenshotManager
-        screenshot_manager = ScreenshotManager()
-        screenshot = screenshot_manager.get_region_screenshot(region)
-        
-        if not screenshot:
-            messagebox.showerror("错误", "无法获取截图区域")
-            return
-        
-        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        image_dir = os.path.join(app_dir, "image")
-        
-        if not os.path.exists(image_dir):
-            os.makedirs(image_dir)
-        
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        filename = f"bg_template_{timestamp}.png"
-        save_path = os.path.join(image_dir, filename)
-        
-        screenshot.save(save_path)
-        
-        template = cv2.imread(save_path, cv2.IMREAD_COLOR)
-        
-        if group_index < len(app.background_groups):
-            group = app.background_groups[group_index]
-            group["template_image"] = template
-            group["template_image_path"] = save_path
-            group["image_path_var"].set(filename)
-            
-            update_bg_image_preview(app, group_index, save_path)
-            
-            app.logging_manager.log_message(f"监控组{group_index + 1}已截取模板: {save_path}")
-        
-        messagebox.showinfo("成功", f"模板已保存到:\n{save_path}")
-        
-        if hasattr(app, 'config_manager') and app.config_manager:
-            app.config_manager.defer_save_config()
-            
-    except Exception as e:
-        messagebox.showerror("错误", f"截图失败: {str(e)}")
-    finally:
-        app._bg_crop_group_index = None
+    save_cropped_template(app, region, app.background_groups, group_index, "监控组", app.logging_manager.log_message)
+    app._bg_crop_group_index = None
 
 
 def start_bg_color_selection(app, group_index):
     app._bg_color_group_index = group_index
     app.logging_manager.log_message("开始选择目标颜色...")
     
-    try:
-        import screeninfo
-        monitors = screeninfo.get_monitors()
+    def on_color_selected(color):
+        r, g, b = color
+        group_index = getattr(app, '_bg_color_group_index', None)
+        if group_index is not None and group_index >= 0 and group_index < len(app.background_groups):
+            group = app.background_groups[group_index]
+            group["target_color"] = (r, g, b)
+            group["color_var"].set(f"RGB({r}, {g}, {b})")
+            
+            if "color_display" in group:
+                group["color_display"].configure(fg_color=f"#{r:02x}{g:02x}{b:02x}")
+            
+            if hasattr(app, 'config_manager') and app.config_manager:
+                app.config_manager.defer_save_config()
         
-        min_x = min(monitor.x for monitor in monitors)
-        min_y = min(monitor.y for monitor in monitors)
-        max_x = max(monitor.x + monitor.width for monitor in monitors)
-        max_y = max(monitor.y + monitor.height for monitor in monitors)
-    except ImportError:
-        messagebox.showerror("错误", "screeninfo库未安装，无法支持多显示器选择。请运行 'pip install screeninfo' 安装该库。")
-        return
-    except Exception:
-        min_x, min_y, max_x, max_y = 0, 0, 1920, 1080
+        app._bg_color_group_index = None
     
-    app.bg_color_selection_window = tk.Toplevel(app.root)
-    app.bg_color_selection_window.overrideredirect(True)
-    app.bg_color_selection_window.geometry(f"{max_x - min_x}x{max_y - min_y}+{min_x}+{min_y}")
-    app.bg_color_selection_window.attributes("-alpha", 0.3)
-    app.bg_color_selection_window.attributes("-topmost", True)
-    app.bg_color_selection_window.configure(cursor="crosshair")
-    
-    app.bg_color_canvas = tk.Canvas(app.bg_color_selection_window, bg="white", highlightthickness=0)
-    app.bg_color_canvas.pack(fill=tk.BOTH, expand=True)
-    
-    app.bg_color_canvas.bind("<Button-1>", lambda e: on_bg_color_select(app, e))
-    
-    app.bg_color_selection_window.bind("<Escape>", lambda e: cancel_bg_color_selection(app))
-    
-    app.bg_color_selection_window.focus_set()
-
-
-def cancel_bg_color_selection(app):
-    app.logging_manager.log_message("已取消颜色选择")
-    if hasattr(app, 'bg_color_selection_window') and app.bg_color_selection_window.winfo_exists():
-        app.bg_color_selection_window.destroy()
-    app._bg_color_group_index = None
-
-
-def on_bg_color_select(app, event):
-    app.bg_color_selection_window.withdraw()
-    
-    app.bg_color_selection_window.update()
-    
-    abs_x, abs_y = event.x_root, event.y_root
-    
-    try:
-        from utils.screenshot import ScreenshotManager
-        screenshot_manager = ScreenshotManager()
-        screen = screenshot_manager.get_full_screenshot()
-    except Exception:
-        from PIL import ImageGrab
-        screen = ImageGrab.grab(all_screens=True)
-    
-    try:
-        import screeninfo
-        monitors = screeninfo.get_monitors()
-        min_x = min(monitor.x for monitor in monitors)
-        min_y = min(monitor.y for monitor in monitors)
-    except:
-        min_x, min_y = 0, 0
-    
-    rel_x = abs_x - min_x
-    rel_y = abs_y - min_y
-    
-    pixel = screen.getpixel((rel_x, rel_y))
-    
-    r, g, b = pixel[:3]
-    
-    group_index = getattr(app, '_bg_color_group_index', None)
-    if group_index is not None and group_index >= 0 and group_index < len(app.background_groups):
-        group = app.background_groups[group_index]
-        group["target_color"] = (r, g, b)
-        group["color_var"].set(f"RGB({r}, {g}, {b})")
-        
-        if "color_display" in group:
-            group["color_display"].configure(fg_color=f"#{r:02x}{g:02x}{b:02x}")
-        
-        app.logging_manager.log_message(f"监控组{group_index + 1}已选择颜色: RGB({r}, {g}, {b})")
-        app.logging_manager.log_message(f"选择位置: ({abs_x}, {abs_y})")
-        
-        if hasattr(app, 'config_manager') and app.config_manager:
-            app.config_manager.defer_save_config()
-    
-    app.bg_color_selection_window.destroy()
-    app._bg_color_group_index = None
+    from ui.utils import create_color_picker
+    create_color_picker(app, on_color_selected, app.logging_manager.log_message)

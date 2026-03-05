@@ -2,7 +2,7 @@ import customtkinter as ctk
 import tkinter as tk
 from ui.theme import Theme
 from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_divider
-from ui.utils import toggle_group_bg, add_group, delete_group
+from ui.utils import toggle_group_bg, add_group, delete_group, update_image_preview, select_template_image, save_cropped_template
 from PIL import Image as PILImage
 
 
@@ -135,7 +135,7 @@ def create_image_group(app, index):
     select_image_btn = AnimatedButton(row2, text='选择图像', font=Theme.get_font('xs'), width=60, height=24,
                                        corner_radius=4, fg_color=Theme.COLORS['primary'],
                                        hover_color=Theme.COLORS['primary_hover'],
-                                       command=lambda: select_reference_image(app, index))
+                                       command=lambda: on_select_image(app, index))
     select_image_btn.pack(side='left', padx=(0, 4))
     
     image_path_entry = ctk.CTkEntry(row2, textvariable=group_vars["image_path_var"], width=80, height=24, state='disabled')
@@ -179,6 +179,10 @@ def create_image_group(app, index):
     }
     app.image_groups.append(group_config)
 
+def on_select_image(app, index):
+    """选择图像回调"""
+    select_template_image(app, app.image_groups, index, "检测组", app.logging_manager.log_message)
+
 
 def add_image_group(app):
     """新增图像检测组"""
@@ -188,7 +192,6 @@ def add_image_group(app):
         create_func=lambda idx: create_image_group(app, idx),
         listener_setup_func=getattr(app, '_setup_image_group_listeners', None)
     )
-
 
 def delete_image_group(app, group_frame, confirm=True):
     """删除图像检测组"""
@@ -201,211 +204,35 @@ def delete_image_group(app, group_frame, confirm=True):
         confirm_message="确定要删除该检测组吗？"
     )
 
-
 def renumber_image_groups(app):
     """重新编号所有图像检测组"""
     for i, group in enumerate(app.image_groups):
         group["title_label"].configure(text=f'检测组 {i + 1}')
-
 
 def start_image_region_selection(app, index):
     """开始选择图像检测区域"""
     from utils.region import _start_selection
     _start_selection(app, "image", index)
 
-
-def update_image_preview(app, index, image_path):
-    """更新图像预览"""
-    if index >= len(app.image_groups):
-        return
-    
-    group = app.image_groups[index]
-    image_preview = group.get("image_preview")
-    preview_container = group.get("preview_container")
-    
-    if not image_preview or not image_path:
-        return
-    
-    try:
-        import os
-        if not os.path.exists(image_path):
-            return
-        
-        image = PILImage.open(image_path)
-        orig_w, orig_h = image.size
-        
-        if preview_container:
-            preview_container.update_idletasks()
-            max_w = preview_container.winfo_width() - 4
-            max_h = preview_container.winfo_height() - 4
-            if max_w < 50:
-                max_w = 140
-            if max_h < 30:
-                max_h = 70
-        else:
-            max_w, max_h = 140, 70
-        
-        ratio = min(max_w / orig_w, max_h / orig_h)
-        new_w = int(orig_w * ratio)
-        new_h = int(orig_h * ratio)
-        
-        ctk_image = ctk.CTkImage(light_image=image, size=(new_w, new_h))
-        image_preview.configure(image=ctk_image, text='')
-        image_preview.image = ctk_image
-    except Exception as e:
-        app.logging_manager.log_message(f"更新图像预览失败: {str(e)}")
-
-
-def select_reference_image(app, index):
-    """选择参考图像"""
-    from tkinter import filedialog, messagebox
-    import os
-    
-    try:
-        import cv2
-        CV2_AVAILABLE = True
-    except ImportError:
-        CV2_AVAILABLE = False
-    
-    if not CV2_AVAILABLE:
-        messagebox.showerror("错误", "OpenCV未安装，无法使用图像检测功能\n请运行: pip install opencv-python")
-        return
-    
-    file_path = filedialog.askopenfilename(
-        title="选择参考图像（模板）",
-        filetypes=[
-            ("图像文件", "*.png;*.jpg;*.jpeg;*.bmp;*.gif"),
-            ("所有文件", "*.*")
-        ]
-    )
-    
-    if file_path:
-        if index < len(app.image_groups):
-            group = app.image_groups[index]
-            
-            try:
-                template = cv2.imread(file_path, cv2.IMREAD_COLOR)
-                if template is None:
-                    messagebox.showerror("错误", f"无法读取图像文件: {file_path}")
-                    return
-                
-                group["template_image"] = template
-                group["reference_image"] = file_path
-                group["image_path_var"].set(os.path.basename(file_path))
-                
-                h, w = template.shape[:2]
-                app.logging_manager.log_message(f"[图像检测] 检测组{index + 1}已加载模板: {file_path}")
-                app.logging_manager.log_message(f"[图像检测] 模板尺寸: {w}x{h}")
-                
-                update_image_preview(app, index, file_path)
-                
-                if hasattr(app, 'config_manager'):
-                    app.config_manager.defer_save_config()
-            except Exception as e:
-                app.logging_manager.log_message(f"[图像检测] 加载图像失败: {str(e)}")
-                messagebox.showerror("错误", f"加载图像失败: {str(e)}")
-
-
-def get_app_dir():
-    """获取应用程序所在目录（兼容打包后路径）"""
-    import sys
-    import os
-    
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    else:
-        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
 def crop_reference_image(app, index):
     """截取屏幕区域作为参考图像"""
-    from tkinter import messagebox
-    
-    try:
-        import cv2
-        CV2_AVAILABLE = True
-    except ImportError:
-        CV2_AVAILABLE = False
-    
-    if not CV2_AVAILABLE:
-        messagebox.showerror("错误", "OpenCV未安装，无法使用图像裁剪功能\n请运行: pip install opencv-python")
-        return
-    
     if index >= len(app.image_groups):
         return
     
     app.logging_manager.log_message("[图像截图] 请在屏幕上选择要截取的区域...")
     
-    app._crop_source_image = None
     app._crop_group_index = index
     
     from utils.region import _start_selection
     _start_selection(app, "crop", index)
 
-
 def save_cropped_image(app, region):
     """保存截取的屏幕区域图像"""
-    from tkinter import messagebox
-    import os
-    import time
-    
     group_index = getattr(app, '_crop_group_index', None)
     
     if group_index is None:
         return
     
-    try:
-        import cv2
-        import numpy as np
-        from PIL import Image
-        
-        app_dir = get_app_dir()
-        image_dir = os.path.join(app_dir, "image")
-        
-        if not os.path.exists(image_dir):
-            os.makedirs(image_dir)
-        
-        app.root.update()
-        import time as t
-        t.sleep(0.1)
-        
-        from utils.screenshot import ScreenshotManager
-        screenshot_manager = ScreenshotManager()
-        screenshot = screenshot_manager.get_region_screenshot(region)
-        
-        if not screenshot:
-            messagebox.showerror("错误", "无法获取截图区域")
-            return
-        
-        crop_w, crop_h = screenshot.size
-        
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        filename = f"screenshot_{timestamp}.png"
-        save_path = os.path.join(image_dir, filename)
-        
-        screenshot.save(save_path)
-        
-        template = cv2.imread(save_path, cv2.IMREAD_COLOR)
-        if template is None:
-            messagebox.showerror("错误", f"无法读取截图: {save_path}")
-            return
-        
-        group = app.image_groups[group_index]
-        group["template_image"] = template
-        group["reference_image"] = save_path
-        group["image_path_var"].set(os.path.basename(save_path))
-        
-        h, w = template.shape[:2]
-        
-        update_image_preview(app, group_index, save_path)
-        
-        if hasattr(app, 'config_manager'):
-            app.config_manager.defer_save_config()
-        
-        messagebox.showinfo("成功", f"截图已保存到:\n{save_path}")
-        
-    except Exception as e:
-        messagebox.showerror("错误", f"截图失败: {str(e)}")
-    finally:
-        app._crop_source_image = None
-        app._crop_group_index = None
+    save_cropped_template(app, region, app.image_groups, group_index, "检测组", app.logging_manager.log_message)
+    
+    app._crop_group_index = None
