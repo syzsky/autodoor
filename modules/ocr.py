@@ -8,6 +8,7 @@ import imagehash
 
 from utils.image import _preprocess_image
 from core.priority_lock import get_module_priority
+from core.click_handler import ClickHandler
 
 
 class OCRModule:
@@ -22,6 +23,7 @@ class OCRModule:
         self.app = app
         self.last_recognition_times = {}
         self.last_trigger_times = {}
+        self.click_handler = ClickHandler(app)
     
     def start_monitoring(self):
         """开始监控"""
@@ -101,7 +103,7 @@ class OCRModule:
                 return min(intervals)
             except (ValueError, TypeError):
                 return 5
-        return 5
+        return 5        
     
     def _wait_for_interval(self, interval):
         """
@@ -414,24 +416,6 @@ class OCRModule:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 区域坐标无效 - {str(e)}")
             return None, None
     
-    def _execute_mouse_click(self, click_x, click_y, group_index):
-        """
-        执行鼠标点击
-        Args:
-            click_x: 点击x坐标
-            click_y: 点击y坐标
-            group_index: OCR组索引
-        """
-        # 检查是否正在运行
-        if not self.app.is_running or getattr(self.app, 'system_stopped', False):
-            return
-
-        if click_x is not None and click_y is not None:
-            # 使用输入控制器执行鼠标点击操作
-            self.app.input_controller.click(click_x, click_y)
-            # 等待固定时间
-            time.sleep(self.app.click_delay)
-    
     def _execute_key_press(self, key, group_index):
         if not self.app.is_running or getattr(self.app, 'system_stopped', False):
             return
@@ -472,7 +456,13 @@ class OCRModule:
 
             if click_enabled:
                 click_x, click_y = self._calculate_click_position(click_pos, region, group_index)
-                self._execute_mouse_click(click_x, click_y, group_index)
+                self.click_handler.execute_click(
+                    x=click_x,
+                    y=click_y,
+                    priority=self.PRIORITY,
+                    module_name="识别组",
+                    index=group_index
+                )
 
             self._execute_key_press(key, group_index)
         except Exception as e:

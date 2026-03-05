@@ -12,6 +12,8 @@ try:
 except ImportError:
     CV2_AVAILABLE = False
 
+from core.click_handler import ClickHandler
+
 
 class ImageDetection:
     """
@@ -33,6 +35,7 @@ class ImageDetection:
         self.interval = 5.0
         self.pause = 180
         self.commands = ""
+        self.click_handler = ClickHandler(app)
         self.last_trigger_time = 0
         self.last_match_pos = None
     
@@ -169,11 +172,13 @@ class ImageDetection:
         click_enabled = group.get("click", tk.BooleanVar(value=True)).get()
         
         if click_enabled:
-            try:
-                self.app.input_controller.click(abs_x, abs_y)
-                time.sleep(self.app.click_delay if hasattr(self.app, 'click_delay') else 0.1)
-            except Exception:
-                pass
+            self.click_handler.execute_click(
+                x=abs_x,
+                y=abs_y,
+                priority=self.PRIORITY,
+                module_name="检测组",
+                index=self.group_index
+            )
         
         if key:
             from modules.input import KeyEventExecutor

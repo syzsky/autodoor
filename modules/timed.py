@@ -8,6 +8,7 @@ except ImportError:
     screeninfo = None
 
 from core.priority_lock import get_module_priority
+from core.click_handler import ClickHandler
 
 
 class TimedModule:
@@ -20,6 +21,7 @@ class TimedModule:
     
     def __init__(self, app):
         self.app = app
+        self.click_handler = ClickHandler(app)
     
     def start_timed_tasks(self):
         def start_func():
@@ -77,21 +79,17 @@ class TimedModule:
                     pos_y = group["position_y"].get()
 
                     if pos_x != 0 or pos_y != 0:
-                        if stop_event.is_set():
-                            return
+                        self.click_handler.execute_click(
+                            x=pos_x,
+                            y=pos_y,
+                            priority=self.PRIORITY,
+                            module_name="定时任务",
+                            index=group_index,
+                            delay=0.5
+                        )
 
-                        try:
-                            self.app.input_controller.click(pos_x, pos_y, priority=self.PRIORITY)
-                            time.sleep(0.5)
-                            if stop_event.is_set():
-                                return
-                        except Exception as e:
-                            self.app.logging_manager.log_message(f"[{self.app.platform_adapter.platform}] 定时任务{group_index+1}错误: 鼠标点击失败 - {str(e)}")
-
-                        time.sleep(0.5)
-
-                        if stop_event.is_set():
-                            return
+                    if stop_event.is_set():
+                        return
 
                 if key:
                     if stop_event.is_set():
