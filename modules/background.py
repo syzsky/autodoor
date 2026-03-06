@@ -13,8 +13,6 @@ from utils.coordinate import RelativeCoordinate, WindowCoordinate
 from utils.recognition import OCRRecognizer, ImageRecognizer, ColorRecognizer
 from utils.image import _preprocess_image
 from core.priority_lock import get_module_priority
-from modules.input import BackgroundKeyEventExecutor
-
 
 class BackgroundMonitor:
     """
@@ -104,6 +102,7 @@ class BackgroundMonitor:
         
         self.stop_event.clear()
         self.is_running = True
+        self.last_trigger_time = 0
         self.monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self.monitor_thread.start()
         return True
@@ -259,48 +258,61 @@ class BackgroundMonitor:
         if not self.app.is_running:
             return
         
-        quick_switch = QuickSwitchBackend(self.app)
-        quick_switch.set_hwnd(self.hwnd)
-        
-        if self.trigger_click:
-            if click_position:
-                success, msg = quick_switch.click(click_position[0], click_position[1])
-                if success:
-                    self.app.logging_manager.log_message(
-                        f"后台监控组{self.group_index + 1}点击位置: ({click_position[0]}, {click_position[1]})"
-                    )
-            else:
-                region = self._get_current_region()
-                if region:
-                    click_x = (region[0] + region[2]) // 2
-                    click_y = (region[1] + region[3]) // 2
-                    success, msg = quick_switch.click(click_x, click_y)
-                    if success:
-                        self.app.logging_manager.log_message(
-                            f"后台监控组{self.group_index + 1}点击位置: ({click_x}, {click_y})"
-                        )
-        
-        if self.trigger_key:
-            executor = BackgroundKeyEventExecutor(
-                quick_switch, self.delay_min, self.delay_max, self.PRIORITY
-            )
-            success, msg = executor.execute_keypress(self.trigger_key)
-            if success:
-                self.app.logging_manager.log_message(
-                    f"后台监控组{self.group_index + 1}按下按键: {self.trigger_key} ({self.delay_min}-{self.delay_max}ms)"
-                )
-        
+        # 播放报警声音
         if self.alarm_enabled:
             try:
                 temp_alarm_var = tk.BooleanVar(value=True)
                 self.app.alarm_module.play_alarm_sound(temp_alarm_var)
             except Exception:
                 pass
-
+        
+        # 如果只设置了报警，无需切换窗口
+        if not self.trigger_click and not self.trigger_key:
+            return
+        
+        quick_switch = QuickSwitchBackend(self.app)
+        quick_switch.set_hwnd(self.hwnd)
+        
+        # 保存原窗口并切换到目标窗口
+        quick_switch._save_foreground_window()
+        switch_success = quick_switch._switch_to_target()
+        
+        if switch_success:
+            # 执行点击操作
+            if self.trigger_click:
+                if click_position:
+                    success, msg = quick_switch.click(click_position[0], click_position[1])
+                    if success:
+                        self.app.logging_manager.log_message(
+                            f"后台监控组{self.group_index + 1}点击位置: ({click_position[0]}, {click_position[1]})"
+                        )
+                else:
+                    region = self._get_current_region()
+                    if region:
+                        click_x = (region[0] + region[2]) // 2
+                        click_y = (region[1] + region[3]) // 2
+                        success, msg = quick_switch.click(click_x, click_y)
+                        if success:
+                            self.app.logging_manager.log_message(
+                                f"后台监控组{self.group_index + 1}点击位置: ({click_x}, {click_y})"
+                            )
+            
+            # 等待0.1秒
+            time.sleep(0.1)
+            
+            # 执行按键操作
+            if self.trigger_key:
+                success, msg = quick_switch.press_key(self.trigger_key, self.delay_min, self.delay_max)
+                if success:
+                    self.app.logging_manager.log_message(
+                        f"后台监控组{self.group_index + 1}按下按键: {self.trigger_key} ({self.delay_min}-{self.delay_max}ms)"
+                    )
+            
+            # 切换回原窗口
+            quick_switch._restore_foreground_window()
 
 class BackgroundManager:
     """后台监控管理器"""
-    
     def __init__(self, app):
         self.app = app
         self.monitors: Dict[int, BackgroundMonitor] = {}
@@ -446,15 +458,7 @@ class BackgroundManager:
         """停止所有监控组"""
         for monitor in self.monitors.values():
             monitor.stop_monitoring()
-    
-    def select_region(self, group_index: int) -> None:
-        """选择监控区域（窗口相对坐标）"""
-        pass
-    
-    def select_click_position(self, group_index: int) -> None:
-        """选择点击位置（窗口相对坐标）"""
-        pass
-    
+
     def get_window_info(self) -> Optional[Dict[str, Any]]:
         """获取目标窗口信息"""
         if not self.target_hwnd:

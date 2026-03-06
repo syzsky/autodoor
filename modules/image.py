@@ -53,6 +53,7 @@ class ImageDetection:
         self.interval = float(interval)
         self.pause = int(pause)
         self.commands = commands
+        self.last_trigger_time = 0
         
         if not CV2_AVAILABLE:
             return

@@ -1,4 +1,5 @@
 import numpy as np
+import pytesseract
 from typing import Optional, Tuple, List
 
 try:
@@ -35,8 +36,6 @@ class OCRRecognizer:
             return (False, None)
         
         try:
-            import pytesseract
-            
             keyword_list = [k.strip().lower() for k in keywords.split(",") if k.strip()]
             if not keyword_list:
                 return (False, None)
@@ -74,8 +73,6 @@ class OCRRecognizer:
             tuple: (center_x, center_y) 关键词中心位置，未找到返回None
         """
         try:
-            import pytesseract
-            
             data = pytesseract.image_to_data(
                 image, lang=language, 
                 config=OCRRecognizer.TESSERACT_CONFIG, 
@@ -111,7 +108,6 @@ class OCRRecognizer:
             str: 识别的文字，失败返回None
         """
         try:
-            import pytesseract
             return pytesseract.image_to_string(image, lang=language, config=OCRRecognizer.TESSERACT_CONFIG)
         except Exception:
             return None

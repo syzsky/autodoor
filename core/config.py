@@ -369,8 +369,8 @@ class ConfigManager:
                     elif hasattr(group[key], 'set'):
                         group[key].set(value)
             
-            if group_type == 'image' and group_config.get('template_image_path'):
-                self._load_bg_template_image(group_index, group_config['template_image_path'])
+            if group_type == 'image' and group_config.get('reference_image'):
+                self._load_bg_template_image(group_index, group_config['reference_image'])
         
         if len(self.app.background_groups) == 0:
             if hasattr(self.app, 'background'):
@@ -439,7 +439,7 @@ class ConfigManager:
             
             if group_index < len(self.app.background_groups):
                 self.app.background_groups[group_index]["template_image"] = template
-                self.app.background_groups[group_index]["template_image_path"] = image_path
+                self.app.background_groups[group_index]["reference_image"] = image_path
                 self.app.background_groups[group_index]["image_path_var"].set(os.path.basename(image_path))
                 
                 from ui.background_tab import update_bg_image_preview
@@ -704,7 +704,7 @@ class ConfigManager:
                 })
             elif group_type == 'image':
                 group_data.update({
-                    'template_image_path': group.get('template_image_path', ''),
+                    'reference_image': group.get('reference_image', ''),
                     'threshold': group.get('threshold', tk.StringVar(value='80')).get()
                 })
             elif group_type == 'color':

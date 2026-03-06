@@ -210,6 +210,10 @@ class TesseractManager:
             if not self._test_tesseract_functionality():
                 return False
 
+            # 全局设置 pytesseract 路径，避免每次识别都重新初始化
+            import pytesseract
+            pytesseract.pytesseract.tesseract_cmd = self.app.tesseract_path
+
             if hasattr(self.app, 'tesseract_path_var'):
                 self.app.tesseract_path_var.set(self.app.tesseract_path)
 

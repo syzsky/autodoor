@@ -256,7 +256,7 @@ def create_background_group(app, index, monitor_type="ocr"):
             "alarm": group_vars["alarm_var"],
             "title_label": title_label,
             "template_image": None,
-            "template_image_path": "",
+            "reference_image": "",
             "image_path_var": group_vars["image_path_var"],
             "threshold": group_vars["threshold_var"],
             "image_preview": image_preview,
