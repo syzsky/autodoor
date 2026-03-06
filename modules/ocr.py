@@ -56,6 +56,7 @@ class OCRModule:
     def stop_monitoring(self):
         """停止监控"""
         self.app.is_running = False
+        self._last_texts.clear()  # 清理缓存，确保下次启动时正常输出日志
     
     def ocr_loop(self):
         """

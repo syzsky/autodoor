@@ -14,7 +14,7 @@ class LoggingManager:
     """
     
     MAX_LOG_LINES = 500
-    GUI_UPDATE_INTERVAL = 500  # ms
+    GUI_UPDATE_INTERVAL = 50  # ms
     
     def __init__(self, app):
         """
@@ -43,20 +43,25 @@ class LoggingManager:
         except Exception as e:
             print(f"写入日志文件失败: {str(e)}")
 
+        need_flush = False
         with self._update_lock:
             self._log_buffer.append(log_entry)
             self._pending_logs.append(log_entry)
             
             if not self._gui_update_pending:
                 self._gui_update_pending = True
-                if threading.current_thread() is not threading.main_thread():
-                    if hasattr(self.app, 'root') and self.app.root:
-                        try:
-                            self.app.root.after(self.GUI_UPDATE_INTERVAL, self._flush_gui_updates)
-                        except Exception:
+                need_flush = True
+        
+        if need_flush:
+            if threading.current_thread() is not threading.main_thread():
+                if hasattr(self.app, 'root') and self.app.root:
+                    try:
+                        self.app.root.after(self.GUI_UPDATE_INTERVAL, self._flush_gui_updates)
+                    except Exception:
+                        with self._update_lock:
                             self._gui_update_pending = False
-                else:
-                    self._flush_gui_updates()
+            else:
+                self._flush_gui_updates()
     
     def _flush_gui_updates(self):
         """
@@ -70,7 +75,7 @@ class LoggingManager:
         if not logs_to_write:
             return
         
-        if hasattr(self.app, 'home_log_text'):
+        if hasattr(self.app, 'home_log_text') and self.app.home_log_text:
             try:
                 self.app.home_log_text.configure(state='normal')
                 
@@ -104,7 +109,7 @@ class LoggingManager:
             self._log_buffer.clear()
             self._pending_logs.clear()
         
-        if hasattr(self.app, 'home_log_text'):
+        if hasattr(self.app, 'home_log_text') and self.app.home_log_text:
             try:
                 self.app.home_log_text.configure(state='normal')
                 self.app.home_log_text.delete("1.0", tk.END)

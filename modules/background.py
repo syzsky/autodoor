@@ -112,6 +112,7 @@ class BackgroundMonitor:
         """停止监控"""
         self.is_running = False
         self.stop_event.set()
+        self._last_text = None  # 清理缓存，确保下次启动时正常输出日志
         
         if self.monitor_thread and self.monitor_thread.is_alive():
             self.monitor_thread.join(timeout=2)

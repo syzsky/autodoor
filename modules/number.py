@@ -47,6 +47,7 @@ class NumberModule:
         self.app.number_stop_events.clear()
         if self.app.number_threads:
             self.app.number_threads.clear()
+        self._last_results.clear()  # 清理缓存，确保下次启动时正常输出日志
 
     def number_recognition_loop(self, region_index, region, threshold, key, stop_event):
         while not stop_event.is_set() and self.app.number_regions[region_index]["enabled"].get():
