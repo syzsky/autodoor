@@ -1,12 +1,20 @@
 import datetime
 import tkinter as tk
 import threading
+from collections import deque
 
 
 class LoggingManager:
     """
     日志管理类，负责记录和显示日志信息
+    
+    性能优化:
+    - 限制GUI日志条目数量，防止内存无限增长
+    - GUI更新节流，批量刷新减少渲染次数
     """
+    
+    MAX_LOG_LINES = 500
+    GUI_UPDATE_INTERVAL = 500  # ms
     
     def __init__(self, app):
         """
@@ -15,6 +23,10 @@ class LoggingManager:
             app: 应用程序实例
         """
         self.app = app
+        self._log_buffer = deque(maxlen=self.MAX_LOG_LINES)
+        self._gui_update_pending = False
+        self._pending_logs = []
+        self._update_lock = threading.Lock()
     
     def log_message(self, message):
         """
@@ -31,39 +43,67 @@ class LoggingManager:
         except Exception as e:
             print(f"写入日志文件失败: {str(e)}")
 
-        if threading.current_thread() is not threading.main_thread():
-            if hasattr(self.app, 'root') and self.app.root:
-                try:
-                    self.app.root.after(0, lambda: self._update_gui(log_entry, message))
-                except Exception:
-                    pass
-        else:
-            self._update_gui(log_entry, message)
-
-    def _update_gui(self, log_entry, message):
+        with self._update_lock:
+            self._log_buffer.append(log_entry)
+            self._pending_logs.append(log_entry)
+            
+            if not self._gui_update_pending:
+                self._gui_update_pending = True
+                if threading.current_thread() is not threading.main_thread():
+                    if hasattr(self.app, 'root') and self.app.root:
+                        try:
+                            self.app.root.after(self.GUI_UPDATE_INTERVAL, self._flush_gui_updates)
+                        except Exception:
+                            self._gui_update_pending = False
+                else:
+                    self._flush_gui_updates()
+    
+    def _flush_gui_updates(self):
         """
-        更新GUI控件（必须在主线程中调用）
-        Args:
-            log_entry: 完整的日志条目
-            message: 原始消息
+        批量刷新GUI日志（合并多次更新为一次）
         """
+        with self._update_lock:
+            logs_to_write = self._pending_logs.copy()
+            self._pending_logs.clear()
+            self._gui_update_pending = False
+        
+        if not logs_to_write:
+            return
+        
         if hasattr(self.app, 'home_log_text'):
             try:
                 self.app.home_log_text.configure(state='normal')
-                self.app.home_log_text.insert(tk.END, log_entry)
+                
+                for log_entry in logs_to_write:
+                    self.app.home_log_text.insert(tk.END, log_entry)
+                
+                line_count = int(self.app.home_log_text.index("end-1c").split(".")[0])
+                if line_count > self.MAX_LOG_LINES:
+                    lines_to_delete = line_count - self.MAX_LOG_LINES
+                    self.app.home_log_text.delete("1.0", f"{lines_to_delete + 1}.0")
+                
                 self.app.home_log_text.see(tk.END)
                 self.app.home_log_text.configure(state='disabled')
             except Exception as e:
                 print(f"写入日志文本框失败: {str(e)}")
 
-        if hasattr(self.app, 'status_var'):
+        if logs_to_write and hasattr(self.app, 'status_var'):
             try:
+                last_log = logs_to_write[-1]
+                if "] " in last_log:
+                    message = last_log.split("] ")[-1].strip()
+                else:
+                    message = last_log.strip()
                 self.app.status_var.set(message.split(":")[0] if ":" in message else message)
-            except Exception as e:
-                print(f"更新状态栏失败: {str(e)}")
-
+            except Exception:
+                pass
+    
     def clear_log(self):
         """清除日志"""
+        with self._update_lock:
+            self._log_buffer.clear()
+            self._pending_logs.clear()
+        
         if hasattr(self.app, 'home_log_text'):
             try:
                 self.app.home_log_text.configure(state='normal')
@@ -71,5 +111,3 @@ class LoggingManager:
                 self.app.home_log_text.configure(state='disabled')
             except Exception as e:
                 print(f"清除日志失败: {str(e)}")
-
-        self.log_message("已清除日志")

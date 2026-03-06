@@ -26,6 +26,7 @@ class OCRModule:
         self.last_trigger_times = {}
         self.click_handler = ClickHandler(app)
         self.screenshot_manager = ScreenshotManager()
+        self._last_texts = {}  # 缓存上次识别文本，用于日志节流
     
     def start_monitoring(self):
         """开始监控"""
@@ -230,7 +231,10 @@ class OCRModule:
                 sleep_time = max(0.01, 0.1 - elapsed_time)
                 time.sleep(sleep_time)
 
-                self.app.logging_manager.log_message(f"识别组{group_index+1}识别结果: '{text.strip()}' (耗时: {elapsed_time:.2f}s, 延迟: {sleep_time:.2f}s)")
+                last_text = self._last_texts.get(group_index)
+                if text.strip() != last_text:
+                    self.app.logging_manager.log_message(f"识别组{group_index+1}识别结果: '{text.strip()}' (耗时: {elapsed_time:.2f}s, 延迟: {sleep_time:.2f}s)")
+                    self._last_texts[group_index] = text.strip()
 
                 if any(keyword in lower_text for keyword in keywords):
                     if click_enabled:
@@ -249,7 +253,11 @@ class OCRModule:
                     elapsed_time = time.time() - start_time
                     sleep_time = max(0.01, 0.1 - elapsed_time)
                     time.sleep(sleep_time)
-                    self.app.logging_manager.log_message(f"识别组{group_index+1}识别结果: '{text.strip()}' (耗时: {elapsed_time:.2f}s)")
+                    
+                    last_text = self._last_texts.get(group_index)
+                    if text.strip() != last_text:
+                        self.app.logging_manager.log_message(f"识别组{group_index+1}识别结果: '{text.strip()}' (耗时: {elapsed_time:.2f}s)")
+                        self._last_texts[group_index] = text.strip()
 
         except Exception as e:
             self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 未知错误 - {str(e)}")

@@ -16,6 +16,7 @@ class NumberModule:
     def __init__(self, app):
         self.app = app
         self.screenshot_manager = ScreenshotManager()
+        self._last_results = {}  # 缓存上次识别结果，用于日志节流
     
     def start_number_recognition(self):
         def start_func():
@@ -65,7 +66,11 @@ class NumberModule:
 
                 number = NumberRecognizer.parse_number(text, self.app._number_cache)
                 if number is not None:
-                    self.app.logging_manager.log_message(f"数字识别{region_index+1}解析结果: {number}")
+                    last_result = self._last_results.get(region_index)
+                    if number != last_result:
+                        self.app.logging_manager.log_message(f"数字识别{region_index+1}解析结果: {number}")
+                        self._last_results[region_index] = number
+                    
                     if number < threshold:
                         self.app.alarm_module.play_alarm_sound(self.app.number_regions[region_index]["alarm"])
 
@@ -84,7 +89,10 @@ class NumberModule:
                         else:
                             self.app.logging_manager.log_message(f"数字识别{region_index+1}按键配置为空，仅执行报警操作")
                 else:
-                    self.app.logging_manager.log_message(f"数字识别{region_index+1}结果: '{text}'")
+                    last_result = self._last_results.get(region_index)
+                    if text != last_result:
+                        self.app.logging_manager.log_message(f"数字识别{region_index+1}结果: '{text}'")
+                        self._last_results[region_index] = text
             except Exception as e:
                 self.app.logging_manager.log_message(f"数字识别{region_index+1}错误: {str(e)}")
                 time.sleep(5)

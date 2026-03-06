@@ -48,6 +48,7 @@ class BackgroundMonitor:
         self.alarm_enabled = False
         
         self.last_trigger_time = 0
+        self._last_text = None  # 缓存上次识别文本，用于日志节流
     
     def set_window(self, hwnd: int) -> None:
         """设置目标窗口"""
@@ -125,11 +126,7 @@ class BackgroundMonitor:
         return self.region
     
     def _monitor_loop(self) -> None:
-        """
-        监控主循环
-        
-        初始化等待一个循环是设计如此，避免启动时同时执行所有组的识别
-        """
+        """监控主循环"""
         for _ in range(int(self.interval)):
             if not self.is_running or self.stop_event.is_set():
                 return
@@ -210,33 +207,29 @@ class BackgroundMonitor:
         if not processed:
             return (False, None)
         
-        # 与常规OCR模块保持一致的实现
         keyword_list = [keyword.strip().lower() for keyword in keywords.split(",") if keyword.strip()]
         if not keyword_list:
             return (False, None)
         
-        # 先获取文本
         text = OCRRecognizer.get_text(processed, language)
         
-        # 记录识别到的文本
-        self.app.logging_manager.log_message(
-            f"后台监控组{self.group_index + 1}识别结果: '{text.strip()}'"
-        )
+        if text and text.strip() != self._last_text:
+            self.app.logging_manager.log_message(
+                f"后台监控组{self.group_index + 1}识别结果: '{text.strip()}'"
+            )
+            self._last_text = text.strip()
         
         if not text:
             return (False, None)
         
-        # 检查关键词
         lower_text = text.lower()
         if not any(keyword in lower_text for keyword in keyword_list):
             return (False, None)
         
-        # 记录识别到的关键词
         self.app.logging_manager.log_message(
             f"后台监控组{self.group_index + 1}识别到关键词: {text.strip()}"
         )
         
-        # 查找关键词位置
         click_pos = OCRRecognizer.find_keyword_position(processed, keyword_list, language)
         
         if click_pos is None:
