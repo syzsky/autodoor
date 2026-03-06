@@ -1,7 +1,6 @@
 import customtkinter as ctk
 from tkinter import messagebox
 import pyautogui
-import threading
 import os
 
 from ui.theme import Theme, init_theme
@@ -151,8 +150,28 @@ class AutoDoorOCR:
         self.root.minsize(950, 600)
         self.root.protocol("WM_DELETE_WINDOW", lambda: exit_program(self))
         
+        self._set_icon()
+        
         self._init_tk_variables()
         self._create_layout()
+
+    def _set_icon(self):
+        """设置应用图标"""
+        import os
+        import sys
+        
+        icon_paths = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), 'icon', 'autodoor.ico'),
+            os.path.join(getattr(sys, '_MEIPASS', ''), 'icon', 'autodoor.ico'),
+        ]
+        
+        for icon_path in icon_paths:
+            if os.path.exists(icon_path):
+                try:
+                    self.root.iconbitmap(icon_path)
+                    break
+                except Exception:
+                    pass
 
     def _init_tk_variables(self):
         import tkinter as tk

@@ -2,8 +2,7 @@ import customtkinter as ctk
 import tkinter as tk
 from ui.theme import Theme
 from ui.widgets import CardFrame, AnimatedButton, NumericEntry, create_divider
-from ui.utils import toggle_group_bg, add_group, delete_group, update_image_preview, select_template_image, save_cropped_template
-from PIL import Image as PILImage
+from ui.utils import toggle_group_bg, add_group, delete_group, select_template_image, save_cropped_template
 
 
 def create_image_tab(app):
@@ -144,7 +143,7 @@ def create_image_group(app, index):
     crop_image_btn = AnimatedButton(row2, text='截图', font=Theme.get_font('xs'), width=36, height=24,
                                      corner_radius=4, fg_color=Theme.COLORS['info'],
                                      hover_color=Theme.COLORS['info_hover'],
-                                     command=lambda: crop_reference_image(app, index))
+                                     command=lambda: select_reference_image(app, index))
     crop_image_btn.pack(side='left', padx=(0, 8))
     
     ctk.CTkLabel(row2, text='阈值:', font=Theme.get_font('xs')).pack(side='left')
@@ -214,7 +213,7 @@ def start_image_region_selection(app, index):
     from utils.region import _start_selection
     _start_selection(app, "image", index)
 
-def crop_reference_image(app, index):
+def select_reference_image(app, index):
     """截取屏幕区域作为参考图像"""
     if index >= len(app.image_groups):
         return

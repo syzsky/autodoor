@@ -410,8 +410,9 @@ class ConfigManager:
                 self.app.logging_manager.log_message(f"[图像检测] 检测组{group_index + 1}已加载模板: {image_path}")
                 self.app.logging_manager.log_message(f"[图像检测] 模板尺寸: {w}x{h}")
                 
-                from ui.image_tab import update_image_preview
-                update_image_preview(self.app, group_index, image_path)
+                from ui.utils import update_image_preview
+                group = self.app.image_groups[group_index]
+                update_image_preview(group["image_preview"], group.get("preview_container"), image_path)
             except Exception as e:
                 self.app.logging_manager.log_message(f"[图像检测] 加载参考图像失败: {str(e)}")
     

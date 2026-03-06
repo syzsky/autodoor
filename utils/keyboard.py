@@ -1,7 +1,3 @@
-import tkinter as tk
-from tkinter import ttk
-
-
 def start_key_listening(app, target_var, button, is_shortcut=False):
     """开始监听用户按下的按键"""
     current_focus = app.root.focus_get()

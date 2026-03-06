@@ -41,6 +41,8 @@ if os.path.exists(tesseract_dir) and platform.system() == 'Windows':
 data_files = [
     (os.path.join(project_root, 'voice/alarm.mp3'), 'voice'),
     (os.path.join(project_root, 'voice/temp_reversed.mp3'), 'voice'),
+    (os.path.join(project_root, 'icon/autodoor.ico'), 'icon'),
+    (os.path.join(project_root, 'icon/autodoor.png'), 'icon'),
 ] + tesseract_files
 
 # 检查平台并添加必要的二进制文件
@@ -117,21 +119,22 @@ a = Analysis(
         
         # UI模块
         'ui',
+        'ui.background_tab',
         'ui.basic_tab',
-        'ui.builder',
         'ui.home',
         'ui.image_tab',
         'ui.number_tab',
         'ui.ocr_tab',
         'ui.script_tab',
-        'ui.styles',
+        'ui.theme',
         'ui.timed_tab',
         'ui.utils',
-        'ui.validators',
+        'ui.widgets',
         
         # 功能模块
         'modules',
         'modules.alarm',
+        'modules.background',
         'modules.color',
         'modules.image',
         'modules.input',
@@ -158,8 +161,6 @@ a = Analysis(
         # 第三方库
         'pygame',
         'pygame.mixer',
-        'pygame.mixer.music',
-        'pygame._sdl2.mixer',
         'tkinter',
         'tkinter.ttk',
         'PIL',
@@ -168,7 +169,6 @@ a = Analysis(
         'pytesseract',
         'screeninfo',
         'screeninfo.common',
-        'screeninfo.monitors',
         'pynput',
         'pynput.keyboard',
         'pynput.mouse',
@@ -228,14 +228,14 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,  # 禁用UPX压缩，避免Windows Defender误报
     console=False,  # 不显示控制台窗口
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='',  # 如果有图标文件，可以在这里设置
+    icon=os.path.join(project_root, 'icon', 'autodoor.ico'),
 )
 
 import platform
@@ -247,7 +247,7 @@ if platform.system() == 'Darwin':
         a.zipfiles,
         a.datas,
         name='AutoDoor.app',
-        icon='',  # 如果有图标文件，可以在这里设置
+        icon=os.path.join(project_root, 'icon', 'autodoor.png'),
         bundle_identifier='com.autodoor.ocr',
         info_plist={
             'CFBundleName': 'AutoDoor',
@@ -276,7 +276,7 @@ else:
         a.zipfiles,
         a.datas,
         strip=False,
-        upx=True,
+        upx=False,  # 禁用UPX压缩，避免Windows Defender误报
         upx_exclude=[],
         name='autodoor',
     )

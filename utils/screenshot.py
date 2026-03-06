@@ -1,6 +1,6 @@
 import threading
 import time
-from PIL import Image, ImageGrab
+from PIL import ImageGrab
 from core.priority_lock import PriorityLock
 
 try:
