@@ -125,7 +125,11 @@ class BackgroundMonitor:
         return self.region
     
     def _monitor_loop(self) -> None:
-        """监控主循环"""
+        """
+        监控主循环
+        
+        初始化等待一个循环是设计如此，避免启动时同时执行所有组的识别
+        """
         for _ in range(int(self.interval)):
             if not self.is_running or self.stop_event.is_set():
                 return
@@ -195,7 +199,7 @@ class BackgroundMonitor:
         return (False, None)
     
     def _recognize_ocr(self, image) -> tuple:
-        """OCR识别 - 使用公共识别工具类"""
+        """OCR识别 - 使用与常规OCR模块相同的实现"""
         keywords = self.ocr_config.get("keywords", "")
         language = self.ocr_config.get("language", "eng")
         
@@ -206,20 +210,43 @@ class BackgroundMonitor:
         if not processed:
             return (False, None)
         
-        matched, click_pos = OCRRecognizer.recognize(
-            processed, keywords, language,
-            log_func=self.app.logging_manager.log_message,
-            group_index=self.group_index
+        # 与常规OCR模块保持一致的实现
+        keyword_list = [keyword.strip().lower() for keyword in keywords.split(",") if keyword.strip()]
+        if not keyword_list:
+            return (False, None)
+        
+        # 先获取文本
+        text = OCRRecognizer.get_text(processed, language)
+        
+        # 记录识别到的文本
+        self.app.logging_manager.log_message(
+            f"后台监控组{self.group_index + 1}识别结果: '{text.strip()}'"
         )
         
-        if matched and click_pos is None:
+        if not text:
+            return (False, None)
+        
+        # 检查关键词
+        lower_text = text.lower()
+        if not any(keyword in lower_text for keyword in keyword_list):
+            return (False, None)
+        
+        # 记录识别到的关键词
+        self.app.logging_manager.log_message(
+            f"后台监控组{self.group_index + 1}识别到关键词: {text.strip()}"
+        )
+        
+        # 查找关键词位置
+        click_pos = OCRRecognizer.find_keyword_position(processed, keyword_list, language)
+        
+        if click_pos is None:
             region = self._get_current_region()
             if region:
                 center_x = (region[0] + region[2]) // 2
                 center_y = (region[1] + region[3]) // 2
                 click_pos = (center_x, center_y)
         
-        return (matched, click_pos)
+        return (True, click_pos)
     
     def _recognize_image(self, image) -> tuple:
         """图像识别 - 使用公共识别工具类"""
@@ -281,35 +308,44 @@ class BackgroundMonitor:
             # 执行点击操作
             if self.trigger_click:
                 if click_position:
-                    success, msg = quick_switch.click(click_position[0], click_position[1])
-                    if success:
-                        self.app.logging_manager.log_message(
-                            f"后台监控组{self.group_index + 1}点击位置: ({click_position[0]}, {click_position[1]})"
-                        )
+                    # 转换为绝对坐标
+                    rect = get_window_rect(self.hwnd)
+                    if rect:
+                        abs_x = rect[0] + click_position[0]
+                        abs_y = rect[1] + click_position[1]
+                        # 直接使用输入控制器执行点击
+                        self.app.input_controller.click(abs_x, abs_y, priority=1)
                 else:
                     region = self._get_current_region()
                     if region:
                         click_x = (region[0] + region[2]) // 2
                         click_y = (region[1] + region[3]) // 2
-                        success, msg = quick_switch.click(click_x, click_y)
-                        if success:
-                            self.app.logging_manager.log_message(
-                                f"后台监控组{self.group_index + 1}点击位置: ({click_x}, {click_y})"
-                            )
+                        # 转换为绝对坐标
+                        rect = get_window_rect(self.hwnd)
+                        if rect:
+                            abs_x = rect[0] + click_x
+                            abs_y = rect[1] + click_y
+                            # 直接使用输入控制器执行点击
+                            self.app.input_controller.click(abs_x, abs_y, priority=1)
             
             # 等待0.1秒
             time.sleep(0.1)
             
             # 执行按键操作
             if self.trigger_key:
-                success, msg = quick_switch.press_key(self.trigger_key, self.delay_min, self.delay_max)
-                if success:
-                    self.app.logging_manager.log_message(
-                        f"后台监控组{self.group_index + 1}按下按键: {self.trigger_key} ({self.delay_min}-{self.delay_max}ms)"
-                    )
+                # 直接使用输入控制器执行按键
+                import random
+                hold_delay = random.randint(self.delay_min, self.delay_max) / 1000.0
+                self.app.input_controller.key_down(self.trigger_key, priority=1)
+                time.sleep(hold_delay)
+                self.app.input_controller.key_up(self.trigger_key, priority=1)
             
             # 切换回原窗口
             quick_switch._restore_foreground_window()
+        else:
+            self.app.logging_manager.log_message(
+                f"后台监控组{self.group_index + 1}窗口切换失败，跳过操作"
+            )
 
 class BackgroundManager:
     """后台监控管理器"""
