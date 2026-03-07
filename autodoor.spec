@@ -180,6 +180,15 @@ a = Analysis(
         'six',
         'imagehash',
         'cv2',
+        
+        # Windows API模块 (pywin32)
+        'win32gui',
+        'win32ui',
+        'win32con',
+        'win32api',
+        'win32process',
+        'pywintypes',
+        'pythoncom',
     ],
     hookspath=[],
     hooksconfig={},
