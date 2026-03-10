@@ -170,14 +170,6 @@ class OCRModule:
         return True, left, top, right, bottom
     
     def _capture_screen_region(self, left, top, right, bottom, group_index):
-        if self.app.platform_adapter.platform == "Darwin":
-            from input.permissions import PermissionManager
-            permission_manager = PermissionManager(self.app)
-            if not permission_manager.check_screen_recording():
-                self.app.root.after(0, lambda: self.app._guide_screen_recording_setup())
-                self.app.logging_manager.log_message(f"识别组{group_index+1}错误: 缺少屏幕录制权限")
-                return None
-        
         try:
             return self.screenshot_manager.get_region_screenshot((left, top, right, bottom), priority=self.PRIORITY)
         except Exception as e:

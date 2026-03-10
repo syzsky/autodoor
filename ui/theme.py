@@ -1,10 +1,7 @@
-import platform
 import customtkinter as ctk
 
 
 class Theme:
-    SYSTEM = platform.system()
-    
     COLORS = {
         'primary': '#3B82F6',
         'primary_hover': '#2563EB',
@@ -37,7 +34,7 @@ class Theme:
     }
     
     FONTS = {
-        'family': 'Microsoft YaHei' if SYSTEM == 'Windows' else 'PingFang SC',
+        'family': 'Microsoft YaHei',
         'sizes': {
             'xs': 10,
             'sm': 11,
@@ -83,14 +80,11 @@ class Theme:
 
 
 def init_theme():
-    # TODO: 夜间模式暂时禁用，待后续迭代完善后启用
-    # 目前强制使用 Light 模式，确保所有组件样式一致
     ctk.set_appearance_mode('Light')
     ctk.set_default_color_theme('blue')
     
-    if Theme.SYSTEM == 'Windows':
-        try:
-            from ctypes import windll
-            windll.shcore.SetProcessDpiAwareness(1)
-        except:
-            pass
+    try:
+        from ctypes import windll
+        windll.shcore.SetProcessDpiAwareness(1)
+    except:
+        pass

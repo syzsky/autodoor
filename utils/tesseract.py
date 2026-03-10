@@ -22,7 +22,6 @@ class TesseractManager:
     def get_default_tesseract_path(self):
         """
         获取默认的Tesseract路径，使用项目自带的tesseract
-        支持Windows和Mac平台，同时支持打包后的环境
         Returns:
             str: Tesseract可执行文件的路径，如果未找到则返回空字符串
         """
@@ -44,9 +43,6 @@ class TesseractManager:
                 os.path.join(os.path.dirname(tesseract_path), "tessdata"),
                 os.path.join(app_root, "tessdata"),
                 os.path.join(app_root, "tesseract", "tessdata"),
-                os.path.join(os.path.dirname(os.path.dirname(app_root)), "Resources", "tesseract", "tessdata"),
-                "/usr/local/share/tessdata",
-                "/opt/homebrew/share/tessdata",
             ]
             
             for tessdata_path in possible_tessdata_paths:
@@ -79,25 +75,13 @@ class TesseractManager:
     
     def _check_tesseract_permissions(self):
         """
-        检查并修复Tesseract执行权限
+        检查Tesseract执行权限
         Returns:
             bool: 如果权限正确则返回True，否则返回False
         """
         if not self.app.platform_adapter.is_valid_tesseract_path(self.app.tesseract_path):
             self.app.logging_manager.log_message(f"Tesseract路径不是有效可执行文件: {self.app.tesseract_path}")
             return False
-
-        if self.app.platform_adapter.platform == "Darwin":  # macOS
-            if not os.access(self.app.tesseract_path, os.X_OK):
-                self.app.logging_manager.log_message(f"Tesseract文件缺少执行权限，尝试修复: {self.app.tesseract_path}")
-                try:
-                    subprocess.run(["chmod", "+x", self.app.tesseract_path], 
-                                  capture_output=True, check=True, timeout=5)
-                    self.app.logging_manager.log_message("成功添加执行权限")
-                except Exception as e:
-                    self.app.logging_manager.log_message(f"添加执行权限失败: {str(e)}")
-                    return False
-        # 其他平台不做严格检查
         return True
 
     def _check_tesseract_version(self):
@@ -251,15 +235,9 @@ class TesseractManager:
             messagebox.showwarning("警告", "指定的路径不存在！")
             return
 
-        # 根据操作系统检查可执行文件格式
-        if self.app.platform_adapter.platform == "Windows":
-            if not new_path.endswith("tesseract.exe"):
-                messagebox.showwarning("警告", "请指定tesseract.exe可执行文件！")
-                return
-        elif self.app.platform_adapter.platform == "Darwin":  # macOS
-            if not os.path.basename(new_path) == "tesseract":
-                messagebox.showwarning("警告", "请指定tesseract可执行文件！")
-                return
+        if not new_path.endswith("tesseract.exe"):
+            messagebox.showwarning("警告", "请指定tesseract.exe可执行文件！")
+            return
 
         try:
             # 测试新路径是否可用

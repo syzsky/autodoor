@@ -99,12 +99,6 @@ class NumberModule:
                 time.sleep(5)
 
     def take_screenshot(self, region):
-        if self.app.platform_adapter.platform == "Darwin":
-            permission_manager = PermissionManager(self.app)
-            if not permission_manager.check_screen_recording():
-                self.app.root.after(0, lambda: self.app._guide_screen_recording_setup())
-                return None
-        
         try:
             return self.screenshot_manager.get_region_screenshot(region, priority=self.PRIORITY)
         except Exception as e:

@@ -72,14 +72,6 @@ class ColorRecognition:
             return False
         
         try:
-            if self.app.platform_adapter.platform == "Darwin":
-                from input.permissions import PermissionManager
-                permission_manager = PermissionManager(self.app)
-                if not permission_manager.check_screen_recording():
-                    self.app.root.after(0, lambda: self.app._guide_screen_recording_setup())
-                    self.app.logging_manager.log_message("颜色识别失败: 缺少屏幕录制权限")
-                    return False
-            
             screenshot = self.screenshot_manager.get_region_screenshot(self.region, priority=self.PRIORITY)
             
             if not screenshot:

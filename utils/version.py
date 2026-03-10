@@ -55,14 +55,11 @@ class VersionChecker:
 
             # 提取下载链接
             windows_download_url = None
-            macos_download_url = None
 
             for asset in data.get('assets', []):
                 asset_name = asset.get('name', '')
                 if 'windows' in asset_name.lower():
                     windows_download_url = asset.get('browser_download_url')
-                elif 'macos' in asset_name.lower():
-                    macos_download_url = asset.get('browser_download_url')
 
             # 比较版本
             if self._is_newer_version(latest_version):
@@ -76,7 +73,7 @@ class VersionChecker:
                         return
                 
                 # 显示更新通知
-                self._show_update_notification(data, latest_version, windows_download_url, macos_download_url)
+                self._show_update_notification(data, latest_version, windows_download_url)
             else:
                 # 当前已是最新版本或开发版本
                 if manual:
@@ -117,7 +114,7 @@ class VersionChecker:
         except:
             return 0
 
-    def _show_update_notification(self, data, latest_version, windows_download_url, macos_download_url):
+    def _show_update_notification(self, data, latest_version, windows_download_url):
         """显示更新通知"""
         def show_notification():
             release_date = data.get('published_at', '')

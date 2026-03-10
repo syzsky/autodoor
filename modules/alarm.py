@@ -54,7 +54,7 @@ class AlarmModule:
         """
         获取默认的报警声音路径，使用项目自带的alarm.mp3
 
-        支持Windows和Mac平台，同时支持打包后的环境
+        支持Windows平台，同时支持打包后的环境
 
         Returns:
             str: 报警声音文件的路径

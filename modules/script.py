@@ -460,23 +460,6 @@ class ScriptExecutor(RecorderBase):
 
     def start_recording(self):
         """开始录制按键"""
-        # 检查平台并进行权限提示
-        current_platform = self.app.platform_adapter.platform
-        
-        # 检查权限（macOS）
-        if current_platform == "Darwin":
-            try:
-                import subprocess
-                # 检查是否有辅助功能权限
-                result = subprocess.run(["osascript", "-e", "tell application \"System Events\" to key code 1"], capture_output=True, timeout=2)
-                if result.returncode != 0:
-                    self.app.root.after(0, lambda: self.app.ui.show_message("权限提示", "在macOS上录制功能需要辅助功能权限，请在系统偏好设置 > 安全性与隐私 > 隐私 > 辅助功能中允许AutoDoor控制您的电脑。"))
-            except Exception as e:
-                pass
-        
-        if current_platform == "Darwin":
-            self.app.root.after(100, lambda: self.app.ui.show_message("提示", "在macOS上录制功能需要辅助功能权限，请在系统偏好设置中允许AutoDoor控制您的电脑。"))
-        
         # 设置录制缓冲期，避免记录开始录制时的操作
         self.recording_grace_period = True
         
@@ -492,39 +475,22 @@ class ScriptExecutor(RecorderBase):
             # 记录鼠标移动的最后位置
             last_mouse_position = None
             
-            # macOS平台使用MacOSGlobalKeyListener，其他平台使用pynput
-            if current_platform == "Darwin":
-                # 0.5秒后关闭缓冲期，允许记录操作
-                time.sleep(0.5)
-                self.recording_grace_period = False
-                
-                # 添加日志记录
-                self.app.logging_manager.log_message("🔴 开始录制操作...")
-                
-                # 由于CoreGraphics功能已禁用，无法使用全局按键监听器
+            # 导入pynput模块
+            keyboard = None
+            mouse = None
+            keyboard_listener = None
+            mouse_listener = None
+            
+            try:
+                from pynput import keyboard, mouse
+            except Exception as e:
+                # 给用户提供明确的提醒
+                self.app.root.after(0, lambda: self.app.ui.show_message("提示", "无法启动录制功能，请确保pynput模块已正确安装。"))
                 self.is_recording = False
                 # 生成空脚本，避免后续处理出错
                 self.recording_events = []
                 self.generate_recorded_script()
-                self.app.logging_manager.log_message("🟢 录制完成")
                 return
-            else:
-                # 导入pynput模块
-                keyboard = None
-                mouse = None
-                keyboard_listener = None
-                mouse_listener = None
-                
-                try:
-                    from pynput import keyboard, mouse
-                except Exception as e:
-                    # 给用户提供明确的提醒
-                    self.app.root.after(0, lambda: self.app.ui.show_message("提示", "无法启动录制功能，请确保pynput模块已正确安装。"))
-                    self.is_recording = False
-                    # 生成空脚本，避免后续处理出错
-                    self.recording_events = []
-                    self.generate_recorded_script()
-                    return
                 
                 # 键盘事件处理
                 def on_key_press(key):
@@ -691,40 +657,6 @@ class ScriptExecutor(RecorderBase):
         # 启动录制线程
         self.recording_thread = threading.Thread(target=record, daemon=True)
         self.recording_thread.start()
-        
-
-    def _keycode_to_name(self, keycode):
-        """将macOS keycode转换为按键名称"""
-        key_map = {
-            0: 'a', 1: 's', 2: 'd', 3: 'f', 4: 'h', 5: 'g', 6: 'z', 7: 'x', 8: 'c', 9: 'v',
-            11: 'b', 12: 'q', 13: 'w', 14: 'e', 15: 'r', 16: 'y', 17: 't',
-            
-            18: '1', 19: '2', 20: '3', 21: '4', 22: '6', 23: '5', 25: '9', 26: '7', 28: '8', 29: '0',
-            
-            24: 'equal', 27: 'minus', 30: 'right_bracket', 33: 'left_bracket', 36: 'return',
-            39: 'apostrophe', 41: 'semicolon', 42: 'backslash', 43: 'comma', 44: 'slash',
-            45: 'n', 46: 'm', 47: 'period',
-            
-            48: 'tab', 49: 'space', 50: 'grave', 51: 'delete', 53: 'escape',
-            54: 'command', 55: 'shift', 56: 'caps_lock', 57: 'option', 58: 'control',
-            59: 'right_shift', 60: 'right_option', 61: 'right_control',
-            
-            63: 'function', 64: 'f17', 65: 'kp_multiply', 66: 'volume_up', 67: 'kp_subtract',
-            69: 'kp_add', 70: 'f19', 71: 'f20',
-            72: 'f5', 73: 'f6', 74: 'f7', 75: 'kp_decimal', 76: 'kp_divide', 77: 'f9', 78: 'kp_enter',
-            79: 'f13', 80: 'f16', 81: 'kp_equal', 82: 'kp_0', 83: 'kp_1', 84: 'kp_2',
-            85: 'kp_3', 86: 'kp_4', 87: 'kp_5', 88: 'kp_6', 89: 'kp_7',
-            90: 'kp_8', 91: 'kp_9', 92: 'page_down', 93: 'f1',
-            
-            123: 'left', 124: 'right', 125: 'down', 126: 'up',
-        }
-        
-        key_name = key_map.get(keycode, None)
-        
-        if not key_name:
-            key_name = f"key_{keycode}"
-        
-        return key_name
 
     def stop_recording(self):
         """停止录制按键"""

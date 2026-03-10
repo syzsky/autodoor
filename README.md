@@ -11,7 +11,7 @@
 - ✅ 自动化鼠标点击和键盘操作
 - ✅ 实时状态显示和日志记录
 - ✅ 配置自动保存/加载
-- ✅ Windows/macOS平台打包支持
+- ✅ Windows平台打包支持
 
 ### 模块化功能
 - ✅ **首页Tab**：集中显示各功能状态，统一控制各模块开关
@@ -44,15 +44,10 @@ B 站：[https://www.bilibili.com/video/BV1AGiGB8EYN](https://www.bilibili.com/v
 2. 解压到任意目录
 3. 运行`autodoor.exe`文件
 
-#### macOS系统：
-1. 从发布页面下载`autodoor-macos.zip`文件
-2. 解压到任意目录
-3. 运行`autodoor`可执行文件
-
 ### 方法二：从源码运行
 
 #### 1. Python环境
-- Python 3.8+ 版本
+- Python 3.10+ 版本
 
 #### 2. 安装Python依赖
 
@@ -63,8 +58,6 @@ python -m venv venv
 # 激活虚拟环境
 # Windows:
 venv\Scripts\activate
-# Linux/macOS:
-source venv/bin/activate
 
 # 安装依赖
 pip install -r requirements.txt
@@ -78,16 +71,6 @@ pip install -r requirements.txt
 1. 下载Tesseract安装包：[Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki)
 2. 安装时记住安装路径
 
-##### Linux系统：
-```bash
-sudo apt-get install tesseract-ocr
-```
-
-##### macOS系统：
-```bash
-brew install tesseract
-```
-
 ## 使用方法
 
 ### 从源码运行
@@ -97,7 +80,6 @@ python autodoor.py
 
 ### 从可执行文件运行
 - Windows：双击`autodoor.exe`文件
-- macOS：双击`autodoor`可执行文件
 
 ## 项目架构
 
@@ -156,7 +138,6 @@ autodoor/
 │   └── temp_reversed.mp3    # 停止音效
 ├── requirements.txt         # Python依赖
 ├── build_windows.bat        # Windows打包脚本
-├── build_mac.sh             # macOS打包脚本
 └── README.md                # 说明文档
 ```
 
@@ -502,7 +483,6 @@ class EventManager:
 程序会自动生成和加载配置文件，使用系统标准目录：
 
 - **Windows**：`%APPDATA%/AutoDoorOCR/autodoor_config.json`
-- **macOS**：`~/Library/Preferences/AutoDoorOCR/autodoor_config.json`
 
 ### 配置结构
 
@@ -611,18 +591,12 @@ class EventManager:
 程序会生成日志文件，与配置文件位于同一目录：
 
 - **Windows**：`%APPDATA%/AutoDoorOCR/autodoor.log`
-- **macOS**：`~/Library/Preferences/AutoDoorOCR/autodoor.log`
 
 ## 打包说明
 
 ### Windows平台打包
 ```cmd
 ./build_windows.bat
-```
-
-### macOS平台打包
-```bash
-./build_mac.sh
 ```
 
 打包后的可执行文件位于`dist/autodoor/`目录下。
@@ -677,13 +651,6 @@ class Theme:
 1. 选择的监控区域应包含清晰可见的文字
 2. 运行脚本时请确保目标区域保持可见
 3. Windows系统可能需要管理员权限
-4. macOS系统需要在"安全性与隐私"中授权
-
-### macOS用户注意事项
-
-1. 通过 Homebrew 安装 Tesseract：`brew install tesseract`
-2. 首次运行时授予屏幕截图权限
-3. 在"系统偏好设置" > "安全性与隐私" > "隐私"中添加权限
 
 ## 故障排除
 
@@ -698,7 +665,6 @@ class Theme:
 
 ### 无法模拟操作
 - Windows：以管理员身份运行
-- macOS：检查"安全性与隐私"设置
 
 ## 联系作者
 - QQ群：1081721730

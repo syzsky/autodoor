@@ -439,9 +439,6 @@ class AutoDoorOCR:
             self.config_manager.defer_save_config()
 
     def _start_services(self):
-        if self.platform_adapter.platform == "Darwin":
-            self.root.after(100, self.permission_manager.check_macos_permissions)
-
         self.config_manager.setup_config_listeners()
 
         if not self.tesseract_available:
