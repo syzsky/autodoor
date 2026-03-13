@@ -1,5 +1,5 @@
 # GitHub Actions 配置文件
-# 实现 Windows 和 macOS 版本的自动构建
+# 实现 Windows 标准版、DD版 和 macOS 版本的自动构建
 # 适配模块化架构 v2.0
 
 name: AutoDoor Build and Release
@@ -21,8 +21,8 @@ env:
   PYTHON_VERSION: '3.12'
 
 jobs:
-  build-windows:
-    name: Build Windows
+  build-windows-standard:
+    name: Build Windows (Standard)
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
@@ -66,7 +66,9 @@ jobs:
             }
         }
     
-    - name: Build with PyInstaller
+    - name: Build Standard Version with PyInstaller
+      env:
+        AUTODOOR_USE_DD: '0'
       run: pyinstaller autodoor.spec --noconfirm
     
     - name: Verify build output
@@ -79,11 +81,87 @@ jobs:
             exit 1
         }
     
-    - name: Archive Windows build
+    - name: Archive Windows Standard build
       uses: actions/upload-artifact@v4
       with:
-        name: autodoor-windows
+        name: autodoor-windows-standard
         path: dist/autodoor/
+        retention-days: 30
+
+  build-windows-dd:
+    name: Build Windows (DD Version)
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt pyinstaller
+    
+    - name: Verify module structure
+      run: |
+        Write-Host "Verifying module structure..."
+        $modules = @("core", "ui", "modules", "input", "utils")
+        foreach ($module in $modules) {
+            if (Test-Path "${{ github.workspace }}\$module") {
+                Write-Host "✓ Module '$module' found"
+                Get-ChildItem "${{ github.workspace }}\$module\*.py" | Select-Object Name
+            } else {
+                Write-Host "✗ Module '$module' not found"
+                exit 1
+            }
+        }
+    
+    - name: Verify DD driver file
+      run: |
+        if (Test-Path "${{ github.workspace }}\drivers\DD64.dll") {
+            Write-Host "✓ DD64.dll found"
+            Get-Item "${{ github.workspace }}\drivers\DD64.dll" | Select-Object Name, Length
+        } else {
+            Write-Host "✗ DD64.dll not found in drivers directory"
+            exit 1
+        }
+    
+    - name: Verify tesseract directory
+      run: |
+        if (Test-Path "${{ github.workspace }}\tesseract") {
+            Write-Host "Tesseract directory found"
+        }
+    
+    - name: Build DD Version with PyInstaller
+      env:
+        AUTODOOR_USE_DD: '1'
+      run: pyinstaller autodoor_dd.spec --noconfirm
+    
+    - name: Verify build output
+      run: |
+        if (Test-Path "${{ github.workspace }}\dist\autodoor_dd\autodoor_dd.exe") {
+            Write-Host "✓ Build successful: autodoor_dd.exe found"
+            Get-Item "${{ github.workspace }}\dist\autodoor_dd\autodoor_dd.exe" | Select-Object Name, Length, LastWriteTime
+            
+            # Verify DD64.dll is included
+            if (Test-Path "${{ github.workspace }}\dist\autodoor_dd\drivers\DD64.dll") {
+                Write-Host "✓ DD64.dll included in build"
+            } else {
+                Write-Host "⚠ DD64.dll not found in build output"
+            }
+        } else {
+            Write-Host "✗ Build failed: autodoor_dd.exe not found"
+            exit 1
+        }
+    
+    - name: Archive Windows DD build
+      uses: actions/upload-artifact@v4
+      with:
+        name: autodoor-windows-dd
+        path: dist/autodoor_dd/
         retention-days: 30
 
   build-macos:
@@ -160,7 +238,7 @@ jobs:
   deploy:
     name: Deploy to GitHub Releases
     runs-on: ubuntu-latest
-    needs: [build-windows, build-macos]
+    needs: [build-windows-standard, build-windows-dd, build-macos]
     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/autodoor_V')
     permissions:
       contents: write
@@ -218,11 +296,17 @@ jobs:
         git push origin "$TAG_NAME"
         echo "已创建并推送标签：$TAG_NAME"
     
-    - name: Download Windows build
+    - name: Download Windows Standard build
       uses: actions/download-artifact@v4
       with:
-        name: autodoor-windows
-        path: windows-build
+        name: autodoor-windows-standard
+        path: windows-standard-build
+    
+    - name: Download Windows DD build
+      uses: actions/download-artifact@v4
+      with:
+        name: autodoor-windows-dd
+        path: windows-dd-build
     
     - name: Download macOS build
       uses: actions/download-artifact@v4
@@ -232,7 +316,8 @@ jobs:
     
     - name: Create zip archives
       run: |
-        zip -r autodoor-windows-${{ steps.get_version.outputs.VERSION }}.zip windows-build/
+        zip -r autodoor-windows-standard-${{ steps.get_version.outputs.VERSION }}.zip windows-standard-build/
+        zip -r autodoor-windows-dd-${{ steps.get_version.outputs.VERSION }}.zip windows-dd-build/
         zip -r autodoor-macos-${{ steps.get_version.outputs.VERSION }}.zip macos-build/
     
     - name: Read update content
@@ -244,7 +329,7 @@ jobs:
           echo "$UPDATE_CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
         else
-          DEFAULT_CONTENT="AutoDoor OCR 识别系统自动构建版本\n- Windows版本：autodoor-windows-${{ steps.get_version.outputs.VERSION }}.zip\n- macOS版本：autodoor-macos-${{ steps.get_version.outputs.VERSION }}.zip"
+          DEFAULT_CONTENT="AutoDoor OCR 识别系统自动构建版本\n\n## 版本说明\n- **Windows 标准版**：使用 PyAutoGUI，适用于普通应用程序\n- **Windows DD版**：使用 DD虚拟键盘，适用于游戏等 DirectInput 应用\n- **macOS 版**：适用于 macOS 系统\n\n## 下载文件\n- autodoor-windows-standard-${{ steps.get_version.outputs.VERSION }}.zip (标准版)\n- autodoor-windows-dd-${{ steps.get_version.outputs.VERSION }}.zip (DD版)\n- autodoor-macos-${{ steps.get_version.outputs.VERSION }}.zip (macOS版)"
           echo "UPDATE_CONTENT<<EOF" >> $GITHUB_OUTPUT
           echo "$DEFAULT_CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -259,5 +344,6 @@ jobs:
         draft: false
         prerelease: false
         files: |
-          autodoor-windows-${{ steps.get_version.outputs.VERSION }}.zip
+          autodoor-windows-standard-${{ steps.get_version.outputs.VERSION }}.zip
+          autodoor-windows-dd-${{ steps.get_version.outputs.VERSION }}.zip
           autodoor-macos-${{ steps.get_version.outputs.VERSION }}.zip

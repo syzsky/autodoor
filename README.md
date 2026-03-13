@@ -12,6 +12,9 @@
 - ✅ 实时状态显示和日志记录
 - ✅ 配置自动保存/加载
 - ✅ Windows平台打包支持
+- ✅ **DD虚拟键盘支持**：新增驱动级键盘模拟方案，支持DirectInput游戏
+- ✅ **双版本打包**：支持标准版（PyAutoGUI）和DD版（DD虚拟键盘）两种打包方式
+- ✅ **动态键码转换**：使用 `DD_todc` 函数动态转换 Windows VK 码到 DD 码，支持所有标准按键
 
 ### 模块化功能
 - ✅ **首页Tab**：集中显示各功能状态，统一控制各模块开关
@@ -128,9 +131,16 @@ autodoor/
 │   ├── keyboard.py          # 键盘工具
 │   └── region.py            # 区域选择工具
 ├── input/                   # 输入控制
-│   ├── controller.py        # 输入控制器
-│   ├── keyboard.py          # 键盘控制
+│   ├── __init__.py          # 模块初始化
+│   ├── base.py              # 输入控制器抽象基类
+│   ├── controller.py        # 输入控制器工厂
+│   ├── pyautogui_input.py   # PyAutoGUI输入实现
+│   ├── dd_input.py          # DD虚拟键盘输入实现
+│   ├── key_mapping.py       # 按键映射表
+│   ├── keyboard.py          # 键盘工具
 │   └── permissions.py       # 权限管理
+├── drivers/                 # 驱动文件
+│   └── DD64.dll             # DD虚拟键盘驱动
 ├── tesseract/               # 内置Tesseract引擎
 │   └── tessdata/            # 语言数据
 ├── voice/                   # 音频文件
@@ -595,11 +605,30 @@ class EventManager:
 ## 打包说明
 
 ### Windows平台打包
+
+#### 标准版（PyAutoGUI）
 ```cmd
-./build_windows.bat
+build_standard.bat
 ```
 
-打包后的可执行文件位于`dist/autodoor/`目录下。
+#### DD版（DD虚拟键盘，支持DirectInput游戏）
+```cmd
+build_dd.bat
+```
+
+#### 同时打包两个版本
+```cmd
+build_all.bat
+```
+
+打包后的可执行文件位于 `dist/` 目录下：
+- `dist/autodoor/` - 标准版
+- `dist/autodoor_dd/` - DD版
+
+### DD版使用说明
+1. DD版需要 `DD64.dll` 驱动文件，打包时会自动包含
+2. 部分系统可能需要管理员权限运行
+3. DD版适用于 DirectInput 游戏（如某些老游戏）
 
 ## 开发说明
 
