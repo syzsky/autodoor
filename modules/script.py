@@ -484,175 +484,156 @@ class ScriptExecutor(RecorderBase):
             try:
                 from pynput import keyboard, mouse
             except Exception as e:
-                # 给用户提供明确的提醒
                 self.app.root.after(0, lambda: self.app.ui.show_message("提示", "无法启动录制功能，请确保pynput模块已正确安装。"))
                 self.is_recording = False
-                # 生成空脚本，避免后续处理出错
                 self.recording_events = []
                 self.generate_recorded_script()
                 return
+            
+            # 键盘事件处理
+            def on_key_press(key):
+                if not self.is_recording:
+                    return False
+                if getattr(self, 'recording_grace_period', False):
+                    self.recording_grace_period = False
+                    return
                 
-                # 键盘事件处理
-                def on_key_press(key):
-                    if not self.is_recording:
-                        return False
-                    if getattr(self, 'recording_grace_period', False):
-                        self.recording_grace_period = False
-                        return
-                    
-                    try:
-                        key_name = key.char
-                    except AttributeError:
-                        key_name = key.name
-                    except Exception:
-                        return
-                    
-                    key_name = pynput_to_pyautogui_map.get(key_name, key_name)
-                    
-                    record_hotkey = self.app.record_hotkey_var.get().lower()
-                    if key_name == record_hotkey:
-                        return
-                    
-                    if key_name not in pressed_keys:
-                        current_time = time.time()
-                        delay = int((current_time - self.last_event_time) * 1000)
-                        self.last_event_time = current_time
-                        
-                        try:
-                            self.recording_events.append({
-                                "type": "keydown",
-                                "key": key_name,
-                                "delay": delay
-                            })
-                            pressed_keys.add(key_name)
-                        except Exception as e:
-                            pass
+                try:
+                    key_name = key.char
+                except AttributeError:
+                    key_name = key.name
+                except Exception:
+                    return
                 
-                def on_key_release(key):
-                    if not self.is_recording:
-                        return False
-                    if getattr(self, 'recording_grace_period', False):
-                        return
-                    
-                    try:
-                        key_name = key.char
-                    except AttributeError:
-                        key_name = key.name
-                    except Exception:
-                        return
-                    
-                    key_name = pynput_to_pyautogui_map.get(key_name, key_name)
-                    
-                    record_hotkey = self.app.record_hotkey_var.get().lower()
-                    if key_name == record_hotkey:
-                        return
-                    
-                    if key_name in pressed_keys:
-                        current_time = time.time()
-                        delay = int((current_time - self.last_event_time) * 1000)
-                        self.last_event_time = current_time
-                        
-                        try:
-                            self.recording_events.append({
-                                "type": "keyup",
-                                "key": key_name,
-                                "delay": delay
-                            })
-                            pressed_keys.remove(key_name)
-                        except Exception as e:
-                            pass
+                key_name = pynput_to_pyautogui_map.get(key_name, key_name)
                 
-                # 鼠标移动事件处理
-                def on_mouse_move(x, y):
-                    if not self.is_recording:
-                        return False
-                    if getattr(self, 'recording_grace_period', False):
-                        return
-                    
-                    # 只记录鼠标位置，不立即添加到事件列表
-                    nonlocal last_mouse_position
-                    last_mouse_position = (x, y)
+                record_hotkey = self.app.record_hotkey_var.get().lower()
+                if key_name == record_hotkey:
+                    return
                 
-                # 鼠标点击事件处理
-                def on_mouse_click(x, y, button, pressed):
-                    if not self.is_recording:
-                        return False
-                    if getattr(self, 'recording_grace_period', False):
-                        return
-                    
+                if key_name not in pressed_keys:
                     current_time = time.time()
                     delay = int((current_time - self.last_event_time) * 1000)
                     self.last_event_time = current_time
                     
                     try:
-                        button_name = button.name
-                    except Exception:
-                        return
-                    
-                    # 使用最后记录的鼠标位置或当前位置
-                    if last_mouse_position:
-                        mouse_x, mouse_y = last_mouse_position
-                    else:
-                        mouse_x, mouse_y = x, y
-                    
-                    try:
-                        # 添加鼠标移动事件
                         self.recording_events.append({
-                            "type": "moveto",
-                            "x": int(mouse_x),
-                            "y": int(mouse_y),
+                            "type": "keydown",
+                            "key": key_name,
                             "delay": delay
                         })
-                        
-                        # 添加鼠标点击事件
-                        self.recording_events.append({
-                            "type": f"mouse_{'down' if pressed else 'up'}",
-                            "button": button_name,
-                            "x": int(mouse_x),
-                            "y": int(mouse_y),
-                            "delay": 0  # 鼠标移动后立即点击，不需要延迟
-                        })
+                        pressed_keys.add(key_name)
                     except Exception as e:
                         pass
-
-                # 使用with语句创建监听器，确保在打包环境中也能正常工作
-                import time
+            
+            def on_key_release(key):
+                if not self.is_recording:
+                    return False
+                if getattr(self, 'recording_grace_period', False):
+                    return
                 
-                # 0.5秒后关闭缓冲期，允许记录操作
-                time.sleep(0.5)
-                self.recording_grace_period = False
-                
-                # 添加日志记录
-                self.app.logging_manager.log_message("🔴 开始录制操作...")
-
                 try:
-                    # 创建监听器
-                    keyboard_listener = keyboard.Listener(on_press=on_key_press, on_release=on_key_release)
-                    mouse_listener = mouse.Listener(on_move=on_mouse_move, on_click=on_mouse_click)
+                    key_name = key.char
+                except AttributeError:
+                    key_name = key.name
+                except Exception:
+                    return
+                
+                key_name = pynput_to_pyautogui_map.get(key_name, key_name)
+                
+                record_hotkey = self.app.record_hotkey_var.get().lower()
+                if key_name == record_hotkey:
+                    return
+                
+                if key_name in pressed_keys:
+                    current_time = time.time()
+                    delay = int((current_time - self.last_event_time) * 1000)
+                    self.last_event_time = current_time
                     
-                    # 注册资源
-                    self.register_resource(keyboard_listener, lambda listener: listener.stop())
-                    self.register_resource(mouse_listener, lambda listener: listener.stop())
+                    try:
+                        self.recording_events.append({
+                            "type": "keyup",
+                            "key": key_name,
+                            "delay": delay
+                        })
+                        pressed_keys.remove(key_name)
+                    except Exception as e:
+                        pass
+            
+            # 鼠标移动事件处理
+            def on_mouse_move(x, y):
+                if not self.is_recording:
+                    return False
+                if getattr(self, 'recording_grace_period', False):
+                    return
+                
+                nonlocal last_mouse_position
+                last_mouse_position = (x, y)
+            
+            # 鼠标点击事件处理
+            def on_mouse_click(x, y, button, pressed):
+                if not self.is_recording:
+                    return False
+                if getattr(self, 'recording_grace_period', False):
+                    return
+                
+                current_time = time.time()
+                delay = int((current_time - self.last_event_time) * 1000)
+                self.last_event_time = current_time
+                
+                try:
+                    button_name = button.name
+                except Exception:
+                    return
+                
+                if last_mouse_position:
+                    mouse_x, mouse_y = last_mouse_position
+                else:
+                    mouse_x, mouse_y = x, y
+                
+                try:
+                    self.recording_events.append({
+                        "type": "moveto",
+                        "x": int(mouse_x),
+                        "y": int(mouse_y),
+                        "delay": delay
+                    })
                     
-                    # 启动监听器
-                    keyboard_listener.start()
-                    mouse_listener.start()
-                    
-                    # 等待录制停止
-                    while self.is_recording:
-                        time.sleep(0.1)
-                        
+                    self.recording_events.append({
+                        "type": f"mouse_{'down' if pressed else 'up'}",
+                        "button": button_name,
+                        "x": int(mouse_x),
+                        "y": int(mouse_y),
+                        "delay": 0
+                    })
                 except Exception as e:
-                    # 给用户提供明确的提醒
-                    self.app.root.after(0, lambda: self.app.show_message("提示", "无法启动录制功能，请确保pynput模块已正确安装。"))
-                    self.is_recording = False
-                finally:
-                    # 使用统一的资源清理接口
-                    self.cleanup_resources()
+                    pass
+
+            time.sleep(0.5)
+            self.recording_grace_period = False
+            
+            self.app.logging_manager.log_message("🔴 开始录制操作...")
+
+            try:
+                keyboard_listener = keyboard.Listener(on_press=on_key_press, on_release=on_key_release)
+                mouse_listener = mouse.Listener(on_move=on_mouse_move, on_click=on_mouse_click)
+                
+                self.register_resource(keyboard_listener, lambda listener: listener.stop())
+                self.register_resource(mouse_listener, lambda listener: listener.stop())
+                
+                keyboard_listener.start()
+                mouse_listener.start()
+                
+                while self.is_recording:
+                    time.sleep(0.1)
                     
-                    # 生成录制脚本
-                    self.generate_recorded_script()
-                    self.app.logging_manager.log_message("🟢 录制完成")
+            except Exception as e:
+                self.app.root.after(0, lambda: self.app.show_message("提示", f"录制启动失败: {str(e)}"))
+                self.is_recording = False
+            finally:
+                self.cleanup_resources()
+                self.generate_recorded_script()
+                self.app.logging_manager.log_message("🟢 录制完成")
         
         # 启动录制线程
         self.recording_thread = threading.Thread(target=record, daemon=True)
